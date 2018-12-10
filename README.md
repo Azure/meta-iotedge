@@ -1,3 +1,38 @@
+meta-iotedge
+===========
+
+This layer provides support for building [IoT Edge](https://github.com/azure/iotedge).
+
+Please see the corresponding sections below for details.
+
+Dependencies
+------------
+This layer depends on:
+
+URI: git://github.com/meta-rust/meta-rust.git 
+branch: master 
+revision: HEAD 
+prio: default 
+
+URI: git://git.yoctoproject.org/meta-virtualization 
+branch: master 
+revision: HEAD 
+prio: default 
+
+URI: git://github.com/openembedded/openembedded-core.git 
+branch: master 
+revision: HEAD 
+prio: default 
+
+Table of Contents
+=================
+
+  I. Adding the meta-iotedge layer to your build
+
+I. Adding the meta-iotedge layer to your build
+=================================================
+
+Run 'bitbake-layers add-layer meta-iotedge'
 
 # Contributing
 
