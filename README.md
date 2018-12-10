@@ -9,20 +9,26 @@ Dependencies
 ------------
 This layer depends on:
 
-URI: git://github.com/meta-rust/meta-rust.git 
-branch: master 
-revision: HEAD 
-prio: default 
+```
+URI: git://github.com/meta-rust/meta-rust.git
+branch: master
+revision: HEAD
+prio: default
+```
 
-URI: git://git.yoctoproject.org/meta-virtualization 
-branch: master 
-revision: HEAD 
-prio: default 
+```
+URI: git://git.yoctoproject.org/meta-virtualization
+branch: master
+revision: HEAD
+prio: default
+```
 
-URI: git://github.com/openembedded/openembedded-core.git 
-branch: master 
-revision: HEAD 
-prio: default 
+```
+URI: git://github.com/openembedded/openembedded-core.git
+branch: master
+revision: HEAD
+prio: default
+```
 
 Table of Contents
 =================
