@@ -7,10 +7,11 @@ inherit cargo
 
 # how to get iotedged could be as easy as but default to a git checkout:
 # SRC_URI += "crate://crates.io/iotedged/0.1.0"
-SRC_URI += "gitsm://git@github.com/myagley/iotedge.git;protocol=ssh;branch=miyagley/libiothsm-version"
-SRCREV = "e15a7dff0af7f8419952466b6cdc4112ea96af51"
+SRC_URI += "gitsm://git@github.com/azure/iotedge.git;protocol=ssh"
+SRCREV = "d76e0316c6f324345d77c48a83ce836d09392699"
 S = "${WORKDIR}/git/edgelet/iotedged"
-CARGO_SRC_DIR="edgelet"
+CARGO_SRC_DIR="iotedged"
+
 
 # please note if you have entries that do not begin with crate://
 # you must change them to how that package can be fetched
@@ -63,12 +64,12 @@ crate://crates.io/generic-array/0.9.0 \
 crate://crates.io/h2/0.1.12 \
 crate://crates.io/hex/0.3.2 \
 crate://crates.io/hmac/0.5.0 \
-crate://crates.io/http/0.1.13 \
+crate://crates.io/http/0.1.14 \
 crate://crates.io/httparse/1.2.4 \
 crate://crates.io/humantime/1.1.1 \
 crate://crates.io/hyper-proxy/0.5.0 \
 crate://crates.io/hyper-tls/0.3.0 \
-crate://crates.io/hyper/0.12.10 \
+crate://crates.io/hyper/0.12.17 \
 crate://crates.io/hyperlocal/0.6.0 \
 crate://crates.io/idna/0.1.4 \
 crate://crates.io/indexmap/1.0.1 \
@@ -78,6 +79,7 @@ crate://crates.io/kernel32-sys/0.2.2 \
 crate://crates.io/lazy_static/0.2.11 \
 crate://crates.io/lazy_static/1.0.0 \
 crate://crates.io/lazycell/0.6.0 \
+crate://crates.io/lazycell/1.2.0 \
 crate://crates.io/libc/0.2.42 \
 crate://crates.io/linked-hash-map/0.3.0 \
 crate://crates.io/linked-hash-map/0.5.1 \
@@ -123,14 +125,11 @@ crate://crates.io/regex/0.1.80 \
 crate://crates.io/regex/0.2.11 \
 crate://crates.io/remove_dir_all/0.5.1 \
 crate://crates.io/rustc-demangle/0.1.7 \
-crate://crates.io/rustc_version/0.2.3 \
 crate://crates.io/safemem/0.2.0 \
 crate://crates.io/schannel/0.1.13 \
 crate://crates.io/scopeguard/0.3.3 \
 crate://crates.io/security-framework-sys/0.2.1 \
 crate://crates.io/security-framework/0.2.1 \
-crate://crates.io/semver-parser/0.7.0 \
-crate://crates.io/semver/0.9.0 \
 crate://crates.io/serde-hjson/0.8.1 \
 crate://crates.io/serde/0.8.23 \
 crate://crates.io/serde/1.0.43 \
@@ -203,17 +202,29 @@ crate://crates.io/windows-service/0.1.0 \
 crate://crates.io/winreg/0.5.1 \
 crate://crates.io/ws2_32-sys/0.2.1 \
 crate://crates.io/yaml-rust/0.4.0 \
+git://github.com/Azure/hyperlocal-windows;protocol=https;name=hyperlocal-windows;destsuffix=hyperlocal-windows \
+git://github.com/Azure/mio-uds-windows.git;protocol=https;name=mio-uds-windows;destsuffix=mio-uds-windows \
+git://github.com/Azure/tokio-uds-windows.git;protocol=https;name=tokio-uds-windows;destsuffix=tokio-uds-windows \
 "
 
+SRCREV_FORMAT .= "_mio-uds-windows"
+SRCREV_mio-uds-windows = "${AUTOREV}"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/mio-uds-windows"
+SRCREV_FORMAT .= "_tokio-uds-windows"
+SRCREV_tokio-uds-windows = "${AUTOREV}"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/tokio-uds-windows"
+SRCREV_FORMAT .= "_hyperlocal-windows"
+SRCREV_hyperlocal-windows = "${AUTOREV}"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/hyperlocal-windows"
 
-
-# FIXME: update generateme with the real MD5 of the license file
 LIC_FILES_CHKSUM=" \
+file://../../LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \
+file://../../THIRDPARTYNOTICES;md5=f6eb6a0e0dc283b6dcd2c59e141dd385 \
 "
 
-SUMMARY = "iotedged"
+SUMMARY = "The IoT Edge Security Daemon"
 HOMEPAGE = "https://github.com/azure/iotedge"
-LICENSE = "CLOSED"
+LICENSE = "MIT"
 
 # includes this file if it exists but does not fail
 # this is useful for anything you may want to override from

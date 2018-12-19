@@ -1,12 +1,12 @@
 DESCRIPTION = "Standard mode libiothsm implementation for Azure IoT Edge"
 LICENSE = "MIT"
 
-# FIXME: update generateme with the real MD5 of the license file
 LIC_FILES_CHKSUM=" \
+file://LICENSE;md5=b98fddd052bb2f5ddbcdbd417ffb26a8 \
 "
 
-SRC_URI += "gitsm://git@github.com/myagley/iotedge.git;protocol=ssh;branch=miyagley/libiothsm-version"
-SRCREV = "e15a7dff0af7f8419952466b6cdc4112ea96af51"
+SRC_URI += "gitsm://git@github.com/azure/iotedge.git;protocol=ssh"
+SRCREV = "d76e0316c6f324345d77c48a83ce836d09392699"
 
 S = "${WORKDIR}/git/edgelet/hsm-sys/azure-iot-hsm-c"
 
