@@ -1,5 +1,7 @@
 DEPENDS += "openssl10"
 
+export BUILD_SOURCEVERSION="${SRCREV}"
+
 do_install () {
     # Binaries
     install -d  "${D}${bindir}"
