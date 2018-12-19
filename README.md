@@ -30,17 +30,13 @@ revision: HEAD
 prio: default
 ```
 
-Table of Contents
-=================
-
-  I. Adding the meta-iotedge layer to your build
-
-I. Adding the meta-iotedge layer to your build
+Adding the meta-iotedge layer to your build
 =================================================
 
-Run 'bitbake-layers add-layer meta-iotedge'
+Run `bitbake-layers add-layer meta-iotedge`
 
-# Contributing
+Contributing
+============
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
 Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
