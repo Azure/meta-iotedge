@@ -18,14 +18,14 @@ prio: default
 
 ```
 URI: git://git.yoctoproject.org/meta-virtualization
-branch: master
+branch: sumo
 revision: HEAD
 prio: default
 ```
 
 ```
 URI: git://github.com/openembedded/openembedded-core.git
-branch: master
+branch: sumo
 revision: HEAD
 prio: default
 ```
