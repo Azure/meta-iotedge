@@ -7,7 +7,7 @@ inherit cargo
 
 # how to get iotedged could be as easy as but default to a git checkout:
 # SRC_URI += "crate://crates.io/iotedged/0.1.0"
-SRC_URI += "gitsm://git@github.com/azure/iotedge.git;protocol=ssh"
+SRC_URI += "gitsm://github.com/azure/iotedge.git;protocol=https"
 SRCREV = "d76e0316c6f324345d77c48a83ce836d09392699"
 S = "${WORKDIR}/git/edgelet/iotedged"
 CARGO_SRC_DIR="iotedged"
