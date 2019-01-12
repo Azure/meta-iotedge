@@ -1,0 +1,21 @@
+trigger: none
+pr:
+  branches:
+    include:
+      - master
+jobs:
+
+################################################################################
+  - job: sumo
+################################################################################
+    displayName: Sumo
+    pool:
+      vmImage: 'ubuntu-16.04'
+    timeoutInMinutes: 300
+    steps:
+      - script: scripts/fetch.sh sumo
+        displayName: Fetch
+        env:
+          METARUST_REV: 'refs/remotes/origin/master'
+      - script: scripts/build.sh
+        displayName: Build
