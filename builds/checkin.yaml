@@ -11,7 +11,7 @@ jobs:
     displayName: Sumo
     pool:
       vmImage: 'ubuntu-16.04'
-    timeoutInMinutes: 300
+    timeoutInMinutes: 360
     steps:
       - script: scripts/fetch.sh sumo
         displayName: Fetch
