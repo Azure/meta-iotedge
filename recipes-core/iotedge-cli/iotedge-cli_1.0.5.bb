@@ -2,19 +2,11 @@
 #
 inherit cargo
 
-# If this is git based prefer versioned ones if they exist
-# DEFAULT_PREFERENCE = "-1"
-
-# how to get iotedge could be as easy as but default to a git checkout:
-# SRC_URI += "crate://crates.io/iotedge/0.1.0"
 SRC_URI += "gitsm://github.com/azure/iotedge.git;protocol=https"
 SRCREV = "d76e0316c6f324345d77c48a83ce836d09392699"
 S = "${WORKDIR}/git/edgelet/iotedge"
 CARGO_SRC_DIR="edgelet"
 
-
-# please note if you have entries that do not begin with crate://
-# you must change them to how that package can be fetched
 SRC_URI += " \
 crate://crates.io/aho-corasick/0.5.3 \
 crate://crates.io/aho-corasick/0.6.4 \
@@ -226,8 +218,5 @@ SUMMARY = "The iotedge tool is used to manage the IoT Edge runtime."
 HOMEPAGE = "https://github.com/azure/iotedge"
 LICENSE = "MIT"
 
-# includes this file if it exists but does not fail
-# this is useful for anything you may want to override from
-# what cargo-bitbake generates.
 include iotedge-cli-${PV}.inc
 include iotedge-cli.inc
