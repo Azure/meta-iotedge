@@ -2,10 +2,10 @@ DEPENDS += "openssl10 docker"
 RDEPENDS_${PN} += "virtual/libiothsm docker"
 INSANE_SKIP_${PN} += "dev-deps"
 
-export SYSROOT = "${STAGING_DIR_TARGET}"
-export OpenSSLDir = "${STAGING_DIR_TARGET}/usr"
-export OPENSSL_DIR = "${STAGING_DIR_TARGET}/usr"
-export OPENSSL_INCLUDE_DIR = "${STAGING_DIR_TARGET}/usr/include"
+export SYSROOT = "${STAGING_DIR_HOST}"
+export OpenSSLDir = "${STAGING_EXECPREFIXDIR}"
+export OPENSSL_DIR = "${STAGING_EXECPREFIXDIR}"
+export OPENSSL_INCLUDE_DIR = "${STAGING_INCDIR}"
 export OPENSSL_LIB_DIR = "${STAGING_LIBDIR}"
 export BUILD_SOURCEVERSION="${SRCREV}"
 
@@ -44,8 +44,8 @@ do_install () {
 
 inherit useradd
 USERADD_PACKAGES = "${PN}"
-USERADD_PARAM_${PN} = "-r -g iotedge -G docker -s /bin/false -d ${localstatedir}/lib/iotedge iotedge"
-GROUPADD_PARAM_${PN} = "-r iotedge"
+USERADD_PARAM_${PN} = "-r -u 15580 -g iotedge -G docker -s /bin/false -d ${localstatedir}/lib/iotedge iotedge"
+GROUPADD_PARAM_${PN} = "-r -g 15580 iotedge"
 
 FILES_${PN} += " \
     ${systemd_unitdir}/system/* \
