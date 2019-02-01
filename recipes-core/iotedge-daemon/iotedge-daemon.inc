@@ -6,7 +6,7 @@ export SYSROOT = "${STAGING_DIR_TARGET}"
 export OpenSSLDir = "${STAGING_DIR_TARGET}/usr"
 export OPENSSL_DIR = "${STAGING_DIR_TARGET}/usr"
 export OPENSSL_INCLUDE_DIR = "${STAGING_DIR_TARGET}/usr/include"
-export OPENSSL_LIB_DIR = "${STAGING_DIR_TARGET}/usr/lib"
+export OPENSSL_LIB_DIR = "${STAGING_LIBDIR}"
 export BUILD_SOURCEVERSION="${SRCREV}"
 
 inherit systemd update-rc.d
