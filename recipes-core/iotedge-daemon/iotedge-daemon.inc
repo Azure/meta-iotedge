@@ -44,8 +44,8 @@ do_install () {
 
 inherit useradd
 USERADD_PACKAGES = "${PN}"
-USERADD_PARAM_${PN} = "-r -g iotedge -G docker -s /bin/false -d ${localstatedir}/lib/iotedge iotedge"
-GROUPADD_PARAM_${PN} = "-r iotedge"
+USERADD_PARAM_${PN} = "-r -u 15580 -g iotedge -G docker -s /bin/false -d ${localstatedir}/lib/iotedge iotedge"
+GROUPADD_PARAM_${PN} = "-r -g 15580 iotedge"
 
 FILES_${PN} += " \
     ${systemd_unitdir}/system/* \
