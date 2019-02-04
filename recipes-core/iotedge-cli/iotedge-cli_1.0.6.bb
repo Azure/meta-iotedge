@@ -2,15 +2,16 @@
 #
 inherit cargo
 
-SRC_URI += "gitsm://github.com/azure/iotedge.git;protocol=https"
-SRCREV = "d76e0316c6f324345d77c48a83ce836d09392699"
-S = "${WORKDIR}/git/edgelet/iotedged"
-CARGO_SRC_DIR="iotedged"
+SRC_URI += "gitsm://github.com/azure/iotedge.git;protocol=https;branch=release/1.0.6"
+SRCREV = "8288bc9bd6f6e15295fea506cd3f99d7f6347a6a"
+S = "${WORKDIR}/git/edgelet/iotedge"
+CARGO_SRC_DIR="iotedge"
 
 SRC_URI += " \
 crate://crates.io/aho-corasick/0.5.3 \
 crate://crates.io/aho-corasick/0.6.4 \
 crate://crates.io/ansi_term/0.11.0 \
+crate://crates.io/argon2rs/0.2.5 \
 crate://crates.io/arrayref/0.3.4 \
 crate://crates.io/arrayvec/0.4.7 \
 crate://crates.io/atty/0.2.10 \
@@ -18,6 +19,7 @@ crate://crates.io/backtrace-sys/0.1.16 \
 crate://crates.io/backtrace/0.3.6 \
 crate://crates.io/base64/0.9.1 \
 crate://crates.io/bitflags/1.0.3 \
+crate://crates.io/blake2-rfc/0.2.18 \
 crate://crates.io/block-buffer/0.3.3 \
 crate://crates.io/byte-tools/0.2.0 \
 crate://crates.io/byteorder/1.2.2 \
@@ -39,6 +41,7 @@ crate://crates.io/crossbeam-epoch/0.5.2 \
 crate://crates.io/crossbeam-utils/0.5.0 \
 crate://crates.io/crypto-mac/0.5.2 \
 crate://crates.io/digest/0.7.2 \
+crate://crates.io/dirs/1.0.4 \
 crate://crates.io/dtoa/0.4.2 \
 crate://crates.io/env_logger/0.5.9 \
 crate://crates.io/error-chain/0.11.0 \
@@ -67,6 +70,7 @@ crate://crates.io/idna/0.1.4 \
 crate://crates.io/indexmap/1.0.1 \
 crate://crates.io/iovec/0.1.2 \
 crate://crates.io/itoa/0.4.1 \
+crate://crates.io/k8s-openapi/0.3.0 \
 crate://crates.io/kernel32-sys/0.2.2 \
 crate://crates.io/lazy_static/0.2.11 \
 crate://crates.io/lazy_static/1.0.0 \
@@ -111,6 +115,7 @@ crate://crates.io/rand/0.5.4 \
 crate://crates.io/rand_core/0.2.1 \
 crate://crates.io/redox_syscall/0.1.37 \
 crate://crates.io/redox_termios/0.1.1 \
+crate://crates.io/redox_users/0.2.0 \
 crate://crates.io/regex-syntax/0.3.9 \
 crate://crates.io/regex-syntax/0.5.6 \
 crate://crates.io/regex/0.1.80 \
@@ -119,17 +124,19 @@ crate://crates.io/remove_dir_all/0.5.1 \
 crate://crates.io/rustc-demangle/0.1.7 \
 crate://crates.io/safemem/0.2.0 \
 crate://crates.io/schannel/0.1.13 \
+crate://crates.io/scoped_threadpool/0.1.9 \
 crate://crates.io/scopeguard/0.3.3 \
 crate://crates.io/security-framework-sys/0.2.1 \
 crate://crates.io/security-framework/0.2.1 \
 crate://crates.io/serde-hjson/0.8.1 \
 crate://crates.io/serde/0.8.23 \
-crate://crates.io/serde/1.0.43 \
+crate://crates.io/serde/1.0.84 \
 crate://crates.io/serde_derive/1.0.43 \
 crate://crates.io/serde_derive_internals/0.23.1 \
 crate://crates.io/serde_json/1.0.17 \
 crate://crates.io/serde_test/0.8.23 \
 crate://crates.io/serde_yaml/0.7.4 \
+crate://crates.io/serde_yaml/0.8.8 \
 crate://crates.io/sha2/0.7.1 \
 crate://crates.io/slab/0.4.1 \
 crate://crates.io/socket2/0.3.5 \
@@ -199,24 +206,24 @@ git://github.com/Azure/mio-uds-windows.git;protocol=https;name=mio-uds-windows;d
 git://github.com/Azure/tokio-uds-windows.git;protocol=https;name=tokio-uds-windows;destsuffix=tokio-uds-windows \
 "
 
-SRCREV_FORMAT .= "_mio-uds-windows"
-SRCREV_mio-uds-windows = "${AUTOREV}"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/mio-uds-windows"
-SRCREV_FORMAT .= "_tokio-uds-windows"
-SRCREV_tokio-uds-windows = "${AUTOREV}"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/tokio-uds-windows"
 SRCREV_FORMAT .= "_hyperlocal-windows"
 SRCREV_hyperlocal-windows = "${AUTOREV}"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/hyperlocal-windows"
+SRCREV_FORMAT .= "_tokio-uds-windows"
+SRCREV_tokio-uds-windows = "${AUTOREV}"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/tokio-uds-windows"
+SRCREV_FORMAT .= "_mio-uds-windows"
+SRCREV_mio-uds-windows = "${AUTOREV}"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/mio-uds-windows"
 
 LIC_FILES_CHKSUM=" \
 file://../../LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \
 file://../../THIRDPARTYNOTICES;md5=f6eb6a0e0dc283b6dcd2c59e141dd385 \
 "
 
-SUMMARY = "The IoT Edge Security Daemon"
+SUMMARY = "The iotedge tool is used to manage the IoT Edge runtime."
 HOMEPAGE = "https://github.com/azure/iotedge"
 LICENSE = "MIT"
 
-include iotedge-daemon-${PV}.inc
-include iotedge-daemon.inc
+include iotedge-cli-${PV}.inc
+include iotedge-cli.inc
