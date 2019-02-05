@@ -6,7 +6,7 @@ file://LICENSE;md5=b98fddd052bb2f5ddbcdbd417ffb26a8 \
 "
 
 SRC_URI += "gitsm://github.com/azure/iotedge.git;protocol=https;branch=release/1.0.6"
-SRCREV = "8288bc9bd6f6e15295fea506cd3f99d7f6347a6a"
+SRCREV = "3fa6cbef8b7fc3c55a49a622735eb1021b8a5963"
 
 S = "${WORKDIR}/git/edgelet/hsm-sys/azure-iot-hsm-c"
 
