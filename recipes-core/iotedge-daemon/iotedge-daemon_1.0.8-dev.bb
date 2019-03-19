@@ -8,6 +8,9 @@ S = "${WORKDIR}/git/edgelet/iotedged"
 CARGO_SRC_DIR="iotedged"
 PV_append = ".AUTOINC+54dccb0881"
 
+# Remove this with actual release
+DEFAULT_PREFERENCE = "-1"
+
 SRC_URI += " \
 crate://crates.io/aho-corasick/0.5.3 \
 crate://crates.io/aho-corasick/0.6.4 \

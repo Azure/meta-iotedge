@@ -14,5 +14,8 @@ DEPENDS += "openssl10"
 PROVIDES += "virtual/libiothsm"
 RPROVIDES_${PN} += "virtual/libiothsm"
 
+# Remove this with actual release
+DEFAULT_PREFERENCE = "-1"
+
 EXTRA_OECMAKE += "-DBUILD_SHARED=On -Duse_emulator=Off -Duse_http=Off -Duse_default_uuid=On -DCMAKE_SYSTEM_VERSION=10"
 inherit cmake
