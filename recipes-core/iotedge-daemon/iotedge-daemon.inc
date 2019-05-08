@@ -1,4 +1,4 @@
-DEPENDS += "openssl10 docker virtual/libiothsm"
+DEPENDS += "openssl docker virtual/libiothsm"
 RDEPENDS_${PN} += "virtual/libiothsm docker"
 INSANE_SKIP_${PN} += "dev-deps"
 
@@ -11,6 +11,7 @@ export OPENSSL_LIB_DIR = "${STAGING_LIBDIR}"
 export BUILD_SOURCEVERSION="${SRCREV}"
 export FORCE_NO_UNITTEST="On"
 export BUILD_SHARED="On"
+export LIBIOTHSM_NOBUILD="On"
 
 inherit systemd update-rc.d
 
@@ -25,23 +26,23 @@ INITSCRIPT_PARAMS_${PN} = "defaults"
 do_install () {
     # Binaries
     install -d  "${D}${bindir}"
-    install -m 755 "${WORKDIR}/git/edgelet/target/${CARGO_TARGET_SUBDIR}/iotedged" ${D}${bindir}/iotedged
+    install -m 755 "${WORKDIR}/iotedge-${PV}/target/${CARGO_TARGET_SUBDIR}/iotedged" ${D}${bindir}/iotedged
 
     # Config file
     install -d "${D}${sysconfdir}/iotedge"
-    install -m 400 -o iotedge -g iotedge "${WORKDIR}/git/edgelet/contrib/config/linux/debian/config.yaml" ${D}${sysconfdir}/iotedge/config.yaml
+    install -m 400 -o iotedge -g iotedge "${WORKDIR}/iotedge-${PV}/contrib/config/linux/debian/config.yaml" ${D}${sysconfdir}/iotedge/config.yaml
 
     # Data dir
     install -d -o iotedge -g iotedge "${D}${localstatedir}/lib/iotedge"
 
     if ${@bb.utils.contains('DISTRO_FEATURES', 'systemd', 'true', 'false', d)}; then
         install -d ${D}${systemd_unitdir}/system
-        install -m 644 ${WORKDIR}/git/edgelet/contrib/systemd/debian/iotedge.service ${D}${systemd_unitdir}/system
-        install -m 644 ${WORKDIR}/git/edgelet/contrib/systemd/debian/iotedge.socket ${D}${systemd_unitdir}/system
-        install -m 644 ${WORKDIR}/git/edgelet/contrib/systemd/debian/iotedge.mgmt.socket ${D}${systemd_unitdir}/system
+        install -m 644 ${WORKDIR}/iotedge-${PV}/contrib/systemd/debian/iotedge.service ${D}${systemd_unitdir}/system
+        install -m 644 ${WORKDIR}/iotedge-${PV}/contrib/systemd/debian/iotedge.socket ${D}${systemd_unitdir}/system
+        install -m 644 ${WORKDIR}/iotedge-${PV}/contrib/systemd/debian/iotedge.mgmt.socket ${D}${systemd_unitdir}/system
     else
         install -d ${D}${sysconfdir}/init.d
-        install -m 755 ${WORKDIR}/git/edgelet/contrib/debian/iotedge.init ${D}${sysconfdir}/init.d/iotedge
+        install -m 755 ${WORKDIR}/iotedge-${PV}/contrib/debian/iotedge.init ${D}${sysconfdir}/init.d/iotedge
     fi
 }
 

@@ -1,0 +1,204 @@
+From 5a6a0fc0aa486ecc87d6716f0be584e1b4662b2d Mon Sep 17 00:00:00 2001
+From: Mike Yagley <myagley@gmail.com>
+Date: Wed, 8 May 2019 11:45:27 -0700
+Subject: [PATCH] Update build.rs to allow no build of libiothsm
+
+---
+ hsm-sys/build.rs | 178 +++++++++++++++++++++------------------
+ 1 file changed, 94 insertions(+), 84 deletions(-)
+
+diff --git a/hsm-sys/build.rs b/hsm-sys/build.rs
+index 882c5aec..c039b89a 100644
+--- a/hsm-sys/build.rs
++++ b/hsm-sys/build.rs
+@@ -73,93 +73,103 @@ impl SetPlatformDefines for Config {
+ }
+ 
+ fn main() {
+-    // Clone Azure C -shared library
+-    let c_shared_repo = "azure-iot-hsm-c/deps/c-shared";
+-    let utpm_repo = "azure-iot-hsm-c/deps/utpm";
+ 
+-    println!("#Start Update C-Shared Utilities");
+-    if !Path::new(&format!("{}/.git", c_shared_repo)).exists()
+-        || !Path::new(&format!("{}/.git", utpm_repo)).exists()
+-    {
+-        let _ = Command::new("git")
+-            .arg("submodule")
+-            .arg("update")
+-            .arg("--init")
+-            .arg("--recursive")
+-            .status()
+-            .expect("submodule update failed");
++    if env::var("LIBIOTHSM_NOBUILD").is_ok() {
++        // libiothsm-std is expected to be built and installed out of band
++        println!("cargo:rustc-link-lib=iothsm");
++    } else {
++        // build libiothsm-std as part of hsm-sys build
++
++        // Clone Azure C -shared library
++        let c_shared_repo = "azure-iot-hsm-c/deps/c-shared";
++        let utpm_repo = "azure-iot-hsm-c/deps/utpm";
++
++        println!("#Start Update C-Shared Utilities");
++        if !Path::new(&format!("{}/.git", c_shared_repo)).exists()
++            || !Path::new(&format!("{}/.git", utpm_repo)).exists()
++        {
++            let _ = Command::new("git")
++                .arg("submodule")
++                .arg("update")
++                .arg("--init")
++                .arg("--recursive")
++                .status()
++                .expect("submodule update failed");
++        }
++
++        println!("#Done Updating C-Shared Utilities");
++
++        println!("#Start building shared utilities");
++        let _shared = Config::new(c_shared_repo)
++            .define(SSL_OPTION, "ON")
++            .define("CMAKE_BUILD_TYPE", "Release")
++            .define("run_unittests", "OFF")
++            .define("use_default_uuid", "ON")
++            .define("use_http", "OFF")
++            .define("skip_samples", "ON")
++            .set_platform_defines()
++            .define("run_valgrind", "OFF")
++            .profile("Release")
++            .build();
++
++        println!("#Also build micro tpm library");
++        let _shared = Config::new(utpm_repo)
++            .define(SSL_OPTION, "ON")
++            .define("CMAKE_BUILD_TYPE", "Release")
++            .define("run_unittests", "OFF")
++            .define("use_default_uuid", "ON")
++            .define("use_http", "OFF")
++            .define("skip_samples", "ON")
++            .set_platform_defines()
++            .define("run_valgrind", "OFF")
++            .profile("Release")
++            .build();
++
++        // make the C libary at azure-iot-hsm-c (currently a subdirectory in this
++        // crate)
++        // Always make the Release version because Rust links to the Release CRT.
++        // (This is especially important for Windows)
++
++        let rut = if env::var("FORCE_NO_UNITTEST").is_ok() {
++            "OFF"
++        } else {
++            "ON"
++        };
++        println!("#Start building HSM dev-mode library");
++        let iothsm = Config::new("azure-iot-hsm-c")
++            .define(SSL_OPTION, "ON")
++            .define("CMAKE_BUILD_TYPE", "Release")
++            .define("run_unittests", rut)
++            .define("use_default_uuid", "ON")
++            .define("use_http", "OFF")
++            .define("skip_samples", "ON")
++            .set_platform_defines()
++            .set_build_shared()
++            .profile("Release")
++            .build();
++
++        println!("#Done building HSM dev-mode library");
++
++        // where to find the library (The "link-lib" should match the library name
++        // defined in the CMakefile.txt)
++
++        println!("cargo:rerun-if-env-changed=RUN_VALGRIND");
++        // For libraries which will just install in target directory
++        println!("cargo:rustc-link-search=native={}", iothsm.display());
++        // For libraries (ie. C Shared) which will install in $target/lib
++        println!("cargo:rustc-link-search=native={}/lib", iothsm.display());
++        println!("cargo:rustc-link-search=native={}/lib64", iothsm.display());
++        println!("cargo:rustc-link-lib=iothsm");
++
++        // we need to explicitly link with c shared util only when we build the C
++        // library as a static lib which we do only in rust debug builds
++        #[cfg(debug_assertions)]
++        println!("cargo:rustc-link-lib=aziotsharedutil");
++        #[cfg(debug_assertions)]
++        println!("cargo:rustc-link-lib=utpm");
+     }
+ 
+-    println!("#Done Updating C-Shared Utilities");
+-
+-    println!("#Start building shared utilities");
+-    let _shared = Config::new(c_shared_repo)
+-        .define(SSL_OPTION, "ON")
+-        .define("CMAKE_BUILD_TYPE", "Release")
+-        .define("run_unittests", "OFF")
+-        .define("use_default_uuid", "ON")
+-        .define("use_http", "OFF")
+-        .define("skip_samples", "ON")
+-        .set_platform_defines()
+-        .define("run_valgrind", "OFF")
+-        .profile("Release")
+-        .build();
+-
+-    println!("#Also build micro tpm library");
+-    let _shared = Config::new(utpm_repo)
+-        .define(SSL_OPTION, "ON")
+-        .define("CMAKE_BUILD_TYPE", "Release")
+-        .define("run_unittests", "OFF")
+-        .define("use_default_uuid", "ON")
+-        .define("use_http", "OFF")
+-        .define("skip_samples", "ON")
+-        .set_platform_defines()
+-        .define("run_valgrind", "OFF")
+-        .profile("Release")
+-        .build();
+-
+-    // make the C libary at azure-iot-hsm-c (currently a subdirectory in this
+-    // crate)
+-    // Always make the Release version because Rust links to the Release CRT.
+-    // (This is especially important for Windows)
+-
+-    let rut = if env::var("FORCE_NO_UNITTEST").is_ok() {
+-        "OFF"
+-    } else {
+-        "ON"
+-    };
+-    println!("#Start building HSM dev-mode library");
+-    let iothsm = Config::new("azure-iot-hsm-c")
+-        .define(SSL_OPTION, "ON")
+-        .define("CMAKE_BUILD_TYPE", "Release")
+-        .define("run_unittests", rut)
+-        .define("use_default_uuid", "ON")
+-        .define("use_http", "OFF")
+-        .define("skip_samples", "ON")
+-        .set_platform_defines()
+-        .set_build_shared()
+-        .profile("Release")
+-        .build();
+-
+-    println!("#Done building HSM dev-mode library");
+-
+-    // where to find the library (The "link-lib" should match the library name
+-    // defined in the CMakefile.txt)
+-
+-    println!("cargo:rerun-if-env-changed=RUN_VALGRIND");
+-    // For libraries which will just install in target directory
+-    println!("cargo:rustc-link-search=native={}", iothsm.display());
+-    // For libraries (ie. C Shared) which will install in $target/lib
+-    println!("cargo:rustc-link-search=native={}/lib", iothsm.display());
+-    println!("cargo:rustc-link-search=native={}/lib64", iothsm.display());
+-    println!("cargo:rustc-link-lib=iothsm");
+-
+-    // we need to explicitly link with c shared util only when we build the C
+-    // library as a static lib which we do only in rust debug builds
+-    #[cfg(debug_assertions)]
+-    println!("cargo:rustc-link-lib=aziotsharedutil");
+-    #[cfg(debug_assertions)]
+-    println!("cargo:rustc-link-lib=utpm");
++    println!("cargo:rerun-if-env-changed=LIBIOTHSM_NOBUILD");
+ 
+     #[cfg(windows)]
+     {
+-- 
+2.17.1
+
