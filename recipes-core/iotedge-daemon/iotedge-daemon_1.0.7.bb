@@ -2,12 +2,12 @@
 #
 inherit cargo
 
-SRC_URI += "https://github.com/Azure/azure-iotedge/releases/download/${PV}/iotedged-${PV}.tar.gz \
-            file://0001-Update-build.rs-to-allow-no-build-of-libiothsm.patch;patchdir=${WORKDIR}/iotedge-${PV}"
-SRC_URI[md5sum] = "1c65378033128fe2c4bd8ac290d30574"
-SRC_URI[sha256sum] = "5459ad87ed8441c08e82e3ac8709b0020012d5e485dc31e5e1b7e3af9aefb4cf"
+SRC_URI += "https://github.com/Azure/azure-iotedge/releases/download/${PV}/iotedge-${PV}.tar.gz \
+            file://0001-Add-flag-to-disable-libiothsm-std-build.patch;patchdir=${WORKDIR}/iotedge-${PV}"
+SRC_URI[md5sum] = "5130423e5a77e7e3016c4f03bbde46e8"
+SRC_URI[sha256sum] = "59a2366fade6be3aa5a67771bd6c288604c552e5b2aa91c2655b5068cd48babe"
 
-S = "${WORKDIR}/iotedge-${PV}/iotedged"
+S = "${WORKDIR}/iotedge-${PV}/edgelet/iotedged"
 CARGO_SRC_DIR="iotedged"
 
 SRC_URI += " \
@@ -220,6 +220,8 @@ SRCREV_tokio-uds-windows = "${AUTOREV}"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/tokio-uds-windows"
 
 LIC_FILES_CHKSUM=" \
+file://../../LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \
+file://../../THIRDPARTYNOTICES;md5=f6eb6a0e0dc283b6dcd2c59e141dd385 \
 "
 
 SUMMARY = "The IoT Edge Security Daemon"
