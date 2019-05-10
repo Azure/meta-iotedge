@@ -2,9 +2,11 @@
 #
 inherit cargo
 
-SRC_URI += "gitsm://github.com/azure/iotedge.git;protocol=https;branch=release/1.0.7"
-SRCREV = "f455ae2cd66db716c4bd8e7aaa7984ce092481c0"
-S = "${WORKDIR}/git/edgelet/iotedge"
+SRC_URI += "https://github.com/Azure/azure-iotedge/releases/download/${PV}/iotedge-${PV}.tar.gz"
+SRC_URI[md5sum] = "5130423e5a77e7e3016c4f03bbde46e8"
+SRC_URI[sha256sum] = "59a2366fade6be3aa5a67771bd6c288604c552e5b2aa91c2655b5068cd48babe"
+
+S = "${WORKDIR}/iotedge-${PV}/edgelet/iotedge"
 CARGO_SRC_DIR="iotedge"
 
 SRC_URI += " \
