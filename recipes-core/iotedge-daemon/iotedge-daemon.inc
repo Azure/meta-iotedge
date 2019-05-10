@@ -3,7 +3,6 @@ RDEPENDS_${PN} += "virtual/libiothsm docker"
 INSANE_SKIP_${PN} += "dev-deps"
 
 export OPENSSL_DIR = "${STAGING_EXECPREFIXDIR}"
-export BUILD_SOURCEVERSION="${SRCREV}"
 export LIBIOTHSM_NOBUILD="On"
 
 inherit systemd update-rc.d
