@@ -3,19 +3,20 @@ pr:
   branches:
     include:
       - master
+      - thud
 jobs:
 
 ################################################################################
-  - job: sumo
+  - job: thud
 ################################################################################
-    displayName: Sumo
+    displayName: Thud
     pool:
       name: azureiotedge
       demands:
         - yocto
     timeoutInMinutes: 360
     steps:
-      - script: scripts/fetch.sh sumo
+      - script: scripts/fetch.sh thud
         displayName: Fetch
         env:
           METARUST_REV: 'refs/remotes/origin/master'
