@@ -3,20 +3,20 @@ pr:
   branches:
     include:
       - master
-      - thud
+      - warrior
 jobs:
 
 ################################################################################
-  - job: thud
+  - job: warrior
 ################################################################################
-    displayName: Thud
+    displayName: Warrior
     pool:
       name: azureiotedge
       demands:
         - yocto
     timeoutInMinutes: 360
     steps:
-      - script: scripts/fetch.sh thud
+      - script: scripts/fetch.sh warrior
         displayName: Fetch
         env:
           METARUST_REV: 'refs/remotes/origin/master'
