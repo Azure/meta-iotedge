@@ -5,9 +5,9 @@ LIC_FILES_CHKSUM=" \
 file://LICENSE;md5=b98fddd052bb2f5ddbcdbd417ffb26a8 \
 "
 
-SRC_URI += "https://github.com/Azure/azure-iotedge/releases/download/1.0.7/iotedge-1.0.7.tar.gz"
-SRC_URI[md5sum] = "5130423e5a77e7e3016c4f03bbde46e8"
-SRC_URI[sha256sum] = "59a2366fade6be3aa5a67771bd6c288604c552e5b2aa91c2655b5068cd48babe"
+SRC_URI += "https://github.com/Azure/azure-iotedge/releases/download/${PV}/iotedge-${PV}.tar.gz"
+SRC_URI[md5sum]="06e86c3a8a19a9ee4f046db959ddf626"
+SRC_URI[sha256sum]="0895b1a2b04a7d034bc789b70e82ee1af27eabfff89fabaf97a86b6dda3a6a63"
 
 S = "${WORKDIR}/iotedge-${PV}/edgelet/hsm-sys/azure-iot-hsm-c"
 
