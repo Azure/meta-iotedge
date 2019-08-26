@@ -11,7 +11,7 @@ SRC_URI[sha256sum]="0895b1a2b04a7d034bc789b70e82ee1af27eabfff89fabaf97a86b6dda3a
 
 S = "${WORKDIR}/iotedge-${PV}/edgelet/hsm-sys/azure-iot-hsm-c"
 
-DEPENDS += "openssl"
+DEPENDS += "openssl10"
 PROVIDES += "virtual/libiothsm"
 RPROVIDES_${PN} += "virtual/libiothsm"
 

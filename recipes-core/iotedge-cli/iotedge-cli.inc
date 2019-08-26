@@ -1,4 +1,4 @@
-DEPENDS += "openssl"
+DEPENDS += "openssl10"
 
 export BUILD_SOURCEVERSION="${SRCREV}"
 
