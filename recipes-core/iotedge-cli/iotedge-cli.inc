@@ -1,5 +1,8 @@
 DEPENDS += "openssl"
 
+export OPENSSL_DIR = "${STAGING_EXECPREFIXDIR}"
+export LIBIOTHSM_NOBUILD="On"
+
 do_install () {
     # Binaries
     install -d  "${D}${bindir}"
