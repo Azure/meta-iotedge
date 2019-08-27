@@ -25,23 +25,23 @@ INITSCRIPT_PARAMS_${PN} = "defaults"
 do_install () {
     # Binaries
     install -d  "${D}${bindir}"
-    install -m 755 "${WORKDIR}/git/edgelet/target/${CARGO_TARGET_SUBDIR}/iotedged" ${D}${bindir}/iotedged
+    install -m 755 "${EDGELETDIR}/target/${CARGO_TARGET_SUBDIR}/iotedged" ${D}${bindir}/iotedged
 
     # Config file
     install -d "${D}${sysconfdir}/iotedge"
-    install -m 400 -o iotedge -g iotedge "${WORKDIR}/git/edgelet/contrib/config/linux/debian/config.yaml" ${D}${sysconfdir}/iotedge/config.yaml
+    install -m 400 -o iotedge -g iotedge "${EDGELETDIR}/contrib/config/linux/debian/config.yaml" ${D}${sysconfdir}/iotedge/config.yaml
 
     # Data dir
     install -d -o iotedge -g iotedge "${D}${localstatedir}/lib/iotedge"
 
     if ${@bb.utils.contains('DISTRO_FEATURES', 'systemd', 'true', 'false', d)}; then
         install -d ${D}${systemd_unitdir}/system
-        install -m 644 ${WORKDIR}/git/edgelet/contrib/systemd/debian/iotedge.service ${D}${systemd_unitdir}/system
-        install -m 644 ${WORKDIR}/git/edgelet/contrib/systemd/debian/iotedge.socket ${D}${systemd_unitdir}/system
-        install -m 644 ${WORKDIR}/git/edgelet/contrib/systemd/debian/iotedge.mgmt.socket ${D}${systemd_unitdir}/system
+        install -m 644 ${EDGELETDIR}/contrib/systemd/debian/iotedge.service ${D}${systemd_unitdir}/system
+        install -m 644 ${EDGELETDIR}/contrib/systemd/debian/iotedge.socket ${D}${systemd_unitdir}/system
+        install -m 644 ${EDGELETDIR}/contrib/systemd/debian/iotedge.mgmt.socket ${D}${systemd_unitdir}/system
     else
         install -d ${D}${sysconfdir}/init.d
-        install -m 755 ${WORKDIR}/git/edgelet/contrib/debian/iotedge.init ${D}${sysconfdir}/init.d/iotedge
+        install -m 755 ${EDGELETDIR}/contrib/debian/iotedge.init ${D}${sysconfdir}/init.d/iotedge
     fi
 }
 
