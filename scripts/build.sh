@@ -5,6 +5,7 @@ export MACHINE="${MACHINE-qemux86-64}"
 
 # What to build
 BUILD_TARGETS="\
+    libiothsm-std \
     iotedge-cli \
     iotedge-daemon \
     "
