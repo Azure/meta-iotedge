@@ -1,4 +1,7 @@
-DEPENDS += "openssl10"
+DEPENDS += "openssl10 virtual/libiothsm"
+RDEPENDS_${PN} += "virtual/libiothsm"
+
+export OPENSSL_DIR = "${STAGING_EXECPREFIXDIR}"
 
 export BUILD_SOURCEVERSION="${SRCREV}"
 
