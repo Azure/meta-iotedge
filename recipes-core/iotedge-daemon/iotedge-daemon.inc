@@ -1,5 +1,5 @@
-DEPENDS += "openssl10 docker virtual/libiothsm"
-RDEPENDS_${PN} += "virtual/libiothsm docker"
+DEPENDS += "openssl virtual/libiothsm"
+RDEPENDS_${PN} += "virtual/libiothsm "
 INSANE_SKIP_${PN} += "dev-deps"
 
 export SYSROOT = "${STAGING_DIR_HOST}"
