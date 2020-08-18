@@ -12,7 +12,7 @@ This layer depends on:
 ```
 URI: git://github.com/meta-rust/meta-rust.git
 branch: master
-revision: HEAD
+revision: 9487b089ea4779c2b494b17b9254219226efa539
 prio: default
 ```
 
