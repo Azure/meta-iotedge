@@ -1,6 +1,7 @@
 DEPENDS += "openssl10"
 
 export BUILD_SOURCEVERSION="${SRCREV}"
+export FORCE_NO_UNITTEST="On"
 
 do_install () {
     # Binaries
