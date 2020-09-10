@@ -246,7 +246,7 @@ EXTRA_OECARGO_PATHS += "${WORKDIR}/tokio-uds-windows"
 
 LIC_FILES_CHKSUM=" \
 file://../../LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \
-file://../../THIRDPARTYNOTICES;md5=fa67a5011e1afb8a5daefcc323d54ec8 \
+file://../../THIRDPARTYNOTICES;md5=1cda6520d68499d4f60c7270445fe436 \
 "
 
 SUMMARY = "IoT Edge Security Daemon"
