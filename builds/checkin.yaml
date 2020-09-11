@@ -19,6 +19,6 @@ jobs:
       - script: scripts/fetch.sh thud
         displayName: Fetch
         env:
-          METARUST_REV: 'refs/remotes/origin/master'
+          METARUST_REV: 'd8d77be1292064a02adcb5e72e293604b704f69b'
       - script: scripts/build.sh
         displayName: Build
