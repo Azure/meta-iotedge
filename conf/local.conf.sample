@@ -224,6 +224,8 @@ SSTATE_MIRRORS = "\
     file://.* http://sstate.yoctoproject.org/2.6/PATH;downloadfilename=PATH \n \
     file://.* http://sstate.yoctoproject.org/2.6.1/PATH;downloadfilename=PATH \n \
     file://.* http://sstate.yoctoproject.org/2.6.2/PATH;downloadfilename=PATH \n \
+    file://.* http://sstate.yoctoproject.org/2.6.3/PATH;downloadfilename=PATH \n \
+    file://.* http://sstate.yoctoproject.org/2.6.4/PATH;downloadfilename=PATH \n \
     "
 
 #
