@@ -1,5 +1,5 @@
-DEPENDS += "openssl docker virtual/libiothsm"
-RDEPENDS_${PN} += "virtual/libiothsm docker"
+DEPENDS += "openssl virtual/docker virtual/libiothsm"
+RDEPENDS_${PN} += "virtual/libiothsm virtual/docker"
 INSANE_SKIP_${PN} += "dev-deps"
 
 export OPENSSL_DIR = "${STAGING_EXECPREFIXDIR}"
