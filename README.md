@@ -5,33 +5,17 @@ This layer provides support for building [IoT Edge](https://github.com/azure/iot
 
 Please see the corresponding sections below for details.
 
-Dependencies
-------------
-This layer depends on:
-
-```
-URI: git://github.com/meta-rust/meta-rust.git
-branch: master
-revision: HEAD
-prio: default
-```
-
-```
-URI: git://git.yoctoproject.org/meta-virtualization
-branch: sumo
-revision: HEAD
-prio: default
-```
-
-```
-URI: git://github.com/openembedded/openembedded-core.git
-branch: sumo
-revision: HEAD
-prio: default
-```
-
 Adding the meta-iotedge layer to your build
 =================================================
+
+Use the branch of `meta-iotedge` corresponding to your Yocto release:
+
+* [Sumo](https://github.com/Azure/meta-iotedge/tree/sumo) - `git clone -b sumo https://github.com/Azure/meta-iotedge.git`
+* [Thud](https://github.com/Azure/meta-iotedge/tree/thud) - `git clone -b thud https://github.com/Azure/meta-iotedge.git`
+* [Warrior](https://github.com/Azure/meta-iotedge/tree/warrior) - `git clone -b warrior https://github.com/Azure/meta-iotedge.git`
+* [Zeus](https://github.com/Azure/meta-iotedge/tree/zeus) - `git clone -b zeus https://github.com/Azure/meta-iotedge.git`
+
+In almost all cases, you should not use the `master` branch of `meta-iotedge` in your image.
 
 Run `bitbake-layers add-layer meta-iotedge`
 
