@@ -6,6 +6,7 @@ pr:
       - sumo
       - thud
       - warrior
+      - zeus
       - dunfell
 jobs:
 
