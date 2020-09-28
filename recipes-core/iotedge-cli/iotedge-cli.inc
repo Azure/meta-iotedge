@@ -1,10 +1,12 @@
-DEPENDS += "openssl10"
+DEPENDS += "openssl virtual/libiothsm"
+RDEPENDS_${PN} += "virtual/libiothsm"
 
-export BUILD_SOURCEVERSION="${SRCREV}"
+export OPENSSL_DIR = "${STAGING_EXECPREFIXDIR}"
+export LIBIOTHSM_NOBUILD="On"
 
 do_install () {
     # Binaries
     install -d  "${D}${bindir}"
-    install -m 755 "${WORKDIR}/git/edgelet/target/${CARGO_TARGET_SUBDIR}/iotedge" ${D}${bindir}/iotedge
+    install -m 755 "${WORKDIR}/iotedge-${PV}/edgelet/target/${CARGO_TARGET_SUBDIR}/iotedge" ${D}${bindir}/iotedge
 }
 

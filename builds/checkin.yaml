@@ -3,26 +3,22 @@ pr:
   branches:
     include:
       - master
-      - sumo
-      - thud
-      - warrior
-      - zeus
       - dunfell
 jobs:
 
 ################################################################################
-  - job: sumo
+  - job: dunfell
 ################################################################################
-    displayName: Sumo
+    displayName: Dunfell
     pool:
       name: azureiotedge
       demands:
         - yocto
     timeoutInMinutes: 360
     steps:
-      - script: scripts/fetch.sh sumo
+      - script: scripts/fetch.sh dunfell
         displayName: Fetch
         env:
-          METARUST_REV: 'refs/remotes/origin/master'
+          METARUST_REV: 'e4d25b98083bcecb94df6ee189a165d63ede7f3d'
       - script: scripts/build.sh
         displayName: Build
