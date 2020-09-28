@@ -3,22 +3,22 @@ pr:
   branches:
     include:
       - master
-      - thud
+      - dunfell
 jobs:
 
 ################################################################################
-  - job: thud
+  - job: dunfell
 ################################################################################
-    displayName: Thud
+    displayName: Dunfell
     pool:
       name: azureiotedge
       demands:
         - yocto
     timeoutInMinutes: 360
     steps:
-      - script: scripts/fetch.sh thud
+      - script: scripts/fetch.sh dunfell
         displayName: Fetch
         env:
-          METARUST_REV: 'd8d77be1292064a02adcb5e72e293604b704f69b'
+          METARUST_REV: 'e4d25b98083bcecb94df6ee189a165d63ede7f3d'
       - script: scripts/build.sh
         displayName: Build
