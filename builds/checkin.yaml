@@ -19,6 +19,6 @@ jobs:
       - script: scripts/fetch.sh thud
         displayName: Fetch
         env:
-          METARUST_REV: 'd8d77be1292064a02adcb5e72e293604b704f69b'
+          METARUST_REV: '7f235b6f8973cc5269448375f2a8f9867bb2a369'
       - script: scripts/build.sh
         displayName: Build
