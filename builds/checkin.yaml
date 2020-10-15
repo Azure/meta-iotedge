@@ -3,20 +3,20 @@ pr:
   branches:
     include:
       - master
-      - dunfell
+      - gatesgarth
 jobs:
 
 ################################################################################
-  - job: dunfell
+  - job: gatesgarth
 ################################################################################
-    displayName: Dunfell
+    displayName: Gatesgarth
     pool:
       name: azureiotedge
       demands:
         - yocto
     timeoutInMinutes: 360
     steps:
-      - script: scripts/fetch.sh dunfell
+      - script: scripts/fetch.sh gatesgarth
         displayName: Fetch
         env:
           METARUST_REV: 'e4d25b98083bcecb94df6ee189a165d63ede7f3d'
