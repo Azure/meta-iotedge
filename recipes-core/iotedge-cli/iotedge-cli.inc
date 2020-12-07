@@ -1,5 +1,5 @@
-DEPENDS += "openssl virtual/libiothsm "
-RDEPENDS_${PN} += "virtual/libiothsm "
+DEPENDS += "openssl virtual/libiothsm"
+RDEPENDS_${PN} += "virtual/libiothsm"
 
 export OPENSSL_DIR = "${STAGING_EXECPREFIXDIR}"
 export LIBIOTHSM_NOBUILD="On"

@@ -1,5 +1,5 @@
-DEPENDS += "openssl virtual/docker virtual/libiothsm "
-RDEPENDS_${PN} += "virtual/libiothsm docker "
+DEPENDS += "openssl virtual/docker virtual/libiothsm"
+RDEPENDS_${PN} += "virtual/libiothsm docker"
 INSANE_SKIP_${PN} += "dev-deps"
 
 export OPENSSL_DIR = "${STAGING_EXECPREFIXDIR}"
@@ -41,10 +41,9 @@ do_install () {
 inherit useradd
 USERADD_PACKAGES = "${PN}"
 SERVICE_USER_ID ?= "15580"
-
 USERADD_PARAM_${PN} = "-r -u ${SERVICE_USER_ID} -g iotedge -G docker -s /bin/false -d ${localstatedir}/lib/iotedge iotedge"
 GROUPADD_PARAM_${PN} = "-r -g ${SERVICE_USER_ID} iotedge"
-    
+
 FILES_${PN} += " \
     ${systemd_unitdir}/system/* \
     ${localstatedir}/lib/iotedge \
