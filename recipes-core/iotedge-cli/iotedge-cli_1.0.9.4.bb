@@ -244,6 +244,23 @@ SRCREV_FORMAT .= "_tokio-uds-windows"
 SRCREV_tokio-uds-windows = "b689a914dbaa905f359f89200c01fed7a6c8df3f"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/tokio-uds-windows"
 
+# Lower unused_attributes from error (implied by deny(warnings)) to allow, because
+# rust_2018_idioms is for crate level only since:
+# https://github.com/rust-lang/rust/pull/73300
+# causing:
+# error: deny(rust_2018_idioms) is ignored unless specified at crate level
+# with rust 1.46.0 and newer
+RUSTFLAGS += "-A unused_attributes"
+
+# Lower deprecated from error (implied by deny(warnings)) to allow, because
+# Error::description is deprecated since 1.42.0 with https://github.com/rust-lang/rust/pull/66919
+# error: use of deprecated associated function `std::error::Error::description`: use the Display impl or to_string()
+#    --> iotedge/src/support_bundle.rs:248:54
+#    --> iotedge/src/support_bundle.rs:302:54
+#    --> iotedge/src/support_bundle.rs:375:54
+#    --> iotedge/src/support_bundle.rs:457:54
+RUSTFLAGS += "-A deprecated"
+
 LIC_FILES_CHKSUM=" \
 file://../../LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \
 file://../../THIRDPARTYNOTICES;md5=1cda6520d68499d4f60c7270445fe436 \

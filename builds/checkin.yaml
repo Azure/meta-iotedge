@@ -19,6 +19,6 @@ jobs:
       - script: scripts/fetch.sh gatesgarth
         displayName: Fetch
         env:
-          METARUST_REV: 'e4d25b98083bcecb94df6ee189a165d63ede7f3d'
+          METARUST_REV: 'c72b2dda3a4f70ed257c7de9bedb4b04732970a4'
       - script: scripts/build.sh
         displayName: Build
