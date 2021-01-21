@@ -17,5 +17,4 @@ die() {
 rm -f build/conf/bblayers.conf || die "failed to nuke bblayers.conf"
 rm -f build/conf/local.conf || die "failed to nuke local.conf"
 
-./scripts/containerize.sh bitbake ${BUILD_TARGETS} || die "failed to build"
-
+./scripts/containerize.sh ". poky/oe-init-build-env && bitbake ${BUILD_TARGETS}" || die "failed to build"
