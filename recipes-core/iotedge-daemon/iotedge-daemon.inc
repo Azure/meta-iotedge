@@ -18,7 +18,7 @@ INITSCRIPT_PARAMS_${PN} = "defaults"
 do_install () {
     # Binaries
     install -d  "${D}${bindir}"
-    install -m 755 "${WORKDIR}/iotedge-${PV}/edgelet/target/${CARGO_TARGET_SUBDIR}/iotedged" ${D}${bindir}/iotedged
+    install -m 755 "${B}/target/${CARGO_TARGET_SUBDIR}/iotedged" ${D}${bindir}/iotedged
 
     # Config file
     install -d "${D}${sysconfdir}/iotedge"
