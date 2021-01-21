@@ -235,13 +235,13 @@ SRC_URI += " \
 "
 
 SRCREV_FORMAT .= "_hyperlocal-windows"
-SRCREV_hyperlocal-windows = "${AUTOREV}"
+SRCREV_hyperlocal-windows = "2bd432bbbfb5b1cf38429733dd9a593c7b97a850"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/hyperlocal-windows"
 SRCREV_FORMAT .= "_mio-uds-windows"
-SRCREV_mio-uds-windows = "${AUTOREV}"
+SRCREV_mio-uds-windows = "87a4a9970e668fdbe9205f4039967e175182c70e"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/mio-uds-windows"
 SRCREV_FORMAT .= "_tokio-uds-windows"
-SRCREV_tokio-uds-windows = "${AUTOREV}"
+SRCREV_tokio-uds-windows = "b689a914dbaa905f359f89200c01fed7a6c8df3f"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/tokio-uds-windows"
 
 LIC_FILES_CHKSUM=" \
