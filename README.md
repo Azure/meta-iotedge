@@ -12,7 +12,7 @@ This layer depends on:
 ```
 URI: git://github.com/meta-rust/meta-rust.git
 branch: master
-revision: e4d25b98083bcecb94df6ee189a165d63ede7f3d
+revision: c72b2dda3a4f70ed257c7de9bedb4b04732970a4
 prio: default
 ```
 
@@ -29,19 +29,6 @@ branch: dunfell
 revision: HEAD
 prio: default
 ```
-
-If you use newer meta-rust and iotedge-{cli,daemon} fail because of:
-#![deny(rust_2018_idioms, warnings)]
-in various files, then select older than current (1.47.0) version of rust:
-RUST_VERSION = "1.41.0"
-PREFERRED_VERSION_rust-native ?= "${RUST_VERSION}"
-PREFERRED_VERSION_rust-cross-${TARGET_ARCH} ?= "${RUST_VERSION}"
-PREFERRED_VERSION_rust-llvm-native ?= "${RUST_VERSION}"
-PREFERRED_VERSION_libstd-rs ?= "${RUST_VERSION}"
-PREFERRED_VERSION_cargo-native ?= "${RUST_VERSION}"
-
-or work around this issue in source with do_compile_prepend():
-find ${WORKDIR}/iotedge-${PV} -name "*.rs" -exec sed -i 's/idioms, warnings)/idioms)/g' {} \;
 
 Adding the meta-iotedge layer to your build
 =================================================

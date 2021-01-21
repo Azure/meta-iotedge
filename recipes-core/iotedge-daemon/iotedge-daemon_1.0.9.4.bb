@@ -244,6 +244,14 @@ SRCREV_FORMAT .= "_tokio-uds-windows"
 SRCREV_tokio-uds-windows = "b689a914dbaa905f359f89200c01fed7a6c8df3f"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/tokio-uds-windows"
 
+# Lower unused_attributes from error (implied by deny(warnings)) to warning, because
+# rust_2018_idioms is for crate level only since:
+# https://github.com/rust-lang/rust/pull/73300
+# causing:
+# error: deny(rust_2018_idioms) is ignored unless specified at crate level
+# with rust 1.46.0 and newer
+RUSTFLAGS += "-A unused_attributes"
+
 LIC_FILES_CHKSUM=" \
 file://../../LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \
 file://../../THIRDPARTYNOTICES;md5=1cda6520d68499d4f60c7270445fe436 \
