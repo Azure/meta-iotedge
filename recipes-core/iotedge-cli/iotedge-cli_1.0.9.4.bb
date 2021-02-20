@@ -6,7 +6,6 @@ SRC_URI[md5sum]="e5b28b34b721a9353ff623374678edf9"
 SRC_URI[sha256sum]="6fbf23972d243624b280546cda4d47a336988fb6beedf0bc44cb29498663edff"
 
 S = "${WORKDIR}/iotedge-${PV}/edgelet/iotedge"
-CARGO_SRC_DIR = "iotedge"
 
 SRC_URI += " \
     crate://crates.io/adler32/1.0.4 \
