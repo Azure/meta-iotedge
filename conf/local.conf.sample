@@ -220,10 +220,12 @@ BB_DISKMON_DIRS = "\
 #file://.* http://someserver.tld/share/sstate/PATH;downloadfilename=PATH \n \
 #file://.* file:///some/local/dir/sstate/PATH"
 
-SSTATE_MIRRORS ?= "file://.* http://build-cache.asterius.io/master/sstate-cache/PATH;downloadfilename=PATH \n"
-
-SOURCE_MIRROR_URL ?= "http://build-cache.asterius.io/downloads/"
-INHERIT += "own-mirrors rm_work"
+SSTATE_MIRRORS = "\
+    file://.* http://sstate.yoctoproject.org/3.1/PATH;downloadfilename=PATH \n \
+    file://.* http://sstate.yoctoproject.org/3.1.1/PATH;downloadfilename=PATH \n \
+    file://.* http://sstate.yoctoproject.org/3.1.2/PATH;downloadfilename=PATH \n \
+    file://.* http://sstate.yoctoproject.org/3.1.3/PATH;downloadfilename=PATH \n \
+    "
 
 #
 # Qemu configuration

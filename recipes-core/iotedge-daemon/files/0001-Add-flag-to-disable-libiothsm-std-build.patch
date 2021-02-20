@@ -1,0 +1,39 @@
+From b9e3cef10e0362eb9b6d5e210cf7160b1835e309 Mon Sep 17 00:00:00 2001
+From: Mike Yagley <myagley@gmail.com>
+Date: Wed, 8 May 2019 16:54:14 -0700
+Subject: [PATCH] Add flag to disable libiothsm-std build
+
+---
+ edgelet/hsm-sys/build.rs | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/edgelet/hsm-sys/build.rs b/edgelet/hsm-sys/build.rs
+index 882c5aec..a207dfaa 100644
+--- a/edgelet/hsm-sys/build.rs
++++ b/edgelet/hsm-sys/build.rs
+@@ -72,7 +72,7 @@ impl SetPlatformDefines for Config {
+     }
+ }
+ 
+-fn main() {
++fn build_libiothsm() {
+     // Clone Azure C -shared library
+     let c_shared_repo = "azure-iot-hsm-c/deps/c-shared";
+     let utpm_repo = "azure-iot-hsm-c/deps/utpm";
+@@ -174,3 +174,13 @@ fn main() {
+     #[cfg(unix)]
+     println!("cargo:rustc-link-lib=crypto");
+ }
++
++fn main() {
++    if env::var("LIBIOTHSM_NOBUILD").is_ok() {
++        // libiothsm-std is expected to be built and installed out of band
++        println!("cargo:rustc-link-lib=iothsm");
++    } else {
++        // build libiothsm-std as part of hsm-sys build
++        build_libiothsm();
++    }
++}
+-- 
+2.17.1
+

@@ -3,24 +3,20 @@ pr:
   branches:
     include:
       - master
-      - sumo
-      - thud
-      - warrior
-      - zeus
-      - dunfell
+      - gatesgarth
 jobs:
 
 ################################################################################
-  - job: sumo
+  - job: gatesgarth
 ################################################################################
-    displayName: Sumo
+    displayName: Gatesgarth
     pool:
       name: azureiotedge
       demands:
         - yocto
     timeoutInMinutes: 360
     steps:
-      - script: scripts/fetch.sh sumo
+      - script: scripts/fetch.sh gatesgarth
         displayName: Fetch
         env:
           METARUST_REV: 'refs/remotes/origin/master'

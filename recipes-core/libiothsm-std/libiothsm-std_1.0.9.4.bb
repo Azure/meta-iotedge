@@ -5,12 +5,13 @@ LIC_FILES_CHKSUM=" \
 file://LICENSE;md5=b98fddd052bb2f5ddbcdbd417ffb26a8 \
 "
 
-SRC_URI += "gitsm://github.com/azure/iotedge.git;protocol=https;branch=release/1.0.7"
-SRCREV = "f455ae2cd66db716c4bd8e7aaa7984ce092481c0"
+SRC_URI += "https://github.com/Azure/azure-iotedge/releases/download/${PV}/iotedge-${PV}.tar.gz"
+SRC_URI[md5sum]="e5b28b34b721a9353ff623374678edf9"
+SRC_URI[sha256sum]="6fbf23972d243624b280546cda4d47a336988fb6beedf0bc44cb29498663edff"
 
-S = "${WORKDIR}/git/edgelet/hsm-sys/azure-iot-hsm-c"
+S = "${WORKDIR}/iotedge-${PV}/edgelet/hsm-sys/azure-iot-hsm-c"
 
-DEPENDS += "openssl10"
+DEPENDS += "openssl"
 PROVIDES += "virtual/libiothsm"
 RPROVIDES_${PN} += "virtual/libiothsm"
 
