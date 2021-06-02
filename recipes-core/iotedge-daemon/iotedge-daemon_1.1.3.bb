@@ -265,7 +265,7 @@ file://../../LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \
 file://../../THIRDPARTYNOTICES;md5=766e8bf0f17552c5c4cea26775a5b296 \
 "
 
-SUMMARY = "The iotedge tool is used to manage the IoT Edge runtime."
+SUMMARY = "IoT Edge Security Daemon"
 HOMEPAGE = "https://github.com/Azure/iotedge"
 LICENSE = "MIT"
 
