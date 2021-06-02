@@ -5,7 +5,7 @@ SRC_URI += "https://github.com/Azure/azure-iotedge/releases/download/${PV}/ioted
 SRC_URI[md5sum]="88fc1f825b6285e92da0b635d033173a"
 SRC_URI[sha256sum]="c9e49a5243428b2b6edb5f2a6310ba45cd3d79067c0c6a2bfba9abab49082c3e"
 
-S = "${WORKDIR}/iotedge-${PV}/edgelet/iotedged"
+S = "${WORKDIR}/iotedge-${PV}/iotedged"
 CARGO_SRC_DIR = "iotedged"
 
 # please note if you have entries that do not begin with crate://
@@ -264,10 +264,9 @@ LIC_FILES_CHKSUM=" \
 file://../../LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \
 file://../../THIRDPARTYNOTICES;md5=766e8bf0f17552c5c4cea26775a5b296 \
 "
-
 SUMMARY = "IoT Edge Security Daemon"
 HOMEPAGE = "https://github.com/Azure/iotedge"
 LICENSE = "MIT"
 
-include iotedge-${PV}.inc
-include iotedge.inc
+include iotedge-daemon-${PV}.inc
+include iotedge-daemon.inc

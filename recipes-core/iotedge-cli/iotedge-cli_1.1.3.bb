@@ -9,7 +9,7 @@ SRC_URI += "https://github.com/Azure/azure-iotedge/releases/download/${PV}/ioted
 SRC_URI[md5sum]="88fc1f825b6285e92da0b635d033173a"
 SRC_URI[sha256sum]="c9e49a5243428b2b6edb5f2a6310ba45cd3d79067c0c6a2bfba9abab49082c3e"
 
-S = "${WORKDIR}/iotedge-${PV}/edgelet/iotedge"
+S = "${WORKDIR}/iotedge-${PV}/iotedge"
 CARGO_SRC_DIR = "iotedge"
 
 # please note if you have entries that do not begin with crate://
@@ -273,5 +273,5 @@ SUMMARY = "The iotedge tool is used to manage the IoT Edge runtime."
 HOMEPAGE = "https://github.com/Azure/iotedge"
 LICENSE = "MIT"
 
-include iotedge-${PV}.inc
-include iotedge.inc
+include iotedge-cli-${PV}.inc
+include iotedge-cli.inc
