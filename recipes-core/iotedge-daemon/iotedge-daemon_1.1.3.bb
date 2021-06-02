@@ -269,8 +269,5 @@ SUMMARY = "IoT Edge Security Daemon"
 HOMEPAGE = "https://github.com/Azure/iotedge"
 LICENSE = "MIT"
 
-# includes this file if it exists but does not fail
-# this is useful for anything you may want to override from
-# what cargo-bitbake generates.
 include iotedge-${PV}.inc
 include iotedge.inc
