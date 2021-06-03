@@ -261,8 +261,8 @@ SRCREV_tokio-uds-windows = "${AUTOREV}"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/tokio-uds-windows"
 
 LIC_FILES_CHKSUM=" \
-file://../../LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \
-file://../../THIRDPARTYNOTICES;md5=766e8bf0f17552c5c4cea26775a5b296 \
+file://../LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \
+file://../THIRDPARTYNOTICES;md5=766e8bf0f17552c5c4cea26775a5b296 \
 "
 SUMMARY = "IoT Edge Security Daemon"
 HOMEPAGE = "https://github.com/Azure/iotedge"
