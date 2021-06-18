@@ -19,6 +19,6 @@ jobs:
       - script: scripts/fetch.sh dunfell
         displayName: Fetch
         env:
-          METARUST_REV: 'e4d25b98083bcecb94df6ee189a165d63ede7f3d'
+          METARUST_REV: '7ff669d8cedd83a2d3efb73073a63b0a7efffddc'
       - script: scripts/build.sh
         displayName: Build
