@@ -6,8 +6,8 @@ file://LICENSE;md5=b98fddd052bb2f5ddbcdbd417ffb26a8 \
 "
 
 SRC_URI += "https://github.com/Azure/azure-iotedge/releases/download/${PV}/iotedge-${PV}.tar.gz"
-SRC_URI[md5sum]="e5b28b34b721a9353ff623374678edf9"
-SRC_URI[sha256sum]="6fbf23972d243624b280546cda4d47a336988fb6beedf0bc44cb29498663edff"
+SRC_URI[md5sum]="fe99f044469fcf9173555d835fdee178"
+SRC_URI[sha256sum]="df22d2764a3b0418024e13d15c3476e842c2bef95c23066d9103e33059e20aaf"
 
 S = "${WORKDIR}/iotedge-${PV}/edgelet/hsm-sys/azure-iot-hsm-c"
 
