@@ -5,7 +5,6 @@ SRC_URI[md5sum]="88fc1f825b6285e92da0b635d033173a"
 SRC_URI[sha256sum]="c9e49a5243428b2b6edb5f2a6310ba45cd3d79067c0c6a2bfba9abab49082c3e"
 
 S = "${WORKDIR}/iotedge-${PV}/iotedge"
-CARGO_SRC_DIR = "iotedge"
 
 # 
 # Start of section
