@@ -1,8 +1,8 @@
 inherit cargo
 
 SRC_URI += "https://github.com/Azure/azure-iotedge/releases/download/${PV}/iotedge-${PV}.tar.gz"
-SRC_URI[md5sum]="050cc8f733840cbff15325772eb261c2"
-SRC_URI[sha256sum]="786f94ef83a554e2bf81c88cf01aa66fcba3ed5b5dc5b10dd8f19a5ee6fdef30"
+SRC_URI[md5sum]="df067049eb386d9246bf9e3da27b4f49"
+SRC_URI[sha256sum]="465afc9586ff3fe74978a962dc86dcf317f7ddd74369c0d090d7c7cc3914017b"
 
 S = "${WORKDIR}/iotedge-${PV}/iotedged"
 
@@ -21,6 +21,7 @@ SRC_URI += " \
     crate://crates.io/argon2rs/0.2.5 \
     crate://crates.io/arrayref/0.3.4 \
     crate://crates.io/arrayvec/0.4.7 \
+    crate://crates.io/assert_matches/1.5.0 \
     crate://crates.io/atty/0.2.10 \
     crate://crates.io/autocfg/1.0.1 \
     crate://crates.io/backtrace-sys/0.1.31 \
@@ -164,7 +165,6 @@ SRC_URI += " \
     crate://crates.io/safemem/0.2.0 \
     crate://crates.io/schannel/0.1.13 \
     crate://crates.io/scoped_threadpool/0.1.9 \
-    crate://crates.io/scopeguard/0.3.3 \
     crate://crates.io/scopeguard/1.0.0 \
     crate://crates.io/security-framework-sys/0.2.1 \
     crate://crates.io/security-framework/0.2.1 \
