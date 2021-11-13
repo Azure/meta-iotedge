@@ -264,7 +264,7 @@ EXTRA_OECARGO_PATHS += "${WORKDIR}/tokio-uds-windows"
 
 LIC_FILES_CHKSUM=" \
 file://../LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \
-file://../THIRDPARTYNOTICES;md5=766e8bf0f17552c5c4cea26775a5b296 \
+file://../THIRDPARTYNOTICES;md5=802851b8dccb6ebe33efd7358e2cce86 \
 "
 
 SUMMARY = "The iotedge tool is used to manage the IoT Edge runtime."
