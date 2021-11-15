@@ -11,16 +11,16 @@ pr:
 jobs:
 
 ################################################################################
-  - job: sumo
+  - job: honister
 ################################################################################
-    displayName: Sumo
+    displayName: Honister
     pool:
       name: azureiotedge
       demands:
         - yocto
     timeoutInMinutes: 360
     steps:
-      - script: scripts/fetch.sh sumo
+      - script: scripts/fetch.sh honister
         displayName: Fetch
         env:
           METARUST_REV: 'refs/remotes/origin/master'
