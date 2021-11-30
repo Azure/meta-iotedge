@@ -26,6 +26,7 @@ do_install () {
 
     # Data dir
     install -d -o iotedge -g iotedge "${D}${localstatedir}/lib/iotedge"
+    install -d -o iotedge -g iotedge "${D}${localstatedir}/log/iotedge"
 
     if ${@bb.utils.contains('DISTRO_FEATURES', 'systemd', 'true', 'false', d)}; then
         install -d ${D}${systemd_unitdir}/system
