@@ -1,0 +1,25 @@
+From 8c40fae9f235c005fc241f09cec9ea982c183b2a Mon Sep 17 00:00:00 2001
+From: Pierrick Curt <pierrick.curt@rtone.fr>
+Date: Mon, 26 Apr 2021 18:39:51 +0000
+Subject: [PATCH] Fix edgelet/iotedge code
+
+---
+ edgelet/iotedge/src/check/mod.rs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/edgelet/iotedge/src/check/mod.rs b/edgelet/iotedge/src/check/mod.rs
+index 44b5df5c2..041fdc6d5 100644
+--- a/edgelet/iotedge/src/check/mod.rs
++++ b/edgelet/iotedge/src/check/mod.rs
+@@ -237,7 +237,7 @@ impl Check {
+             description: String,
+             result: CheckResult,
+             additional_info: serde_json::Value,
+-        };
++        }
+ 
+         let mut checks: BTreeMap<String, CheckOutputSerializable> = Default::default();
+ 
+-- 
+2.17.1
+

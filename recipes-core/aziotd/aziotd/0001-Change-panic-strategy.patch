@@ -1,0 +1,26 @@
+From 31b671bbe28d94fae70ca15c9ab198d8640ec600 Mon Sep 17 00:00:00 2001
+From: Pierrick Curt <pierrick.curt@rtone.fr>
+Date: Mon, 26 Apr 2021 09:54:28 +0000
+Subject: [PATCH] Change panic strategy
+
+---
+ Cargo.toml | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Cargo.toml b/Cargo.toml
+index 797856f..5233a37 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -56,7 +56,7 @@ members = [
+ # Don't let panics from callbacks cross FFI boundary
+ 
+ [profile.dev]
+-panic = "abort"
++panic = "unwind"
+ 
+ [profile.release]
+-panic = "abort"
++panic = "unwind"
+-- 
+2.17.1
+
