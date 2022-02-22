@@ -244,19 +244,19 @@ SRC_URI += " \
     crate://crates.io/ws2_32-sys/0.2.1 \
     crate://crates.io/yaml-rust/0.4.0 \
     crate://crates.io/zip/0.5.3 \
-    git://github.com/Azure/hyperlocal-windows;protocol=https;nobranch=1;name=hyperlocal-windows;destsuffix=hyperlocal-windows \
-    git://github.com/Azure/mio-uds-windows.git;protocol=https;nobranch=1;name=mio-uds-windows;destsuffix=mio-uds-windows \
-    git://github.com/Azure/tokio-uds-windows.git;protocol=https;nobranch=1;name=tokio-uds-windows;destsuffix=tokio-uds-windows \
+    git://github.com/Azure/hyperlocal-windows;protocol=https;branch=main;name=hyperlocal-windows;destsuffix=hyperlocal-windows \
+    git://github.com/Azure/mio-uds-windows.git;protocol=https;branch=main;name=mio-uds-windows;destsuffix=mio-uds-windows \
+    git://github.com/Azure/tokio-uds-windows.git;protocol=https;branch=main;name=tokio-uds-windows;destsuffix=tokio-uds-windows \
 "
 
 SRCREV_FORMAT .= "_hyperlocal-windows"
-SRCREV_hyperlocal-windows = "${AUTOREV}"
+SRCREV_hyperlocal-windows = "main"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/hyperlocal-windows"
 SRCREV_FORMAT .= "_mio-uds-windows"
-SRCREV_mio-uds-windows = "${AUTOREV}"
+SRCREV_mio-uds-windows = "main"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/mio-uds-windows"
 SRCREV_FORMAT .= "_tokio-uds-windows"
-SRCREV_tokio-uds-windows = "${AUTOREV}"
+SRCREV_tokio-uds-windows = "main"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/tokio-uds-windows"
 
 #
