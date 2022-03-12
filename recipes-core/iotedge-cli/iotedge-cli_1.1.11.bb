@@ -1,8 +1,8 @@
 inherit cargo
 
 SRC_URI += "https://github.com/Azure/azure-iotedge/releases/download/${PV}/iotedge-${PV}.tar.gz"
-SRC_URI[md5sum]="287da13e0118eb2c40f1c17397f6568a"
-SRC_URI[sha256sum]="afeb8d31a95f5acedd9e617b2231eb96f853a4a74b0783cb95246fa6fb6ad2a2"
+SRC_URI[md5sum]="7e4578607bc7453f6d24851d8561b545"
+SRC_URI[sha256sum]="2283d99f2a27af8ea037457d51fa4cb5e15449a0eea6170c3ab46d3e39f6be76"
 
 S = "${WORKDIR}/iotedge-${PV}/iotedge"
 
@@ -264,7 +264,7 @@ EXTRA_OECARGO_PATHS += "${WORKDIR}/tokio-uds-windows"
 
 LIC_FILES_CHKSUM=" \
 file://../LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \
-file://../THIRDPARTYNOTICES;md5=802851b8dccb6ebe33efd7358e2cce86 \
+file://../THIRDPARTYNOTICES;md5=11604c6170b98c376be25d0ca6989d9b \
 "
 
 SUMMARY = "The iotedge tool is used to manage the IoT Edge runtime."
