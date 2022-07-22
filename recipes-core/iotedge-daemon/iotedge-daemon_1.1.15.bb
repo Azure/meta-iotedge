@@ -95,7 +95,7 @@ SRC_URI += " \
     crate://crates.io/hyperlocal/0.6.0 \
     crate://crates.io/idna/0.1.4 \
     crate://crates.io/idna/0.2.0 \
-    crate://crates.io/indexmap/1.0.1 \
+	crate://crates.io/indexmap/1.0.1 \
     crate://crates.io/iovec/0.1.2 \
     crate://crates.io/itoa/0.4.1 \
     crate://crates.io/json-patch/0.2.5 \
@@ -158,7 +158,7 @@ SRC_URI += " \
     crate://crates.io/redox_termios/0.1.1 \
     crate://crates.io/redox_users/0.2.0 \
     crate://crates.io/regex-syntax/0.6.25 \
-    crate://crates.io/regex/1.5.4 \
+    crate://crates.io/regex/1.5.5 \
     crate://crates.io/remove_dir_all/0.5.1 \
     crate://crates.io/rustc-demangle/0.1.7 \
     crate://crates.io/rustc_version/0.2.3 \
