@@ -95,7 +95,7 @@ SRC_URI += " \
     crate://crates.io/hyperlocal/0.6.0 \
     crate://crates.io/idna/0.1.4 \
     crate://crates.io/idna/0.2.0 \
-	crate://crates.io/indexmap/1.0.1 \
+    crate://crates.io/indexmap/1.0.1 \
     crate://crates.io/iovec/0.1.2 \
     crate://crates.io/itoa/0.4.1 \
     crate://crates.io/json-patch/0.2.5 \
