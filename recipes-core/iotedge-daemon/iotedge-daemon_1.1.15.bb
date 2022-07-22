@@ -1,8 +1,8 @@
 inherit cargo
 
 SRC_URI += "https://github.com/Azure/azure-iotedge/releases/download/${PV}/iotedge-${PV}.tar.gz"
-SRC_URI[md5sum]="7e4578607bc7453f6d24851d8561b545"
-SRC_URI[sha256sum]="2283d99f2a27af8ea037457d51fa4cb5e15449a0eea6170c3ab46d3e39f6be76"
+SRC_URI[md5sum]="11189b3046573443f75c7b5bba54b8c4"
+SRC_URI[sha256sum]="386502d4efa693daaea1bf70deff5c7dabebfad1c5b899e789a95f2e3950257c"
 
 
 S = "${WORKDIR}/iotedge-${PV}/iotedged"
