@@ -246,9 +246,9 @@ SRC_URI += " \
     crate://crates.io/ws2_32-sys/0.2.1 \
     crate://crates.io/yaml-rust/0.4.0 \
     crate://crates.io/zip/0.5.13 \
-    git://github.com/Azure/hyperlocal-windows;protocol=https;nobranch=1;name=hyperlocal-windows;destsuffix=hyperlocal-windows \
-    git://github.com/Azure/mio-uds-windows.git;protocol=https;nobranch=1;name=mio-uds-windows;destsuffix=mio-uds-windows \
-    git://github.com/Azure/tokio-uds-windows.git;protocol=https;nobranch=1;name=tokio-uds-windows;destsuffix=tokio-uds-windows \
+    git://github.com/Azure/hyperlocal-windows;protocol=https;branch=main;name=hyperlocal-windows;destsuffix=hyperlocal-windows \
+    git://github.com/Azure/mio-uds-windows.git;protocol=https;branch=main;name=mio-uds-windows;destsuffix=mio-uds-windows \
+    git://github.com/Azure/tokio-uds-windows.git;protocol=https;branch=main;name=tokio-uds-windows;destsuffix=tokio-uds-windows \
 "
 
 SRCREV_FORMAT .= "_hyperlocal-windows"
