@@ -11,9 +11,9 @@ jobs:
 ################################################################################
     displayName: Dunfell
     pool:
-      name: azureiotedge
+      name: "Azure-IoT-Edge-1ES-Hosted-Linux"
       demands:
-        - yocto
+      - ImageOverride -equals agent-aziotedge-rhel-8-msmoby
     timeoutInMinutes: 360
     steps:
       - script: scripts/fetch.sh dunfell
