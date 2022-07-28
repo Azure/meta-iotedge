@@ -81,6 +81,19 @@ update_repo() {
 	echo "Updated '${path}' to '${rev}'"
 }
 
+# Fetch into /mnt/storage
+# https://github.com/crops/poky-container/blob/master/Dockerfile
+echo "*** Show working dir"
+echo ${PWD}
+ls -la ${PWD}
+
+sudo groupadd -g 70 usersetup 
+sudo useradd -N -m -u 70 -g 70 usersetup
+sudo useradd -ou $(id -u) -g$(id -g) pokyuser
+sudo usermod -aG root pokyuser
+sudo chown -R $(id -u):$(id -g) ${STORAGE_PATH}
+pushd ${STORAGE_PATH}
+
 # For each repo, do the work
 for repo in ${REPOS}; do
 	# upper case the name
@@ -103,6 +116,11 @@ for repo in ${REPOS}; do
 	update_repo "${repo_uri}" "${repo_path}" "${repo_rev}"
 
 done
+
+echo "*** Show storage dir"
+pwd
+sudo chown -R $(id -u):$(id -g) ${STORAGE_PATH}
+ls -la ${STORAGE_PATH}
 
 rm -rf "${METAIOTEDGE_PATH}" || die "unable to clear old ${METAIOTEDGE_PATH}"
 ln -sf "../${METAIOTEDGE_URI}" "${METAIOTEDGE_PATH}" || \

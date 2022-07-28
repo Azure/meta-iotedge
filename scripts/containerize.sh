@@ -30,6 +30,10 @@ tty -s && termint=t
 einfo "*** Ensuring local container is up to date"
 docker pull ${CONTAINER} > /dev/null || die "Failed to update docker container"
 
+echo "*** Show dir"
+pwd
+ls -la ${STORAGE_PATH}
+
 # Ensure we've got what we need for SSH_AUTH_SOCK
 if [[ -n ${SSH_AUTH_SOCK} ]]; then
 	SSH_AUTH_DIR=$(dirname $(readlink -f ${SSH_AUTH_SOCK}))
@@ -40,13 +44,17 @@ fi
 einfo "*** Launching container ..."
 exec docker run \
     --privileged \
+    -u ${my_uid}:${my_gid} \
     -e BUILD_UID=${my_uid} \
     -e BUILD_GID=${my_gid} \
     -e TEMPLATECONF=meta-iotedge/conf \
     -e MACHINE=${MACHINE:-qemux86-64} \
     ${SSH_AUTH_SOCK:+-e SSH_AUTH_SOCK="/tmp/ssh-agent/${SSH_AUTH_NAME}"} \
+    -v /etc/passwd:/etc/passwd:ro \
+    -v /etc/group:/etc/group:ro \
+    -v /etc/shadow:/etc/shadow:ro \
     -v ${HOME}/.ssh:/var/build/.ssh \
-    -v "${PWD}":/var/build:rw \
+    -v ${STORAGE_PATH}:/var/build:rw \
     --workdir=/var/build \
     ${SSH_AUTH_SOCK:+-v "${SSH_AUTH_DIR}":/tmp/ssh-agent} \
     ${EXTRA_CONTAINER_ARGS} \

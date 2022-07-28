@@ -11,14 +11,30 @@ jobs:
 ################################################################################
     displayName: Dunfell
     pool:
-      name: "Azure-IoT-Edge-1ES-Hosted-Linux"
+      name: "iotedge-1es-hosted-linux"
       demands:
-      - ImageOverride -equals agent-aziotedge-rhel-8-msmoby
-    timeoutInMinutes: 360
+      - ImageOverride -equals agent-aziotedge-ubuntu-20.04-msmoby
+    timeoutInMinutes: 2400
+    variables:
+      mntStorageLocation: '/mnt/storage'
     steps:
       - script: scripts/fetch.sh dunfell
         displayName: Fetch
         env:
           METARUST_REV: '7ff669d8cedd83a2d3efb73073a63b0a7efffddc'
+          STORAGE_PATH: $(mntStorageLocation)
+      - script: |
+          cp -r $(Build.SourcesDirectory)/* $(mntStorageLocation)
+        displayName: Copy Files
       - script: scripts/build.sh
         displayName: Build
+        env:
+          STORAGE_PATH: $(mntStorageLocation)
+      - script: |
+          echo "du"
+          sudo du -hsx 
+          echo ""
+          echo "df"
+          sudo df -ha /dev/*
+        displayName: Debug disk
+        condition: always()
