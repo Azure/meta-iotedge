@@ -114,10 +114,7 @@ for repo in ${REPOS}; do
 
 done
 
-echo "*** Show storage dir"
-pwd
 sudo chown -R $(id -u):$(id -g) ${STORAGE_PATH}
-ls -la ${STORAGE_PATH}
 
 rm -rf "${METAIOTEDGE_PATH}" || die "unable to clear old ${METAIOTEDGE_PATH}"
 ln -sf "../${METAIOTEDGE_URI}" "${METAIOTEDGE_PATH}" || \
