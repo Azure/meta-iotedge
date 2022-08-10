@@ -81,12 +81,9 @@ update_repo() {
 	echo "Updated '${path}' to '${rev}'"
 }
 
-# Fetch into /mnt/storage
+# Base image dockerfile:
 # https://github.com/crops/poky-container/blob/master/Dockerfile
-echo "*** Show working dir"
-echo ${PWD}
-ls -la ${PWD}
-
+echo "*** Set permissions to be used for the build container"
 sudo groupadd -g 70 usersetup 
 sudo useradd -N -m -u 70 -g 70 usersetup
 sudo useradd -ou $(id -u) -g$(id -g) pokyuser

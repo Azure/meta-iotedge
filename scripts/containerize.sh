@@ -30,10 +30,6 @@ tty -s && termint=t
 einfo "*** Ensuring local container is up to date"
 docker pull ${CONTAINER} > /dev/null || die "Failed to update docker container"
 
-echo "*** Show dir"
-pwd
-ls -la ${STORAGE_PATH}
-
 # Ensure we've got what we need for SSH_AUTH_SOCK
 if [[ -n ${SSH_AUTH_SOCK} ]]; then
 	SSH_AUTH_DIR=$(dirname $(readlink -f ${SSH_AUTH_SOCK}))
