@@ -14,6 +14,8 @@ jobs:
       name: "iotedge-1es-hosted-linux"
       demands:
       - ImageOverride -equals agent-aziotedge-ubuntu-20.04-msmoby
+      - DiskSizeGiB -equals 150
+      - WorkFolder -equals /mnt/storage/_work
     timeoutInMinutes: 2400
     variables:
       mntStorageLocation: '/mnt/storage'
@@ -23,11 +25,6 @@ jobs:
         env:
           METARUST_REV: '7ff669d8cedd83a2d3efb73073a63b0a7efffddc'
           STORAGE_PATH: $(mntStorageLocation)
-      - script: |
-          # DevOps won't let you directly checkout the "self" repository to the mounted drive.
-          # The repo needs to be explicitly copied over after the checkout
-          cp -r $(Build.SourcesDirectory)/* $(mntStorageLocation)
-        displayName: Copy Files
       - script: scripts/build.sh
         displayName: Build
         env:

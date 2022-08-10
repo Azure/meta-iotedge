@@ -40,17 +40,13 @@ fi
 einfo "*** Launching container ..."
 exec docker run \
     --privileged \
-    -u ${my_uid}:${my_gid} \
     -e BUILD_UID=${my_uid} \
     -e BUILD_GID=${my_gid} \
     -e TEMPLATECONF=meta-iotedge/conf \
     -e MACHINE=${MACHINE:-qemux86-64} \
     ${SSH_AUTH_SOCK:+-e SSH_AUTH_SOCK="/tmp/ssh-agent/${SSH_AUTH_NAME}"} \
-    -v /etc/passwd:/etc/passwd:ro \
-    -v /etc/group:/etc/group:ro \
-    -v /etc/shadow:/etc/shadow:ro \
     -v ${HOME}/.ssh:/var/build/.ssh \
-    -v ${STORAGE_PATH}:/var/build:rw \
+    -v ${PWD}:/var/build:rw \
     --workdir=/var/build \
     ${SSH_AUTH_SOCK:+-v "${SSH_AUTH_DIR}":/tmp/ssh-agent} \
     ${EXTRA_CONTAINER_ARGS} \

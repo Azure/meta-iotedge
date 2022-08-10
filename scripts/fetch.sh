@@ -81,16 +81,6 @@ update_repo() {
 	echo "Updated '${path}' to '${rev}'"
 }
 
-# Base image dockerfile:
-# https://github.com/crops/poky-container/blob/master/Dockerfile
-echo "*** Set permissions to be used for the build container"
-sudo groupadd -g 70 usersetup 
-sudo useradd -N -m -u 70 -g 70 usersetup
-sudo useradd -ou $(id -u) -g$(id -g) pokyuser
-sudo usermod -aG root pokyuser
-sudo chown -R $(id -u):$(id -g) ${STORAGE_PATH}
-pushd ${STORAGE_PATH}
-
 # For each repo, do the work
 for repo in ${REPOS}; do
 	# upper case the name
@@ -113,8 +103,6 @@ for repo in ${REPOS}; do
 	update_repo "${repo_uri}" "${repo_path}" "${repo_rev}"
 
 done
-
-sudo chown -R $(id -u):$(id -g) ${STORAGE_PATH}
 
 rm -rf "${METAIOTEDGE_PATH}" || die "unable to clear old ${METAIOTEDGE_PATH}"
 ln -sf "../${METAIOTEDGE_URI}" "${METAIOTEDGE_PATH}" || \
