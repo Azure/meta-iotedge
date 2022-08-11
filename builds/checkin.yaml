@@ -24,16 +24,5 @@ jobs:
         displayName: Fetch
         env:
           METARUST_REV: '7ff669d8cedd83a2d3efb73073a63b0a7efffddc'
-          STORAGE_PATH: $(mntStorageLocation)
       - script: scripts/build.sh
         displayName: Build
-        env:
-          STORAGE_PATH: $(mntStorageLocation)
-      - script: |
-          echo "du"
-          sudo du -hsx /* | sort -rh | head -n 40
-          echo ""
-          echo "df"
-          sudo df -ha /dev/*
-        displayName: Debug disk
-        condition: always()
