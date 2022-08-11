@@ -17,8 +17,6 @@ jobs:
       - DiskSizeGiB -equals 150
       - WorkFolder -equals /mnt/storage/_work
     timeoutInMinutes: 2400
-    variables:
-      mntStorageLocation: '/mnt/storage'
     steps:
       - script: scripts/fetch.sh dunfell
         displayName: Fetch
