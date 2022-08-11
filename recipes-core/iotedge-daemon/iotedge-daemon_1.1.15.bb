@@ -1,8 +1,8 @@
 inherit cargo
 
 SRC_URI += "https://github.com/Azure/azure-iotedge/releases/download/${PV}/iotedge-${PV}.tar.gz"
-SRC_URI[md5sum]="7e4578607bc7453f6d24851d8561b545"
-SRC_URI[sha256sum]="2283d99f2a27af8ea037457d51fa4cb5e15449a0eea6170c3ab46d3e39f6be76"
+SRC_URI[md5sum]="69181ab2beff8cdc259269b29e74aa3e"
+SRC_URI[sha256sum]="1a18e765867370dc953c7c241a680a25511efa0b2ad464de27b1d1e6aebe962b"
 
 
 S = "${WORKDIR}/iotedge-${PV}/iotedged"
@@ -158,7 +158,7 @@ SRC_URI += " \
     crate://crates.io/redox_termios/0.1.1 \
     crate://crates.io/redox_users/0.2.0 \
     crate://crates.io/regex-syntax/0.6.25 \
-    crate://crates.io/regex/1.5.4 \
+    crate://crates.io/regex/1.5.5 \
     crate://crates.io/remove_dir_all/0.5.1 \
     crate://crates.io/rustc-demangle/0.1.7 \
     crate://crates.io/rustc_version/0.2.3 \
