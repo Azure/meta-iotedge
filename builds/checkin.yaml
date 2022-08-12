@@ -11,10 +11,12 @@ jobs:
 ################################################################################
     displayName: Dunfell
     pool:
-      name: azureiotedge
+      name: "iotedge-1es-hosted-linux"
       demands:
-        - yocto
-    timeoutInMinutes: 360
+      - ImageOverride -equals agent-aziotedge-ubuntu-20.04-msmoby
+      - DiskSizeGiB -equals 150
+      - WorkFolder -equals /mnt/storage/_work
+    timeoutInMinutes: 2400
     steps:
       - script: scripts/fetch.sh dunfell
         displayName: Fetch
