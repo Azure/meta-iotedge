@@ -9,7 +9,7 @@ branch=${1-master}
 
 # the repos we want to check out, must setup variables below
 # NOTE: poky must remain first
-REPOS="poky metaoe metarust metavirt"
+REPOS="poky metaoe metarust metavirt metasecurity metaclang"
 
 POKY_URI="git://git.yoctoproject.org/poky.git"
 POKY_PATH="poky"
@@ -26,6 +26,14 @@ METARUST_REV="${METARUST_REV-refs/remotes/origin/${branch}}"
 METAVIRT_URI="git://git.yoctoproject.org/meta-virtualization"
 METAVIRT_PATH="poky/meta-virtualization"
 METAVIRT_REV="${METAVIRT_REV-refs/remotes/origin/${branch}}"
+
+METASECURITY_URI="git://git.yoctoproject.org/meta-security"
+METASECURITY_PATH="poky/meta-security"
+METASECURITY_REV="${METASECURITY_REV-refs/remotes/origin/${branch}}"
+
+METACLANG_URI="https://github.com/kraj/meta-clang"
+METACLANG_PATH="poky/meta-clang"
+METACLANG_REV="${METACLANG_REV-refs/remotes/origin/${branch}}"
 
 METAIOTEDGE_URI="."
 METAIOTEDGE_PATH="poky/meta-iotedge"
