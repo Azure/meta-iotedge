@@ -1,0 +1,15 @@
+[Unit]
+Description=Azure IoT Certificates Service
+Requires=aziot-certd.socket
+After=aziot-certd.socket
+
+[Service]
+Environment="LD_LIBRARY_PATH=@private-libs@"
+ExecStart=@libexecdir@/aziot-identity-service/aziot-certd
+KillMode=process
+Restart=on-failure
+RestartSec=5s
+User=aziotcs
+
+[Install]
+WantedBy=multi-user.target

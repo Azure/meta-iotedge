@@ -5,8 +5,8 @@ export MACHINE="${MACHINE-qemux86-64}"
 
 # What to build
 BUILD_TARGETS="\
-    iotedge-cli \
-    iotedge-daemon \
+    iotedge \
+    aziot-edged \
     "
 
 die() {

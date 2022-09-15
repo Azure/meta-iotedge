@@ -1,0 +1,15 @@
+[Unit]
+Description=Azure IoT Identity Service
+Requires=aziot-identityd.socket
+After=aziot-identityd.socket
+
+[Service]
+Environment="LD_LIBRARY_PATH=@private-libs@"
+ExecStart=@libexecdir@/aziot-identity-service/aziot-identityd
+KillMode=process
+Restart=on-failure
+RestartSec=5s
+User=aziotid
+
+[Install]
+WantedBy=multi-user.target

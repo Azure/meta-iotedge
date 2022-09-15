@@ -1,0 +1,15 @@
+[Unit]
+Description=Azure IoT Keys Service
+Requires=aziot-keyd.socket
+After=aziot-keyd.socket
+
+[Service]
+Environment="LD_LIBRARY_PATH=@private-libs@"
+ExecStart=@libexecdir@/aziot-identity-service/aziot-keyd
+KillMode=process
+Restart=on-failure
+RestartSec=5s
+User=aziotks
+
+[Install]
+WantedBy=multi-user.target
