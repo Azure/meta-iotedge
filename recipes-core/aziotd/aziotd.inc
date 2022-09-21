@@ -1,5 +1,5 @@
-DEPENDS += "openssl virtual/docker aziot-keys aziotctl"
-RDEPENDS_${PN} += "docker aziot-keys aziotctl"
+DEPENDS += "openssl virtual/docker"
+RDEPENDS_${PN} += "docker 
 
 inherit systemd 
 
