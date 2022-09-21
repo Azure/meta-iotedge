@@ -1,5 +1,5 @@
 DEPENDS += "openssl virtual/docker"
-RDEPENDS_${PN} += "docker "
+RDEPENDS_${PN} += "docker"
 
 do_install () {
     # Binaries
