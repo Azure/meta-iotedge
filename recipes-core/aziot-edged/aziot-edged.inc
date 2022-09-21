@@ -6,7 +6,7 @@ inherit systemd
 SYSTEMD_AUTO_ENABLE_${PN} = "enable"
 SYSTEMD_SERVICE_${PN} = "aziot-edged.service"
 
-SRC_URI += "file://./aziot-edged.service  \
+SRC_URI += "file://aziot-edged.service  \
 "
 
 do_install () {
