@@ -24,7 +24,6 @@
 #MACHINE ?= "qemuppc"
 #MACHINE ?= "qemux86"
 #MACHINE ?= "qemux86-64"
-
 #
 # There are also the following hardware board target machines included for 
 # demonstration purposes:
