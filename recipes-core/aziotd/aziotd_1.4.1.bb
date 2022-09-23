@@ -238,8 +238,6 @@ SRC_URI += " \
     crate://crates.io/ws2_32-sys/0.2.1 \
 "
 
-
-
 LIC_FILES_CHKSUM=" \
 file://LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \
 file://THIRDPARTYNOTICES;md5=11604c6170b98c376be25d0ca6989d9b \
