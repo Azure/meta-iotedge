@@ -6,12 +6,12 @@ inherit cargo
 # DEFAULT_PREFERENCE = "-1"
 
 # how to get aziotd could be as easy as but default to a git checkout:
-# SRC_URI += "crate://crates.io/aziotd/1.4.0"
-SRC_URI += "gitsm://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;branch=main"
-SRCREV = "d966a2227f3de42e5324db93786c572b203da605"
+# SRC_URI += "crate://crates.io/aziotd/1.4.1"
+SRC_URI += "gitsm://github.com/Azure/iot-identity-service;protocol=https;nobranch=1"
+SRCREV = "f349b64d3b555b917a417f1c7543d245612495e3"
 S = "${WORKDIR}/git"
 CARGO_SRC_DIR = "aziotd"
-PV:append = ".AUTOINC+d966a2227f"
+PV:append = ".AUTOINC+f349b64d3b"
 
 # please note if you have entries that do not begin with crate://
 # you must change them to how that package can be fetched
@@ -245,7 +245,7 @@ LIC_FILES_CHKSUM = " \
     file://MIT;md5=generateme \
 "
 
-SUMMARY = "The iotedge tool is used to manage the IoT Edge runtime."
+SUMMARY = "The aziotd is the binary for IoT identity service"
 HOMEPAGE = "https://github.com/azure/iot-identity-service"
 LICENSE = "MIT"
 

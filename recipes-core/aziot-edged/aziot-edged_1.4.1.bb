@@ -5,13 +5,13 @@ inherit cargo
 # If this is git based prefer versioned ones if they exist
 # DEFAULT_PREFERENCE = "-1"
 
-# how to get iotedge could be as easy as but default to a git checkout:
-# SRC_URI += "crate://crates.io/iotedge/0.1.0"
-SRC_URI += "git://github.com/Azure/iotedge;protocol=https;nobranch=1;branch=main"
-SRCREV = "d79baf9dc4bf4ee0d9710c6ae0a941965a150108"
+# how to get aziot-edged could be as easy as but default to a git checkout:
+# SRC_URI += "crate://crates.io/aziot-edged/0.1.0"
+SRC_URI += "git://github.com/Azure/iotedge;protocol=https;nobranch=1"
+SRCREV = "d65a3aeac060296280ff5ef4475137b79031e29e"
 S = "${WORKDIR}/git"
-CARGO_SRC_DIR = "iotedge"
-PV:append = ".AUTOINC+d79baf9dc4"
+CARGO_SRC_DIR = "aziot-edged"
+PV:append = ".AUTOINC+d65a3aeac0"
 
 # please note if you have entries that do not begin with crate://
 # you must change them to how that package can be fetched
@@ -20,25 +20,25 @@ SRC_URI += " \
     crate://crates.io/aho-corasick/0.7.18 \
     crate://crates.io/android_system_properties/0.1.4 \
     crate://crates.io/ansi_term/0.12.1 \
-    crate://crates.io/anyhow/1.0.61 \
+    crate://crates.io/anyhow/1.0.62 \
     crate://crates.io/async-trait/0.1.57 \
     crate://crates.io/atty/0.2.14 \
     crate://crates.io/autocfg/1.1.0 \
     crate://crates.io/base64/0.13.0 \
     crate://crates.io/bitflags/1.3.2 \
     crate://crates.io/block-buffer/0.10.2 \
-    crate://crates.io/bumpalo/3.10.0 \
+    crate://crates.io/bumpalo/3.11.0 \
     crate://crates.io/byte-unit/4.0.14 \
     crate://crates.io/byteorder/1.4.3 \
     crate://crates.io/bytes/1.2.1 \
     crate://crates.io/cc/1.0.73 \
     crate://crates.io/cfg-if/1.0.0 \
-    crate://crates.io/chrono-humanize/0.2.1 \
-    crate://crates.io/chrono/0.4.21 \
+    crate://crates.io/chrono-humanize/0.2.2 \
+    crate://crates.io/chrono/0.4.22 \
     crate://crates.io/clap/2.34.0 \
     crate://crates.io/config/0.13.2 \
     crate://crates.io/core-foundation-sys/0.8.3 \
-    crate://crates.io/cpufeatures/0.2.2 \
+    crate://crates.io/cpufeatures/0.2.4 \
     crate://crates.io/crc32fast/1.3.2 \
     crate://crates.io/crossbeam-channel/0.5.6 \
     crate://crates.io/crossbeam-deque/0.8.2 \
@@ -49,7 +49,7 @@ SRC_URI += " \
     crate://crates.io/darling_core/0.14.1 \
     crate://crates.io/darling_macro/0.14.1 \
     crate://crates.io/digest/0.10.3 \
-    crate://crates.io/either/1.7.0 \
+    crate://crates.io/either/1.8.0 \
     crate://crates.io/env_logger/0.9.0 \
     crate://crates.io/erased-serde/0.3.22 \
     crate://crates.io/fastrand/1.8.0 \
@@ -58,17 +58,17 @@ SRC_URI += " \
     crate://crates.io/foreign-types-shared/0.1.1 \
     crate://crates.io/foreign-types/0.3.2 \
     crate://crates.io/form_urlencoded/1.0.1 \
-    crate://crates.io/futures-channel/0.3.21 \
-    crate://crates.io/futures-core/0.3.21 \
-    crate://crates.io/futures-executor/0.3.21 \
-    crate://crates.io/futures-io/0.3.21 \
-    crate://crates.io/futures-macro/0.3.21 \
-    crate://crates.io/futures-sink/0.3.21 \
-    crate://crates.io/futures-task/0.3.21 \
-    crate://crates.io/futures-util/0.3.21 \
-    crate://crates.io/futures/0.3.21 \
+    crate://crates.io/futures-channel/0.3.23 \
+    crate://crates.io/futures-core/0.3.23 \
+    crate://crates.io/futures-executor/0.3.23 \
+    crate://crates.io/futures-io/0.3.23 \
+    crate://crates.io/futures-macro/0.3.23 \
+    crate://crates.io/futures-sink/0.3.23 \
+    crate://crates.io/futures-task/0.3.23 \
+    crate://crates.io/futures-util/0.3.23 \
+    crate://crates.io/futures/0.3.23 \
     crate://crates.io/generic-array/0.14.6 \
-    crate://crates.io/h2/0.3.13 \
+    crate://crates.io/h2/0.3.14 \
     crate://crates.io/hashbrown/0.12.3 \
     crate://crates.io/headers-core/0.2.0 \
     crate://crates.io/headers/0.3.7 \
@@ -78,11 +78,12 @@ SRC_URI += " \
     crate://crates.io/http/0.2.8 \
     crate://crates.io/httparse/1.7.1 \
     crate://crates.io/httpdate/1.0.2 \
+    crate://crates.io/humantime-serde/1.1.1 \
     crate://crates.io/humantime/2.1.0 \
     crate://crates.io/hyper-openssl/0.9.2 \
     crate://crates.io/hyper-proxy/0.9.1 \
     crate://crates.io/hyper/0.14.20 \
-    crate://crates.io/iana-time-zone/0.1.44 \
+    crate://crates.io/iana-time-zone/0.1.46 \
     crate://crates.io/ident_case/1.0.1 \
     crate://crates.io/idna/0.2.3 \
     crate://crates.io/indexmap/1.9.1 \
@@ -90,7 +91,7 @@ SRC_URI += " \
     crate://crates.io/itoa/1.0.3 \
     crate://crates.io/js-sys/0.3.59 \
     crate://crates.io/lazy_static/1.4.0 \
-    crate://crates.io/libc/0.2.131 \
+    crate://crates.io/libc/0.2.132 \
     crate://crates.io/linked-hash-map/0.5.6 \
     crate://crates.io/linked_hash_set/0.1.4 \
     crate://crates.io/lock_api/0.4.7 \
@@ -109,7 +110,7 @@ SRC_URI += " \
     crate://crates.io/num-traits/0.2.15 \
     crate://crates.io/num_cpus/1.13.1 \
     crate://crates.io/num_threads/0.1.6 \
-    crate://crates.io/once_cell/1.13.0 \
+    crate://crates.io/once_cell/1.13.1 \
     crate://crates.io/openssl-errors/0.1.0 \
     crate://crates.io/openssl-macros/0.1.0 \
     crate://crates.io/openssl-sys/0.9.75 \
@@ -131,13 +132,16 @@ SRC_URI += " \
     crate://crates.io/regex-syntax/0.6.27 \
     crate://crates.io/regex/1.6.0 \
     crate://crates.io/remove_dir_all/0.5.3 \
+    crate://crates.io/rustversion/1.0.9 \
     crate://crates.io/ryu/1.0.11 \
     crate://crates.io/scopeguard/1.1.0 \
-    crate://crates.io/serde/1.0.143 \
-    crate://crates.io/serde_derive/1.0.143 \
-    crate://crates.io/serde_json/1.0.83 \
+    crate://crates.io/serde/1.0.144 \
+    crate://crates.io/serde_derive/1.0.144 \
+    crate://crates.io/serde_json/1.0.85 \
     crate://crates.io/serde_with/2.0.0 \
     crate://crates.io/serde_with_macros/2.0.0 \
+    crate://crates.io/serial_test/0.8.0 \
+    crate://crates.io/serial_test_derive/0.8.0 \
     crate://crates.io/sha-1/0.10.0 \
     crate://crates.io/sha2/0.10.2 \
     crate://crates.io/signal-hook-registry/1.4.0 \
@@ -147,7 +151,7 @@ SRC_URI += " \
     crate://crates.io/strsim/0.10.0 \
     crate://crates.io/strsim/0.8.0 \
     crate://crates.io/syn/1.0.99 \
-    crate://crates.io/sysinfo/0.25.2 \
+    crate://crates.io/sysinfo/0.25.3 \
     crate://crates.io/tabwriter/1.2.1 \
     crate://crates.io/tempfile/3.3.0 \
     crate://crates.io/termcolor/1.1.3 \
@@ -230,82 +234,82 @@ SRC_URI += " \
 "
 
 SRCREV_FORMAT .= "_aziot-cert-client-async"
-SRCREV_aziot-cert-client-async = "main"
+SRCREV_aziot-cert-client-async = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-cert-client-async"
 SRCREV_FORMAT .= "_aziot-cert-common-http"
-SRCREV_aziot-cert-common-http = "main"
+SRCREV_aziot-cert-common-http = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-cert-common-http"
 SRCREV_FORMAT .= "_aziot-certd-config"
-SRCREV_aziot-certd-config = "main"
+SRCREV_aziot-certd-config = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-certd-config"
 SRCREV_FORMAT .= "_aziot-identity-client-async"
-SRCREV_aziot-identity-client-async = "main"
+SRCREV_aziot-identity-client-async = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-identity-client-async"
 SRCREV_FORMAT .= "_aziot-identity-common"
-SRCREV_aziot-identity-common = "main"
+SRCREV_aziot-identity-common = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-identity-common"
 SRCREV_FORMAT .= "_aziot-identity-common-http"
-SRCREV_aziot-identity-common-http = "main"
+SRCREV_aziot-identity-common-http = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-identity-common-http"
 SRCREV_FORMAT .= "_aziot-identityd-config"
-SRCREV_aziot-identityd-config = "main"
+SRCREV_aziot-identityd-config = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-identityd-config"
 SRCREV_FORMAT .= "_aziot-key-client"
-SRCREV_aziot-key-client = "main"
+SRCREV_aziot-key-client = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-key-client"
 SRCREV_FORMAT .= "_aziot-key-client-async"
-SRCREV_aziot-key-client-async = "main"
+SRCREV_aziot-key-client-async = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-key-client-async"
 SRCREV_FORMAT .= "_aziot-key-common"
-SRCREV_aziot-key-common = "main"
+SRCREV_aziot-key-common = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-key-common"
 SRCREV_FORMAT .= "_aziot-key-common-http"
-SRCREV_aziot-key-common-http = "main"
+SRCREV_aziot-key-common-http = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-key-common-http"
 SRCREV_FORMAT .= "_aziot-key-openssl-engine"
-SRCREV_aziot-key-openssl-engine = "main"
+SRCREV_aziot-key-openssl-engine = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-key-openssl-engine"
 SRCREV_FORMAT .= "_aziot-keyd-config"
-SRCREV_aziot-keyd-config = "main"
+SRCREV_aziot-keyd-config = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-keyd-config"
 SRCREV_FORMAT .= "_aziot-keys-common"
-SRCREV_aziot-keys-common = "main"
+SRCREV_aziot-keys-common = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-keys-common"
 SRCREV_FORMAT .= "_aziot-tpmd-config"
-SRCREV_aziot-tpmd-config = "main"
+SRCREV_aziot-tpmd-config = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-tpmd-config"
 SRCREV_FORMAT .= "_aziotctl-common"
-SRCREV_aziotctl-common = "main"
+SRCREV_aziotctl-common = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/aziotctl-common"
 SRCREV_FORMAT .= "_cert-renewal"
-SRCREV_cert-renewal = "main"
+SRCREV_cert-renewal = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/cert-renewal"
 SRCREV_FORMAT .= "_config-common"
-SRCREV_config-common = "main"
+SRCREV_config-common = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/config-common"
 SRCREV_FORMAT .= "_http-common"
-SRCREV_http-common = "main"
+SRCREV_http-common = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/http-common"
 SRCREV_FORMAT .= "_logger"
-SRCREV_logger = "main"
+SRCREV_logger = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/logger"
 SRCREV_FORMAT .= "_openssl-build"
-SRCREV_openssl-build = "main"
+SRCREV_openssl-build = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/openssl-build"
 SRCREV_FORMAT .= "_openssl-sys2"
-SRCREV_openssl-sys2 = "main"
+SRCREV_openssl-sys2 = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/openssl-sys2"
 SRCREV_FORMAT .= "_openssl2"
-SRCREV_openssl2 = "main"
+SRCREV_openssl2 = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/openssl2"
 SRCREV_FORMAT .= "_pkcs11"
-SRCREV_pkcs11 = "main"
+SRCREV_pkcs11 = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/pkcs11"
 SRCREV_FORMAT .= "_pkcs11-sys"
-SRCREV_pkcs11-sys = "main"
+SRCREV_pkcs11-sys = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/pkcs11-sys"
 SRCREV_FORMAT .= "_test-common"
-SRCREV_test-common = "main"
+SRCREV_test-common = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/test-common"
 
 # FIXME: update generateme with the real MD5 of the license file
@@ -313,12 +317,12 @@ LIC_FILES_CHKSUM = " \
     file://MIT;md5=generateme \
 "
 
-SUMMARY = "The iotedge tool is used to manage the IoT Edge runtime."
-HOMEPAGE = "https://github.com/Azure/iotedge"
+SUMMARY = "The aziot-edged is the IoT edge daemon."
+HOMEPAGE = "https://github.com/azure/iotedge"
 LICENSE = "MIT"
 
 # includes this file if it exists but does not fail
 # this is useful for anything you may want to override from
 # what cargo-bitbake generates.
-include iotedge-${PV}.inc
-include iotedge.inc
+include aziot-edged-${PV}.inc
+include aziot-edged.inc
