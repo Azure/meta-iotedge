@@ -312,9 +312,9 @@ SRCREV_FORMAT .= "_test-common"
 SRCREV_test-common = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/test-common"
 
-# FIXME: update generateme with the real MD5 of the license file
-LIC_FILES_CHKSUM = " \
-    file://MIT;md5=generateme \
+LIC_FILES_CHKSUM=" \
+file://../LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \
+file://../THIRDPARTYNOTICES;md5=de5e3729dd4cb9a63dbeb45e480d7634 \
 "
 
 SUMMARY = "The iotedge tool is used to manage the IoT Edge runtime."
