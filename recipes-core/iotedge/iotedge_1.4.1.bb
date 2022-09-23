@@ -313,8 +313,8 @@ SRCREV_test-common = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/test-common"
 
 LIC_FILES_CHKSUM=" \
-file://../LICENSE;md5=b98fddd052bb2f5ddbcdbd417ffb26a8 \
-file://../THIRDPARTYNOTICES;md5=fa67a5011e1afb8a5daefcc323d54ec8 \
+file://LICENSE;md5=b98fddd052bb2f5ddbcdbd417ffb26a8 \
+file://THIRDPARTYNOTICES;md5=fa67a5011e1afb8a5daefcc323d54ec8 \
 "
 
 SUMMARY = "The iotedge tool is used to manage the IoT Edge runtime."
