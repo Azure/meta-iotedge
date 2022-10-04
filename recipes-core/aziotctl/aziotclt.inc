@@ -1,6 +1,7 @@
 DEPENDS += "openssl virtual/docker"
 RDEPENDS_${PN} += "docker"
 
+#adding openssl env var
 export OPENSSL_DIR = "${STAGING_EXECPREFIXDIR}"
 
 do_install () {
