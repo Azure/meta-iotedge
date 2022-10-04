@@ -1,6 +1,8 @@
 DEPENDS += "openssl virtual/docker"
 RDEPENDS_${PN} += "docker"
 
+export OPENSSL_DIR = "${STAGING_EXECPREFIXDIR}"
+
 do_install () {
     # Binaries
     install -d  "${D}${bindir}"
