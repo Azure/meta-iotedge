@@ -27,6 +27,10 @@ METAVIRT_URI="git://git.yoctoproject.org/meta-virtualization"
 METAVIRT_PATH="poky/meta-virtualization"
 METAVIRT_REV="${METAVIRT_REV-refs/remotes/origin/${branch}}"
 
+METASECURITY_URI="git://git.yoctoproject.org/meta-security"
+METASECURITY_PATH="poky/meta-security"
+METASECURITY_REV="${METASECURITY_REV-refs/remotes/origin/${branch}}"
+
 METAIOTEDGE_URI="."
 METAIOTEDGE_PATH="poky/meta-iotedge"
 
