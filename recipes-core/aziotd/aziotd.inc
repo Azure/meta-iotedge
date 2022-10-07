@@ -1,7 +1,6 @@
 DEPENDS += "openssl virtual/docker"
 RDEPENDS_${PN} += "docker" 
 
-inherit pkgconfig
 inherit systemd 
 
 SYSTEMD_PACKAGES = "${@bb.utils.contains('DISTRO_FEATURES', 'systemd', '${PN}', '', d)}"
