@@ -9,7 +9,7 @@ branch=${1-master}
 
 # the repos we want to check out, must setup variables below
 # NOTE: poky must remain first
-REPOS="poky metaoe metarust metavirt"
+REPOS="poky metaoe metarust metavirt security"
 
 POKY_URI="git://git.yoctoproject.org/poky.git"
 POKY_PATH="poky"
