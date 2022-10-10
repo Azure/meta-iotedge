@@ -239,10 +239,8 @@ SRC_URI += " \
 "
 
 LIC_FILES_CHKSUM=" \
-file://LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \
-file://THIRDPARTYNOTICES;md5=11604c6170b98c376be25d0ca6989d9b \
+file://LICENSE;md5=4f9c2c296f77b3096b6c11a16fa7c66e \
 "
-
 
 SUMMARY = "The aziotctl tool is used for IoT identity service"
 HOMEPAGE = "https://github.com/azure/iot-identity-service"
