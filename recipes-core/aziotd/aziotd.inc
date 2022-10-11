@@ -1,4 +1,4 @@
-DEPENDS += "openssl virtual/docker tpm2-tss"
+DEPENDS += "openssl virtual/docker tpm2-tss libclang"
 RDEPENDS_${PN} += "docker" 
 
 inherit systemd 
