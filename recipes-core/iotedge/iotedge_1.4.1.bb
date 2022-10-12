@@ -9,7 +9,7 @@ inherit cargo
 # SRC_URI += "crate://crates.io/iotedge/0.1.0"
 SRC_URI += "git://github.com/Azure/iotedge;protocol=https;nobranch=1"
 SRCREV = "d65a3aeac060296280ff5ef4475137b79031e29e"
-S = "${WORKDIR}/git"
+S = "${WORKDIR}/git/edgelet/iotedge"
 CARGO_SRC_DIR = "iotedge"
 PV:append = ".AUTOINC+d65a3aeac0"
 
