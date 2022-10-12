@@ -9,7 +9,7 @@ inherit cargo
 # SRC_URI += "crate://crates.io/aziot-edged/0.1.0"
 SRC_URI += "git://github.com/Azure/iotedge;protocol=https;nobranch=1"
 SRCREV = "d65a3aeac060296280ff5ef4475137b79031e29e"
-S = "${WORKDIR}/git"
+S = "${WORKDIR}/git/edgelet"
 CARGO_SRC_DIR = "aziot-edged"
 PV:append = ".AUTOINC+d65a3aeac0"
 
@@ -313,8 +313,8 @@ SRCREV_test-common = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/test-common"
 
 LIC_FILES_CHKSUM=" \
-file://LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \
-file://THIRDPARTYNOTICES;md5=11604c6170b98c376be25d0ca6989d9b \
+file://../LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \
+file://../THIRDPARTYNOTICES;md5=11604c6170b98c376be25d0ca6989d9b \
 "
 
 SUMMARY = "The aziot-edged is the IoT edge daemon."
