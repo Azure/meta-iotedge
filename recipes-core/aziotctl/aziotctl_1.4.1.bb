@@ -239,7 +239,7 @@ SRC_URI += " \
 "
 
 LIC_FILES_CHKSUM=" \
-file://LICENSE;md5=4f9c2c296f77b3096b6c11a16fa7c66e \
+file://../LICENSE;md5=4f9c2c296f77b3096b6c11a16fa7c66e \
 "
 
 SUMMARY = "The aziotctl tool is used for IoT identity service"
