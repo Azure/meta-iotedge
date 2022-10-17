@@ -1,5 +1,6 @@
 DEPENDS += "openssl virtual/docker tpm2-tss clang"
-RDEPENDS_${PN} += "docker" 
+RDEPENDS_${PN} += "docker"
+export LIBCLANG_PATH = ${WORKDIR}/recipe-sysroot/${libdir}
 
 inherit systemd 
 
