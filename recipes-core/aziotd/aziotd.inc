@@ -19,10 +19,9 @@ SRC_URI += "file://aziot-certd.service \
 "
 
 # Copy keys.generated.rs
-do_deploy () {
+do_compile_prepend () {
     install -m 644 ${WORKDIR}/keys.generated.rs ${WORKDIR}/git/key/aziot-keyd/src/keys.generated.rs
 }
-addtask deploy after do_install
 
 do_install () {
     # Binaries
