@@ -15,6 +15,7 @@ SRC_URI += "file://aziot-certd.service \
             file://aziot-identityd.service \
             file://aziot-keyd.service \
             file://aziot-tpmd.service \
+            file://keys.generated.rs \
 "
 
 do_install () {
@@ -37,6 +38,7 @@ do_install () {
     install -d -m 0700 ${D}${sysconfdir}/aziot/tpmd/config.d
 
     # Configuration files
+    install -m 644 ${WORKDIR}/keys.generated.rs ${WORKDIR}/git/key/aziot-keyd/src/keys.generated.rs
     install -m 644 ${WORKDIR}/git/cert/aziot-certd/config/unix/default.toml ${D}${sysconfdir}/aziot/certd/config.toml.default
     install -m 644 ${WORKDIR}/git/identity/aziot-identityd/config/unix/default.toml ${D}${sysconfdir}/aziot/identityd/config.toml.default
     install -m 644 ${WORKDIR}/git/key/aziot-keyd/config/unix/default.toml ${D}${sysconfdir}/aziot/keyd/config.toml.default
