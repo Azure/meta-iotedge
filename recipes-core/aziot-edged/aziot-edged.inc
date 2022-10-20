@@ -3,6 +3,7 @@ RDEPENDS_${PN} += "docker iotedge aziotd"
 
 inherit systemd
 
+#SYSTEMD_PACKAGES = "${@bb.utils.contains('DISTRO_FEATURES', 'systemd', '${PN}', '', d)}"
 SYSTEMD_AUTO_ENABLE_${PN} = "enable"
 SYSTEMD_SERVICE_${PN} = "aziot-edged.service"
 
@@ -28,8 +29,7 @@ do_install () {
         install -m 644 ${WORKDIR}/git/edgelet/contrib/systemd/debian/aziot-edged.workload.socket ${D}${systemd_unitdir}/system
         install -m 644 ${WORKDIR}/git/edgelet/contrib/systemd/debian/aziot-edged.mgmt.socket ${D}${systemd_unitdir}/system
     else
-        install -d ${D}${sysconfdir}/init.d
-        install -m 755 ${WORKDIR}/aziot-edged-${PV}/contrib/debian/aziot-edged.init ${D}${sysconfdir}/init.d/aziot-edged
+        bberror "systemd not found"
     fi
 }
 
