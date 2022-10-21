@@ -34,7 +34,7 @@ do_install () {
         install -m 644 ${WORKDIR}/git/edgelet/contrib/systemd/debian/aziot-edged.mgmt.socket ${D}${systemd_unitdir}/system
     else
         install -d ${D}${sysconfdir}/init.d
-        install -m 755 ${WORKDIR}/aziot-edged-${PV}/contrib/debian/aziot-edged.init ${D}${sysconfdir}/init.d/aziot-edged
+        install -m 755 ${WORKDIR}/edgelet/contrib/debian/aziot-edged.init ${D}${sysconfdir}/init.d/aziot-edged
     fi
 }
 
