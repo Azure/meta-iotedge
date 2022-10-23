@@ -1,6 +1,5 @@
-DEPENDS += "openssl virtual/docker tpm2-tss clang"
-RDEPENDS_${PN} += "docker"
-TOOLCHAIN = "clang"
+DEPENDS += "openssl virtual/docker aziot-keys tpm2-tss clang-native"
+RDEPENDS_${PN} += "aziot-keys docker clang"
 
 inherit systemd 
 
@@ -15,7 +14,13 @@ SRC_URI += "file://aziot-certd.service \
             file://aziot-identityd.service \
             file://aziot-keyd.service \
             file://aziot-tpmd.service \
+            file://keys.generated.rs \
 "
+
+# Copy keys.generated.rs
+do_compile_prepend () {
+    install -m 644 ${WORKDIR}/keys.generated.rs ${WORKDIR}/git/key/aziot-keyd/src/keys.generated.rs
+}
 
 do_install () {
     # Binaries
