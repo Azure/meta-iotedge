@@ -30,6 +30,20 @@ revision: HEAD
 prio: default
 ```
 
+```
+URI: git://git.yoctoproject.org/meta-security
+branch: dunfell
+revision: HEAD
+prio: default
+```
+
+```
+URI: https://github.com/kraj/meta-clang.git
+branch: dunfell
+revision: HEAD
+prio: default
+```
+
 Adding the meta-iotedge layer to your build
 =================================================
 

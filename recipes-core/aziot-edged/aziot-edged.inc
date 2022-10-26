@@ -11,7 +11,8 @@ INITSCRIPT_PACKAGES += "${@bb.utils.contains('DISTRO_FEATURES','sysvinit','${PN}
 INITSCRIPT_NAME_${PN} = "${@bb.utils.contains('DISTRO_FEATURES','sysvinit','iotedge','',d)}"
 INITSCRIPT_PARAMS_${PN} = "defaults"
 
-SRC_URI += "file://aziot-edged.service  \
+SRC_URI += "file://aziot-edged.service \
+            file://0001-Change-panic-strategy-to-unwind.patch \
 "
 
 do_install () {

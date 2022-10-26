@@ -1,5 +1,5 @@
 DEPENDS += "openssl virtual/docker aziotctl aziot-keys tpm2-tss clang"
-RDEPENDS_${PN} += "docker clang"
+RDEPENDS_${PN} += "docker"
 TOOLCHAIN = "clang"
 
 inherit systemd 
@@ -16,6 +16,7 @@ SRC_URI += "file://aziot-certd.service \
             file://aziot-keyd.service \
             file://aziot-tpmd.service \
             file://keys.generated.rs \
+            file://0001-Change-panic-strategy-to-unwind.patch \
 "
 
 # Copy keys.generated.rs

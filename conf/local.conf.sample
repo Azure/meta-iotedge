@@ -244,4 +244,3 @@ PACKAGECONFIG_append_pn-nativesdk-qemu = " sdl"
 CONF_VERSION = "1"
 
 DISTRO_FEATURES_append += " virtualization"
-RUST_PANIC_STRATEGY = "abort"
