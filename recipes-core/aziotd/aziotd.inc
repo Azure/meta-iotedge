@@ -1,5 +1,5 @@
 DEPENDS += "openssl virtual/docker aziotctl aziot-keys tpm2-tss clang-native libtss2"
-RDEPENDS_${PN} += "docker libtss2 libtss2-mu libtss2-tcti-device"
+RDEPENDS_${PN} += "docker libtss2 libtss2-mu libtss2-tcti-device aziot-keys"
 TOOLCHAIN = "clang"
 
 inherit systemd 
@@ -19,10 +19,7 @@ SRC_URI += "file://aziot-certd.service \
             file://0001-Change-panic-strategy-to-unwind.patch \
 "
 
-# Copy keys.generated.rs
-do_compile_prepend () {
-    install -m 644 ${WORKDIR}/keys.generated.rs ${WORKDIR}/git/key/aziot-keyd/src/keys.generated.rs
-}
+
 
 do_install () {
     # Binaries
@@ -37,11 +34,11 @@ do_install () {
     ln -s ${bindir}/aziotd ${D}${bindir}/aziot-tpmd
 
     # Install all folders
-    install -d "${D}${sysconfdir}/aziot"
-    install -d -m 0700 ${D}${sysconfdir}/aziot/certd/config.d
-    install -d -m 0700 ${D}${sysconfdir}/aziot/identityd/config.d
-    install -d -m 0700 ${D}${sysconfdir}/aziot/keyd/config.d
-    install -d -m 0700 ${D}${sysconfdir}/aziot/tpmd/config.d
+    install -d ${D}${sysconfdir}/aziot
+    install -d -m 700 -o aziotcs -g aziotcs ${D}${sysconfdir}/aziot/certd/config.d
+    install -d -m 700 -o aziotid -g aziotid ${D}${sysconfdir}/aziot/identityd/config.d
+    install -d -m 700 -o aziotks -g aziotks ${D}${sysconfdir}/aziot/keyd/config.d
+    install -d -m 700 -o aziottpm -g aziottpm ${D}${sysconfdir}/aziot/tpmd/config.d
 
     # Configuration files
     install -m 644 ${WORKDIR}/git/cert/aziot-certd/config/unix/default.toml ${D}${sysconfdir}/aziot/certd/config.toml.default
@@ -49,6 +46,15 @@ do_install () {
     install -m 644 ${WORKDIR}/git/key/aziot-keyd/config/unix/default.toml ${D}${sysconfdir}/aziot/keyd/config.toml.default
     install -m 644 ${WORKDIR}/git/tpm/aziot-tpmd/config/unix/default.toml ${D}${sysconfdir}/aziot/tpmd/config.toml.default
     install -m 644 ${WORKDIR}/git/aziotctl/config/unix/template.toml ${D}${sysconfdir}/aziot/config.toml.template
+
+    # Data dir
+    install -d ${D}${localstatedir}/lib
+    install -d ${D}${localstatedir}/lib/aziot
+    install -d -m 700 -o aziotks -g aziotks ${D}${localstatedir}/lib/aziot/keyd
+    install -d -m 700 -o aziotcs -g aziotcs ${D}${localstatedir}/lib/aziot/certd
+    install -d -m 700 -o aziotid -g aziotid ${D}${localstatedir}/lib/aziot/identityd
+    install -d -m 700 -o aziottpm -g aziottpm ${D}${localstatedir}/lib/aziot/tpmd
+
 
     # Install all required services
     install -m 644 ${WORKDIR}/aziot-certd.service ${D}${systemd_unitdir}/system
@@ -63,13 +69,18 @@ do_install () {
 
 inherit useradd
 USERADD_PACKAGES = "${PN}"
-USERADD_PARAM_${PN} = "-r -s /bin/false aziotid; "
-USERADD_PARAM_${PN} += "-r -s /bin/false aziotcs; "
-USERADD_PARAM_${PN} += "-r -s /bin/false aziotks; "
-USERADD_PARAM_${PN} += "-r -s /bin/false aziottpm; "
+USERADD_PARAM_${PN} = "-r -g aziotcs -c 'aziot-certd user' -G aziotks -s /sbin/nologin -d ${localstatedir}/lib/aziot/certd aziotcs; "
+USERADD_PARAM_${PN} += "-r -g aziotks -c 'aziot-keyd user' -s /sbin/nologin -d ${localstatedir}/lib/aziot/keyd aziotks; "
+USERADD_PARAM_${PN} += "-r -g aziotid -c 'aziot-identityd user' -G aziotcs,aziotks,aziottpm -s /sbin/nologin -d ${localstatedir}/lib/aziot/identityd aziotid; "
+USERADD_PARAM_${PN} += "-r -g aziottpm -c 'aziot-tpmd user' -s /sbin/nologin -d ${localstatedir}/lib/aziot/tpmd aziottpm; "
+
+GROUPADD_PARAM_${PN} = "-r aziotcs; "
+GROUPADD_PARAM_${PN} += "-r aziotks; "
+GROUPADD_PARAM_${PN} += "-r aziotid; "
+GROUPADD_PARAM_${PN} += "-r aziottpm; "
 
 FILES_${PN} += " \
     ${systemd_unitdir}/system/* \
     ${bindir}/aziot-* \
-    ${localstatedir}/lib/aziotid \
+    ${localstatedir}/lib/ \
    "

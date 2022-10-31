@@ -4,8 +4,9 @@ Requires=aziot-certd.socket
 After=aziot-certd.socket
 
 [Service]
-Environment="LD_LIBRARY_PATH=/usr/lib/aziot-identity-service"
-ExecStart=/usr/libexec/aziot-identity-service/aziot-certd
+Environment=AZIOT_LOG=error
+Environment="LD_LIBRARY_PATH=/usr/lib/rust"
+ExecStart=/usr/bin/aziot-certd
 KillMode=process
 Restart=on-failure
 RestartSec=5s
