@@ -8,7 +8,7 @@ fi
 branch=${1-master}
 
 # the repos we want to check out, must setup variables below
-# NOTE: poky must remain first
+# NOTE: poky must remain first.
 REPOS="poky metaoe metarust metavirt metasecurity metaclang"
 
 POKY_URI="git://git.yoctoproject.org/poky.git"
