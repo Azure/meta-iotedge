@@ -4,7 +4,6 @@ TOOLCHAIN = "clang"
 
 inherit systemd 
 
-SYSTEMD_PACKAGES = "${@bb.utils.contains('DISTRO_FEATURES', 'systemd', '${PN}', '', d)}"
 SYSTEMD_AUTO_ENABLE_${PN} = "enable"
 SYSTEMD_SERVICE_${PN} = "aziot-certd.service "
 SYSTEMD_SERVICE_${PN} += "aziot-identityd.service "
@@ -23,8 +22,8 @@ SRC_URI += "file://aziot-certd.service \
 
 do_install () {
     # Binaries
-    install -d "${D}${bindir}"
-    install -m 755 "${WORKDIR}/build/target/${TARGET_SYS}/release/aziotd" ${D}${bindir}/aziotd
+    install -d ${D}${bindir}
+    install -m 755 ${WORKDIR}/build/target/${TARGET_SYS}/release/aziotd ${D}${bindir}/aziotd
     install -d ${D}${systemd_unitdir}/system
 
     # Create symbolic links

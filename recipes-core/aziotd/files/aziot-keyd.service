@@ -4,12 +4,12 @@ Requires=aziot-keyd.socket
 After=aziot-keyd.socket
 
 [Service]
-Environment="LD_LIBRARY_PATH=/usr/lib/rust"
+Environment=AZIOT_LOG=error
+Environment=LD_LIBRARY_PATH=/usr/lib/rust
 ExecStart=/usr/bin/aziot-keyd
 KillMode=process
 Restart=on-failure
 RestartSec=5s
-User=aziotks
 
 [Install]
 WantedBy=multi-user.target
