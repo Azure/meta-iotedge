@@ -47,7 +47,12 @@ prio: default
 Adding the meta-iotedge layer to your build
 =================================================
 
-Run `bitbake-layers add-layer meta-iotedge`
+Run `bitbake-layers add-layer meta-iotedge`.
+
+The relevant recipes are:
+
+* `aziot-edged` – contains all required dependencies for IoT Edge and IoT Identity Service
+* `aziotctl` – optional CLI tool for IoT Identity Service
 
 Contributing
 ============
