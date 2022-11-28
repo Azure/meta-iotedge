@@ -1,0 +1,15 @@
+[Unit]
+Description=Azure IoT Keys Service
+Requires=aziot-keyd.socket
+After=aziot-keyd.socket
+
+[Service]
+Environment=AZIOT_LOG=error
+Environment=LD_LIBRARY_PATH=/usr/lib/rust
+ExecStart=/usr/bin/aziot-keyd
+KillMode=process
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

@@ -1,9 +1,12 @@
 meta-iotedge
 ===========
 
-This layer provides support for building [IoT Edge](https://github.com/azure/iotedge).
+This layer provides support for building [IoT Edge][iotedge] with [Yocto][yocto].
 
 Please see the corresponding sections below for details.
+
+[iotedge]: https://github.com/azure/iotedge
+[yocto]: https://www.yoctoproject.org/
 
 Dependencies
 ------------
@@ -12,7 +15,7 @@ This layer depends on:
 ```
 URI: git://github.com/meta-rust/meta-rust.git
 branch: master
-revision: 7ff669d8cedd83a2d3efb73073a63b0a7efffddc
+revision: 458ab61befa4fb5c192cd970ed0db2225f0c5030
 prio: default
 ```
 
@@ -30,10 +33,41 @@ revision: HEAD
 prio: default
 ```
 
+```
+URI: git://git.yoctoproject.org/meta-security
+branch: dunfell
+revision: HEAD
+prio: default
+```
+
+```
+URI: https://github.com/kraj/meta-clang.git
+branch: dunfell
+revision: HEAD
+prio: default
+```
+
 Adding the meta-iotedge layer to your build
 =================================================
 
-Run `bitbake-layers add-layer meta-iotedge`
+Run `bitbake-layers add-layer meta-iotedge`.
+
+The relevant recipes are:
+
+* `aziot-edged` – contains all required dependencies for IoT Edge and IoT Identity Service
+* `aziotctl` – optional CLI tool for IoT Identity Service
+
+Migration from IoT Edge 1.1 LTS
+===============================
+
+IoT Edge 1.2 introduced many changes affecting the services which are running,
+configuration file locations, and also configuration file format. The changes
+are listed in the [IoT Edge Packaging][packaging] document. Additionally, [How
+to Update IoT Edge][updating-guide] describes how to migrate existing
+installation and configuration.
+
+[packaging]: https://github.com/Azure/iotedge/blob/main/doc/packaging.md
+[update-guide]: https://learn.microsoft.com/en-us/azure/iot-edge/how-to-update-iot-edge?view=iotedge-1.4&tabs=ubuntu#special-case-update-from-10-or-11-to-latest-release
 
 Contributing
 ============
