@@ -67,7 +67,7 @@ to Update IoT Edge][updating-guide] describes how to migrate existing
 installation and configuration.
 
 [packaging]: https://github.com/Azure/iotedge/blob/main/doc/packaging.md
-[update-guide]: https://learn.microsoft.com/en-us/azure/iot-edge/how-to-update-iot-edge?view=iotedge-1.4&tabs=ubuntu#special-case-update-from-10-or-11-to-latest-release
+[updating-guide]: https://learn.microsoft.com/azure/iot-edge/how-to-update-iot-edge?view=iotedge-1.4&tabs=ubuntu#special-case-update-from-10-or-11-to-latest-release
 
 Contributing
 ============
