@@ -7,7 +7,7 @@ inherit cargo
 
 # how to get aziot-edged could be as easy as but default to a git checkout:
 # SRC_URI += "crate://crates.io/aziot-edged/0.1.0"
-SRC_URI += "git://github.com/Azure/iotedge;protocol=https;nobranch=1;branch=release/1.4"
+SRC_URI += "git://github.com/Azure/iotedge;protocol=https;nobranch=1"
 SRCREV = "7d994d326dffed89cf590b1f2dcf34d779809526"
 S = "${WORKDIR}/git/edgelet"
 CARGO_SRC_DIR = "aziot-edged"
@@ -318,7 +318,7 @@ file://../THIRDPARTYNOTICES;md5=11604c6170b98c376be25d0ca6989d9b \
 "
 
 SUMMARY = "The aziot-edged is the IoT edge daemon."
-HOMEPAGE = "https://github.com/azure/iotedge"
+HOMEPAGE = "https://aka.ms/iotedge"
 LICENSE = "MIT"
 
 # includes this file if it exists but does not fail

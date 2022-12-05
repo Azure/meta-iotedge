@@ -7,7 +7,7 @@ inherit cargo
 
 # how to get iotedge could be as easy as but default to a git checkout:
 # SRC_URI += "crate://crates.io/iotedge/0.1.0"
-SRC_URI += "git://github.com/Azure/iotedge;protocol=https;nobranch=1;branch=release/1.4"
+SRC_URI += "git://github.com/Azure/iotedge;protocol=https;nobranch=1"
 SRCREV = "7d994d326dffed89cf590b1f2dcf34d779809526"
 S = "${WORKDIR}/git/edgelet"
 CARGO_SRC_DIR = "iotedge"
@@ -312,14 +312,13 @@ SRCREV_FORMAT .= "_test-common"
 SRCREV_test-common = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/test-common"
 
-
 LIC_FILES_CHKSUM=" \
 file://../LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \
 file://../THIRDPARTYNOTICES;md5=11604c6170b98c376be25d0ca6989d9b \
 "
 
 SUMMARY = "The iotedge tool is used to manage the IoT Edge runtime."
-HOMEPAGE = "https://github.com/azure/iotedge"
+HOMEPAGE = "https://aka.ms/iotedge"
 LICENSE = "MIT"
 
 # includes this file if it exists but does not fail
