@@ -312,12 +312,13 @@ SRCREV_FORMAT .= "_test-common"
 SRCREV_test-common = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/test-common"
 
+
 LIC_FILES_CHKSUM=" \
 file://../LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \
 file://../THIRDPARTYNOTICES;md5=11604c6170b98c376be25d0ca6989d9b \
 "
 
-SUMMARY = "The iotedge is the CLI for IoT Edge"
+SUMMARY = "The iotedge tool is used to manage the IoT Edge runtime."
 HOMEPAGE = "https://github.com/azure/iotedge"
 LICENSE = "MIT"
 
