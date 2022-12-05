@@ -3,6 +3,10 @@ pr:
   branches:
     include:
       - master
+      - sumo
+      - thud
+      - warrior
+      - zeus
       - dunfell
 jobs:
 

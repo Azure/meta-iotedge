@@ -5,69 +5,20 @@ This layer provides support for building [IoT Edge][iotedge] with [Yocto][yocto]
 
 Please see the corresponding sections below for details.
 
-[iotedge]: https://github.com/azure/iotedge
-[yocto]: https://www.yoctoproject.org/
-
-Dependencies
-------------
-This layer depends on:
-
-```
-URI: git://github.com/meta-rust/meta-rust.git
-branch: master
-revision: 458ab61befa4fb5c192cd970ed0db2225f0c5030
-prio: default
-```
-
-```
-URI: git://git.yoctoproject.org/meta-virtualization
-branch: dunfell
-revision: HEAD
-prio: default
-```
-
-```
-URI: git://github.com/openembedded/openembedded-core.git
-branch: dunfell
-revision: HEAD
-prio: default
-```
-
-```
-URI: git://git.yoctoproject.org/meta-security
-branch: dunfell
-revision: HEAD
-prio: default
-```
-
-```
-URI: https://github.com/kraj/meta-clang.git
-branch: dunfell
-revision: HEAD
-prio: default
-```
-
 Adding the meta-iotedge layer to your build
 =================================================
 
-Run `bitbake-layers add-layer meta-iotedge`.
+Use the branch of `meta-iotedge` corresponding to your Yocto release:
 
-The relevant recipes are:
+* [Sumo](https://github.com/Azure/meta-iotedge/tree/sumo) - `git clone -b sumo https://github.com/Azure/meta-iotedge.git`
+* [Thud](https://github.com/Azure/meta-iotedge/tree/thud) - `git clone -b thud https://github.com/Azure/meta-iotedge.git`
+* [Warrior](https://github.com/Azure/meta-iotedge/tree/warrior) - `git clone -b warrior https://github.com/Azure/meta-iotedge.git`
+* [Zeus](https://github.com/Azure/meta-iotedge/tree/zeus) - `git clone -b zeus https://github.com/Azure/meta-iotedge.git`
+* [Dunfell](https://github.com/Azure/meta-iotedge/tree/dunfell) - `git clone -b dunfell https://github.com/Azure/meta-iotedge.git`
 
-* `aziot-edged` – contains all required dependencies for IoT Edge and IoT Identity Service
-* `aziotctl` – optional CLI tool for IoT Identity Service
+In almost all cases, you should not use the `master` branch of `meta-iotedge` in your image.
 
-Migration from IoT Edge 1.1 LTS
-===============================
-
-IoT Edge 1.2 introduced many changes affecting the services which are running,
-configuration file locations, and also configuration file format. The changes
-are listed in the [IoT Edge Packaging][packaging] document. Additionally, [How
-to Update IoT Edge][updating-guide] describes how to migrate existing
-installation and configuration.
-
-[packaging]: https://github.com/Azure/iotedge/blob/main/doc/packaging.md
-[updating-guide]: https://learn.microsoft.com/azure/iot-edge/how-to-update-iot-edge?view=iotedge-1.4&tabs=ubuntu#special-case-update-from-10-or-11-to-latest-release
+Run `bitbake-layers add-layer meta-iotedge`
 
 Contributing
 ============
