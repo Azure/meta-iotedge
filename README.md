@@ -69,6 +69,23 @@ installation and configuration.
 [packaging]: https://github.com/Azure/iotedge/blob/main/doc/packaging.md
 [updating-guide]: https://learn.microsoft.com/azure/iot-edge/how-to-update-iot-edge?view=iotedge-1.4&tabs=ubuntu#special-case-update-from-10-or-11-to-latest-release
 
+
+Branching Strategy and Timelines
+===============================
+
+| Yoto | IoT Edge version | Branch Name | Branch Status |
+| :- | :- | :- | :- |
+| Dunfell | 1.4.x  | main | Active and maintained |
+| Dunfell | 1.4.x  | dunfell | Active and maintained |
+| Dunfell | 1.1.x  | dunfell-1.1 | 1.1.x is deprecated in Dec'22. Not maintained |
+| Kirkstone | 1.1.x | N/A | 1.1.x is deprecated in Dec'22 |
+| Kirkstone | 1.4.x | N/A | ETA TBD |
+| Sumo | 1.1 | sumo | Not active and Not maintained |
+| thud | 1.1 | thud | Not active and Not maintained |
+| Warrior | 1.1 | warrior | Not active and Not maintained |
+| Zeus | 1.1 | zeus | Not active and Not maintained |
+
+
 Contributing
 ============
 
