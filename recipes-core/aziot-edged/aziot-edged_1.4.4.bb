@@ -317,7 +317,7 @@ file://../LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \
 file://../THIRDPARTYNOTICES;md5=11604c6170b98c376be25d0ca6989d9b \
 "
 
-SUMMARY = "The aziot-edged is the IoT edge daemon."
+SUMMARY = "The aziot-edged is the main binary for IoT edge daemon."
 HOMEPAGE = "https://aka.ms/iotedge"
 LICENSE = "MIT"
 
