@@ -29,10 +29,10 @@ Branching Strategy and Timelines
 | Dunfell | 1.4.x  | main | Active and maintained |
 | Dunfell | 1.4.x  | dunfell | Active and maintained |
 | Dunfell | 1.1.x  | dunfell-1.1 | 1.1.x is deprecated in Dec'22. Not maintained |
-| Sumo | 1.1 | sumo | Not active and Not maintained |
-| Thud | 1.1 | thud | Not active and Not maintained |
-| Warrior | 1.1 | warrior | Not active and Not maintained |
-| Zeus | 1.1 | zeus | Not active and Not maintained |
+| Sumo | 1.1.x | sumo | Not active and Not maintained |
+| Thud | 1.1.x | thud | Not active and Not maintained |
+| Warrior | 1.1.x | warrior | Not active and Not maintained |
+| Zeus | 1.1.x | zeus | Not active and Not maintained |
 
 
 Contributing
