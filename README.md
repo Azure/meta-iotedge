@@ -1,7 +1,7 @@
 meta-iotedge
 ===========
 
-This layer provides support for building [IoT Edge](https://github.com/azure/iotedge).
+This layer provides support for building [IoT Edge](https://github.com/azure/iotedge) with [Yocto](https://www.yoctoproject.org/).
 
 Please see the corresponding sections below for details.
 

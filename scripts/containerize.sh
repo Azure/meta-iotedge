@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # what container are we using to build this
-CONTAINER="cardoe/yocto:pyro"
+CONTAINER="crops/poky:ubuntu-20.04"
 
 einfo() {
 	echo "$*" >&2
@@ -46,7 +46,8 @@ exec docker run \
     -e MACHINE=${MACHINE:-qemux86-64} \
     ${SSH_AUTH_SOCK:+-e SSH_AUTH_SOCK="/tmp/ssh-agent/${SSH_AUTH_NAME}"} \
     -v ${HOME}/.ssh:/var/build/.ssh \
-    -v "${PWD}":/var/build:rw \
+    -v ${PWD}:/var/build:rw \
+    --workdir=/var/build \
     ${SSH_AUTH_SOCK:+-v "${SSH_AUTH_DIR}":/tmp/ssh-agent} \
     ${EXTRA_CONTAINER_ARGS} \
     -${termint}i --rm -- \

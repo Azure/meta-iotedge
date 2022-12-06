@@ -5,8 +5,8 @@ export MACHINE="${MACHINE-qemux86-64}"
 
 # What to build
 BUILD_TARGETS="\
-    iotedge-cli \
-    iotedge-daemon \
+    iotedge \
+    aziot-edged \
     "
 
 die() {
@@ -17,5 +17,5 @@ die() {
 rm -f build/conf/bblayers.conf || die "failed to nuke bblayers.conf"
 rm -f build/conf/local.conf || die "failed to nuke local.conf"
 
-./scripts/containerize.sh bitbake ${BUILD_TARGETS} || die "failed to build"
+./scripts/containerize.sh ./scripts/bitbake.sh ${BUILD_TARGETS} || die "failed to build"
 

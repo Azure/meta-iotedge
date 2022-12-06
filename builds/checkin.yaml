@@ -11,18 +11,20 @@ pr:
 jobs:
 
 ################################################################################
-  - job: sumo
+  - job: dunfell
 ################################################################################
-    displayName: Sumo
+    displayName: Dunfell
     pool:
-      name: azureiotedge
+      name: "iotedge-1es-hosted-linux"
       demands:
-        - yocto
-    timeoutInMinutes: 360
+      - ImageOverride -equals agent-aziotedge-ubuntu-20.04-msmoby
+      - DiskSizeGiB -equals 500
+      - WorkFolder -equals /mnt/storage/_work
+    timeoutInMinutes: 2400
     steps:
-      - script: scripts/fetch.sh sumo
+      - script: scripts/fetch.sh dunfell
         displayName: Fetch
         env:
-          METARUST_REV: 'refs/remotes/origin/master'
+          METARUST_REV: '458ab61befa4fb5c192cd970ed0db2225f0c5030'
       - script: scripts/build.sh
         displayName: Build
