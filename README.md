@@ -20,6 +20,21 @@ In almost all cases, you should not use the `master` branch of `meta-iotedge` in
 
 Run `bitbake-layers add-layer meta-iotedge`
 
+Branching Strategy and Timelines
+===============================
+
+| Yocto Release | IoT Edge version | Branch Name | Branch Status |
+| :- | :- | :- | :- |
+| Kirkstone | 1.4.x | N/A | ETA TBD |
+| Dunfell | 1.4.x  | main | Active and maintained |
+| Dunfell | 1.4.x  | dunfell | Active and maintained |
+| Dunfell | 1.1.x  | dunfell-1.1 | 1.1.x is deprecated in Dec'22. Not maintained |
+| Sumo | 1.1 | sumo | Not active and Not maintained |
+| Thud | 1.1 | thud | Not active and Not maintained |
+| Warrior | 1.1 | warrior | Not active and Not maintained |
+| Zeus | 1.1 | zeus | Not active and Not maintained |
+
+
 Contributing
 ============
 
