@@ -30,7 +30,7 @@ Branching Strategy and Timelines
 | :- | :- | :- | :- |
 | Kirkstone | 1.4.x | N/A | ETA TBD |
 | Dunfell | 1.4.x  | main | Active and maintained |
-| Dunfell | 1.4.x  | dunfell | Active and maintained |
+| Dunfell | 1.4.x  | dunfell | Active and maintained through April 2024 |
 | Dunfell | 1.1.x  | dunfell-1.1 | 1.1.x is retired in Dec'22. Not maintained |
 | Sumo | 1.1.x | sumo | Not active and Not maintained |
 | Thud | 1.1.x | thud | Not active and Not maintained |
