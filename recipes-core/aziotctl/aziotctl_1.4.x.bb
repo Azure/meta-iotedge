@@ -8,10 +8,10 @@ inherit cargo
 # how to get aziotctl could be as easy as but default to a git checkout:
 # SRC_URI += "crate://crates.io/aziotctl/1.4.1"
 SRC_URI += "gitsm://github.com/Azure/iot-identity-service;protocol=https;nobranch=1"
-SRCREV = "f349b64d3b555b917a417f1c7543d245612495e3"
+SRCREV = "3057bace4ea9c2d119a65c74bc131beb54b0f7dd"
 S = "${WORKDIR}/git"
 CARGO_SRC_DIR = "aziotctl"
-PV:append = ".AUTOINC+f349b64d3b"
+PV:append = ".AUTOINC+3057bace4e"
 
 # please note if you have entries that do not begin with crate://
 # you must change them to how that package can be fetched
@@ -19,7 +19,6 @@ SRC_URI += " \
     crate://crates.io/addr2line/0.17.0 \
     crate://crates.io/adler/1.0.2 \
     crate://crates.io/aho-corasick/0.7.18 \
-    crate://crates.io/ansi_term/0.12.1 \
     crate://crates.io/anyhow/1.0.60 \
     crate://crates.io/async-recursion/1.0.0 \
     crate://crates.io/async-trait/0.1.57 \
@@ -40,7 +39,9 @@ SRC_URI += " \
     crate://crates.io/cfg-if/1.0.0 \
     crate://crates.io/chrono/0.4.20 \
     crate://crates.io/clang-sys/1.3.3 \
-    crate://crates.io/clap/2.34.0 \
+    crate://crates.io/clap/4.0.13 \
+    crate://crates.io/clap_derive/4.0.13 \
+    crate://crates.io/clap_lex/0.3.0 \
     crate://crates.io/colored/2.0.0 \
     crate://crates.io/core-foundation-sys/0.8.3 \
     crate://crates.io/cpufeatures/0.2.2 \
@@ -85,7 +86,7 @@ SRC_URI += " \
     crate://crates.io/hashbrown/0.12.3 \
     crate://crates.io/headers-core/0.2.0 \
     crate://crates.io/headers/0.3.7 \
-    crate://crates.io/heck/0.3.3 \
+    crate://crates.io/heck/0.4.0 \
     crate://crates.io/hermit-abi/0.1.19 \
     crate://crates.io/hex/0.4.3 \
     crate://crates.io/hmac/0.8.1 \
@@ -137,10 +138,11 @@ SRC_URI += " \
     crate://crates.io/object/0.29.0 \
     crate://crates.io/once_cell/1.13.0 \
     crate://crates.io/opaque-debug/0.3.0 \
-    crate://crates.io/openssl-errors/0.1.0 \
+    crate://crates.io/openssl-errors/0.2.0 \
     crate://crates.io/openssl-macros/0.1.0 \
-    crate://crates.io/openssl-sys/0.9.75 \
-    crate://crates.io/openssl/0.10.41 \
+    crate://crates.io/openssl-sys/0.9.76 \
+    crate://crates.io/openssl/0.10.42 \
+    crate://crates.io/os_str_bytes/6.3.0 \
     crate://crates.io/parking_lot/0.12.1 \
     crate://crates.io/parking_lot_core/0.9.3 \
     crate://crates.io/paste/1.0.8 \
@@ -178,14 +180,10 @@ SRC_URI += " \
     crate://crates.io/smallvec/1.9.0 \
     crate://crates.io/socket2/0.4.4 \
     crate://crates.io/strsim/0.10.0 \
-    crate://crates.io/strsim/0.8.0 \
-    crate://crates.io/structopt-derive/0.4.18 \
-    crate://crates.io/structopt/0.3.26 \
     crate://crates.io/subtle/2.4.1 \
     crate://crates.io/syn/1.0.99 \
     crate://crates.io/sysinfo/0.15.9 \
     crate://crates.io/termcolor/1.1.3 \
-    crate://crates.io/textwrap/0.11.0 \
     crate://crates.io/time/0.1.44 \
     crate://crates.io/time/0.3.13 \
     crate://crates.io/tinyvec/1.6.0 \
@@ -205,13 +203,10 @@ SRC_URI += " \
     crate://crates.io/unicode-bidi/0.3.8 \
     crate://crates.io/unicode-ident/1.0.3 \
     crate://crates.io/unicode-normalization/0.1.21 \
-    crate://crates.io/unicode-segmentation/1.9.0 \
-    crate://crates.io/unicode-width/0.1.9 \
     crate://crates.io/url/2.2.2 \
     crate://crates.io/utf8-width/0.1.6 \
     crate://crates.io/uuid/1.1.2 \
     crate://crates.io/vcpkg/0.2.15 \
-    crate://crates.io/vec_map/0.8.2 \
     crate://crates.io/version_check/0.9.4 \
     crate://crates.io/walkdir/2.3.2 \
     crate://crates.io/want/0.3.0 \
