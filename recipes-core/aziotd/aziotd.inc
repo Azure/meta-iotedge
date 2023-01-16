@@ -1,14 +1,14 @@
 DEPENDS += "openssl virtual/docker aziotctl aziot-keys tpm2-tss clang-native libtss2"
-RDEPENDS_${PN} += "docker libtss2 libtss2-mu libtss2-tcti-device aziot-keys"
+RDEPENDS:${PN} += "docker libtss2 libtss2-mu libtss2-tcti-device aziot-keys"
 TOOLCHAIN = "clang"
 
 inherit systemd 
 
-SYSTEMD_AUTO_ENABLE_${PN} = "enable"
-SYSTEMD_SERVICE_${PN} = "aziot-certd.service "
-SYSTEMD_SERVICE_${PN} += "aziot-identityd.service "
-SYSTEMD_SERVICE_${PN} += "aziot-keyd.service "
-SYSTEMD_SERVICE_${PN} += "aziot-tpmd.service "
+SYSTEMD_AUTO_ENABLE:${PN} = "enable"
+SYSTEMD_SERVICE:${PN} = "aziot-certd.service "
+SYSTEMD_SERVICE:${PN} += "aziot-identityd.service "
+SYSTEMD_SERVICE:${PN} += "aziot-keyd.service "
+SYSTEMD_SERVICE:${PN} += "aziot-tpmd.service "
 
 SRC_URI += "file://aziot-certd.service \
             file://aziot-identityd.service \
@@ -68,17 +68,17 @@ do_install () {
 
 inherit useradd
 USERADD_PACKAGES = "${PN}"
-USERADD_PARAM_${PN} = "-r -g aziotcs -c 'aziot-certd user' -G aziotks -s /sbin/nologin -d ${localstatedir}/lib/aziot/certd aziotcs; "
-USERADD_PARAM_${PN} += "-r -g aziotks -c 'aziot-keyd user' -s /sbin/nologin -d ${localstatedir}/lib/aziot/keyd aziotks; "
-USERADD_PARAM_${PN} += "-r -g aziotid -c 'aziot-identityd user' -G aziotcs,aziotks,aziottpm -s /sbin/nologin -d ${localstatedir}/lib/aziot/identityd aziotid; "
-USERADD_PARAM_${PN} += "-r -g aziottpm -c 'aziot-tpmd user' -s /sbin/nologin -d ${localstatedir}/lib/aziot/tpmd aziottpm; "
+USERADD_PARAM:${PN} = "-r -g aziotcs -c 'aziot-certd user' -G aziotks -s /sbin/nologin -d ${localstatedir}/lib/aziot/certd aziotcs; "
+USERADD_PARAM:${PN} += "-r -g aziotks -c 'aziot-keyd user' -s /sbin/nologin -d ${localstatedir}/lib/aziot/keyd aziotks; "
+USERADD_PARAM:${PN} += "-r -g aziotid -c 'aziot-identityd user' -G aziotcs,aziotks,aziottpm -s /sbin/nologin -d ${localstatedir}/lib/aziot/identityd aziotid; "
+USERADD_PARAM:${PN} += "-r -g aziottpm -c 'aziot-tpmd user' -s /sbin/nologin -d ${localstatedir}/lib/aziot/tpmd aziottpm; "
 
-GROUPADD_PARAM_${PN} = "-r aziotcs; "
-GROUPADD_PARAM_${PN} += "-r aziotks; "
-GROUPADD_PARAM_${PN} += "-r aziotid; "
-GROUPADD_PARAM_${PN} += "-r aziottpm; "
+GROUPADD_PARAM:${PN} = "-r aziotcs; "
+GROUPADD_PARAM:${PN} += "-r aziotks; "
+GROUPADD_PARAM:${PN} += "-r aziotid; "
+GROUPADD_PARAM:${PN} += "-r aziottpm; "
 
-FILES_${PN} += " \
+FILES:${PN} += " \
     ${systemd_unitdir}/system/* \
     ${bindir}/aziot-* \
     ${localstatedir}/lib/ \

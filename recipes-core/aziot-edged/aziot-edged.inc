@@ -1,10 +1,10 @@
 DEPENDS += "openssl virtual/docker iotedge aziotd systemd"
-RDEPENDS_${PN} += "docker iotedge aziotd aziot-keys systemd"
+RDEPENDS:${PN} += "docker iotedge aziotd aziot-keys systemd"
 
 inherit systemd
 
-SYSTEMD_AUTO_ENABLE_${PN} = "enable"
-SYSTEMD_SERVICE_${PN} = "aziot-edged.service"
+SYSTEMD_AUTO_ENABLE:${PN} = "enable"
+SYSTEMD_SERVICE:${PN} = "aziot-edged.service"
 
 
 SRC_URI += "file://aziot-edged.service \
@@ -42,12 +42,12 @@ do_install () {
 
 inherit useradd
 USERADD_PACKAGES = "${PN}"
-USERADD_PARAM_${PN} = "-r -g iotedge -c 'iotedge user' -G docker,systemd-journal,aziotcs,aziotks,aziottpm,aziotid -s /sbin/nologin -d ${localstatedir}/lib/aziot/edged iotedge; "
-USERADD_PARAM_${PN} += "-r -g iotedge -c 'edgeAgent user' -s /bin/sh -u 13622 edgeagentuser; "
-USERADD_PARAM_${PN} += "-r -g iotedge -c 'edgeHub user' -s /bin/sh -u 13623 edgehubuser; "
-GROUPADD_PARAM_${PN} = "-r iotedge"
+USERADD_PARAM:${PN} = "-r -g iotedge -c 'iotedge user' -G docker,systemd-journal,aziotcs,aziotks,aziottpm,aziotid -s /sbin/nologin -d ${localstatedir}/lib/aziot/edged iotedge; "
+USERADD_PARAM:${PN} += "-r -g iotedge -c 'edgeAgent user' -s /bin/sh -u 13622 edgeagentuser; "
+USERADD_PARAM:${PN} += "-r -g iotedge -c 'edgeHub user' -s /bin/sh -u 13623 edgehubuser; "
+GROUPADD_PARAM:${PN} = "-r iotedge"
 
-FILES_${PN} += " \
+FILES:${PN} += " \
     ${systemd_unitdir}/system/* \
     ${localstatedir}/lib/ \
     ${localstatedir}/log/ \
