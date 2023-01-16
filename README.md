@@ -10,6 +10,9 @@ Adding the meta-iotedge layer to your build
 
 Use the branch of `meta-iotedge` corresponding to your Yocto release:
 
+**Preliminary Pull Request Submitted**:
+* [Kirkstone](https://github.com/Azure/meta-iotedge/tree/kirkstone) - `git clone -b kirkstone https://github.com/Azure/meta-iotedge.git`
+
 **Active and maintained**:
 * [Dunfell](https://github.com/Azure/meta-iotedge/tree/dunfell) - `git clone -b dunfell https://github.com/Azure/meta-iotedge.git`
 
@@ -28,7 +31,7 @@ Branching Strategy and Timelines
 
 | Yocto Release | IoT Edge version | Branch Name | Branch Status |
 | :- | :- | :- | :- |
-| Kirkstone | 1.4.x | N/A | ETA TBD |
+| Kirkstone | 1.4.x | kirkstone | Preliminary Pull Request Submitted |
 | Dunfell | 1.4.x  | main | Active and maintained |
 | Dunfell | 1.4.x  | dunfell | Active and maintained through April 2024 |
 | Dunfell | 1.1.x  | dunfell-1.1 | 1.1.x is retired in Dec'22. Not maintained |

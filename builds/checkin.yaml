@@ -8,12 +8,13 @@ pr:
       - warrior
       - zeus
       - dunfell
+      - kirkstone
 jobs:
 
 ################################################################################
-  - job: dunfell
+  - job: kirkstone
 ################################################################################
-    displayName: Dunfell
+    displayName: Kirkstone
     pool:
       name: "iotedge-1es-hosted-linux"
       demands:
@@ -22,9 +23,9 @@ jobs:
       - WorkFolder -equals /mnt/storage/_work
     timeoutInMinutes: 2400
     steps:
-      - script: scripts/fetch.sh dunfell
+      - script: scripts/fetch.sh kirkstone
         displayName: Fetch
         env:
-          METARUST_REV: '458ab61befa4fb5c192cd970ed0db2225f0c5030'
+          METARUST_REV: '929de2ae54ca1e1e4abff35e960638218e5e06e2'
       - script: scripts/build.sh
         displayName: Build
