@@ -27,11 +27,8 @@ do_install () {
 
     # Data dir
     install -d ${D}${localstatedir}/lib
-    install -d ${D}${localstatedir}/log
     install -d ${D}${localstatedir}/lib/aziot
-    install -d ${D}${localstatedir}/log/aziot
     install -d -m 755 -o iotedge -g iotedge ${D}${localstatedir}/lib/aziot/edged
-    install -d -m 755 -o iotedge -g iotedge ${D}${localstatedir}/log/aziot/edged
 
     install -d ${D}${systemd_unitdir}/system
     install -m 644 ${WORKDIR}/aziot-edged.service ${D}${systemd_unitdir}/system
@@ -50,6 +47,5 @@ GROUPADD_PARAM:${PN} = "-r iotedge"
 FILES:${PN} += " \
     ${systemd_unitdir}/system/* \
     ${localstatedir}/lib/ \
-    ${localstatedir}/log/ \
     ${sysconfdir}/aziot/ \
     "
