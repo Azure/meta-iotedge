@@ -40,6 +40,20 @@ do_install () {
 
 }
 
+pkg_postinst_ontarget_${PN}() {
+    #!/bin/sh
+
+    # Add each admin user to the iotedge group
+    for u in $(getent group admin | sed -e "s/^.*://" -e "s/,/ /g"); do
+        usermod -aG iotedge "$u" >/dev/null || true
+    done
+
+    # Add each sudo user to the iotedge group
+    for u in $(getent group sudo | sed -e "s/^.*://" -e "s/,/ /g"); do
+        usermod -aG iotedge "$u" >/dev/null || true
+    done
+}
+
 inherit useradd
 USERADD_PACKAGES = "${PN}"
 USERADD_PARAM_${PN} = "-r -g iotedge -c 'iotedge user' -G docker,systemd-journal,aziotcs,aziotks,aziottpm,aziotid -s /sbin/nologin -d ${localstatedir}/lib/aziot/edged iotedge; "
