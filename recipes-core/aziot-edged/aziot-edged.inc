@@ -8,6 +8,7 @@ SYSTEMD_SERVICE:${PN} = "aziot-edged.service"
 
 
 SRC_URI += "file://aziot-edged.service \
+            file://iotedge.conf \
             file://0001-Change-panic-strategy-to-unwind.patch \
 "
 
@@ -35,6 +36,9 @@ do_install () {
     install -m 644 ${WORKDIR}/git/edgelet/contrib/systemd/debian/aziot-edged.workload.socket ${D}${systemd_unitdir}/system
     install -m 644 ${WORKDIR}/git/edgelet/contrib/systemd/debian/aziot-edged.mgmt.socket ${D}${systemd_unitdir}/system
 
+    #Permissions and ownership for /var/run/iotedge
+    install -d ${D}${sysconfdir}/tmpfiles.d
+    install -m 644 ${WORKDIR}/iotedge.conf ${D}${sysconfdir}/tmpfiles.d/iotedge.conf
 }
 
 inherit useradd
