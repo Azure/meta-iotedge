@@ -1,5 +1,5 @@
 DEPENDS += "openssl virtual/docker iotedge aziotd systemd"
-RDEPENDS_${PN} += "docker iotedge aziotd aziot-keys systemd"
+RDEPENDS_${PN} += "docker iotedge aziotd aziot-keys systemd glibc-utils"
 
 inherit systemd
 
@@ -39,6 +39,19 @@ do_install () {
     install -m 644 ${WORKDIR}/git/edgelet/contrib/systemd/debian/aziot-edged.mgmt.socket ${D}${systemd_unitdir}/system
 
 }
+
+pkg_postinst_ontarget_${PN}() {
+    #!/bin/sh
+
+    # Add each admin user to the iotedge group
+    for u in $(getent group admin | sed -e "s/^.*://" -e "s/,/ /g"); do
+        usermod -aG iotedge "$u" >/dev/null || true
+    done
+
+    # Add each sudo user to the iotedge group
+    for u in $(getent group sudo | sed -e "s/^.*://" -e "s/,/ /g"); do
+        usermod -aG iotedge "$u" >/dev/null || true
+    done
 
 inherit useradd
 USERADD_PACKAGES = "${PN}"
