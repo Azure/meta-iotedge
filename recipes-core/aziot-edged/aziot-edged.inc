@@ -1,5 +1,5 @@
 DEPENDS += "openssl virtual/docker iotedge aziotd systemd"
-RDEPENDS_${PN} += "docker iotedge aziotd aziot-keys systemd"
+RDEPENDS_${PN} += "docker iotedge aziotd aziot-keys systemd glibc-utils"
 
 inherit systemd
 
