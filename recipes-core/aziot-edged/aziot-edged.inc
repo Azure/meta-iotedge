@@ -52,6 +52,7 @@ pkg_postinst_ontarget_${PN}() {
     for u in $(getent group sudo | sed -e "s/^.*://" -e "s/,/ /g"); do
         usermod -aG iotedge "$u" >/dev/null || true
     done
+}
 
 inherit useradd
 USERADD_PACKAGES = "${PN}"
