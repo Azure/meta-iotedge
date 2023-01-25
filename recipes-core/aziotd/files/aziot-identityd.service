@@ -4,12 +4,13 @@ Requires=aziot-identityd.socket
 After=aziot-identityd.socket
 
 [Service]
-Environment=AZIOT_LOG=error
-Environment=LD_LIBRARY_PATH=/usr/lib/rust
+Environment="AZIOT_LOG=error"
+Environment="LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/rust"
 ExecStart=/usr/bin/aziot-identityd
 KillMode=process
 Restart=on-failure
 RestartSec=5s
+User=aziotid
 
 [Install]
 WantedBy=multi-user.target
