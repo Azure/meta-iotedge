@@ -12,6 +12,8 @@ SRCREV = "3b60555c24da7791ec3e35e86aa5c6c600136f01"
 S = "${WORKDIR}/git/edgelet"
 CARGO_SRC_DIR = "iotedge"
 
+# Allow do_compile to perform git fetch commands
+do_compile[network] = "1"
 
 # please note if you have entries that do not begin with crate://
 # you must change them to how that package can be fetched
