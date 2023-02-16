@@ -24,7 +24,7 @@ SRC_URI += " \
     crate://crates.io/async-trait/0.1.61 \
     crate://crates.io/atty/0.2.14 \
     crate://crates.io/autocfg/1.1.0 \
-    crate://crates.io/base64/0.21.1 \
+    crate://crates.io/base64/0.13.1 \
     crate://crates.io/bitflags/1.3.2 \
     crate://crates.io/block-buffer/0.10.3 \
     crate://crates.io/bumpalo/3.12.0 \
