@@ -48,10 +48,10 @@ SRC_URI += " \
     crate://crates.io/crossbeam-epoch/0.9.13 \
     crate://crates.io/crossbeam-utils/0.8.14 \
     crate://crates.io/crypto-common/0.1.6 \
-    crate://crates.io/cxx-build/1.0.90 \
-    crate://crates.io/cxx/1.0.90 \
-    crate://crates.io/cxxbridge-flags/1.0.90 \
-    crate://crates.io/cxxbridge-macro/1.0.90 \
+    crate://crates.io/cxx-build/1.0.91 \
+    crate://crates.io/cxx/1.0.91 \
+    crate://crates.io/cxxbridge-flags/1.0.91 \
+    crate://crates.io/cxxbridge-macro/1.0.91 \
     crate://crates.io/darling/0.14.3 \
     crate://crates.io/darling_core/0.14.3 \
     crate://crates.io/darling_macro/0.14.3 \
@@ -87,7 +87,7 @@ SRC_URI += " \
     crate://crates.io/hermit-abi/0.3.1 \
     crate://crates.io/hex/0.4.3 \
     crate://crates.io/http-body/0.4.5 \
-    crate://crates.io/http/0.2.8 \
+    crate://crates.io/http/0.2.9 \
     crate://crates.io/httparse/1.8.0 \
     crate://crates.io/httpdate/1.0.2 \
     crate://crates.io/humantime-serde/1.1.1 \
@@ -117,7 +117,7 @@ SRC_URI += " \
     crate://crates.io/mime/0.3.16 \
     crate://crates.io/minimal-lexical/0.2.1 \
     crate://crates.io/miniz_oxide/0.6.2 \
-    crate://crates.io/mio/0.8.5 \
+    crate://crates.io/mio/0.8.6 \
     crate://crates.io/nix/0.26.2 \
     crate://crates.io/nom/7.1.3 \
     crate://crates.io/nom8/0.2.0 \
@@ -125,7 +125,7 @@ SRC_URI += " \
     crate://crates.io/num-integer/0.1.45 \
     crate://crates.io/num-traits/0.2.15 \
     crate://crates.io/num_cpus/1.15.0 \
-    crate://crates.io/once_cell/1.17.0 \
+    crate://crates.io/once_cell/1.17.1 \
     crate://crates.io/openssl-errors/0.2.0 \
     crate://crates.io/openssl-macros/0.1.0 \
     crate://crates.io/openssl-sys/0.9.80 \
@@ -181,9 +181,9 @@ SRC_URI += " \
     crate://crates.io/thiserror-impl/1.0.38 \
     crate://crates.io/thiserror/1.0.38 \
     crate://crates.io/time-core/0.1.0 \
-    crate://crates.io/time-macros/0.2.6 \
+    crate://crates.io/time-macros/0.2.7 \
     crate://crates.io/time/0.1.45 \
-    crate://crates.io/time/0.3.17 \
+    crate://crates.io/time/0.3.19 \
     crate://crates.io/tinyvec/1.6.0 \
     crate://crates.io/tinyvec_macros/0.1.1 \
     crate://crates.io/tokio-macros/1.8.2 \
