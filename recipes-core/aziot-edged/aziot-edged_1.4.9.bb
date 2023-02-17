@@ -74,7 +74,7 @@ SRC_URI += " \
     crate://crates.io/futures-macro/0.3.26 \
     crate://crates.io/futures-sink/0.3.26 \
     crate://crates.io/futures-task/0.3.26 \
-    crate://crates.io/futures-util/0.3.26 \
+    crate://crates.io/futures-util/0.3.25 \
     crate://crates.io/futures/0.3.26 \
     crate://crates.io/generic-array/0.14.6 \
     crate://crates.io/getrandom/0.2.8 \
