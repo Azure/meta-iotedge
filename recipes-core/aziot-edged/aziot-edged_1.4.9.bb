@@ -7,11 +7,11 @@ inherit cargo
 
 # how to get aziot-edged could be as easy as but default to a git checkout:
 # SRC_URI += "crate://crates.io/aziot-edged/0.1.0"
-SRC_URI += "git://github.com/Azure/iotedge;protocol=https;nobranch=1"
-SRCREV = "dfefad996c44f30b663c19ae43486ada25224762"
+SRC_URI += "git://github.com/Azure/iotedge;protocol=https;nobranch=1;branch=release/1.4"
+SRCREV = "4c97503bda1a3a37979ec480000243307182b3f9"
 S = "${WORKDIR}/git/edgelet"
 CARGO_SRC_DIR = "aziot-edged"
-
+PV:append = ".AUTOINC+4c97503bda"
 
 # please note if you have entries that do not begin with crate://
 # you must change them to how that package can be fetched
@@ -165,7 +165,7 @@ SRC_URI += " \
     crate://crates.io/sha1/0.10.5 \
     crate://crates.io/sha2/0.10.6 \
     crate://crates.io/signal-hook-registry/1.4.1 \
-    crate://crates.io/slab/0.4.7 \
+    crate://crates.io/slab/0.4.8 \
     crate://crates.io/smallvec/1.10.0 \
     crate://crates.io/socket2/0.4.7 \
     crate://crates.io/static_assertions/1.1.0 \
@@ -339,6 +339,7 @@ EXTRA_OECARGO_PATHS += "${WORKDIR}/pkcs11-sys"
 SRCREV_FORMAT .= "_test-common"
 SRCREV_test-common = "release/1.4"
 EXTRA_OECARGO_PATHS += "${WORKDIR}/test-common"
+
 
 LIC_FILES_CHKSUM=" \
 file://../LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \

@@ -7,11 +7,11 @@ inherit cargo
 
 # how to get aziotd could be as easy as but default to a git checkout:
 # SRC_URI += "crate://crates.io/aziotd/1.4.3"
-SRC_URI += "gitsm://github.com/Azure/iot-identity-service;protocol=https;nobranch=1"
-SRCREV = "cfa39b58ec0931d62597d1c1f4908fa202c23a32"
+SRC_URI += "gitsm://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;branch=release/1.4"
+SRCREV = "03e383e390670bd75e7aab6e58e363ae2276f437"
 S = "${WORKDIR}/git"
 CARGO_SRC_DIR = "aziotd"
-PV:append = ".AUTOINC+cfa39b58ec"
+
 
 # please note if you have entries that do not begin with crate://
 # you must change them to how that package can be fetched
@@ -40,7 +40,7 @@ SRC_URI += " \
     crate://crates.io/cfg-if/0.1.10 \
     crate://crates.io/cfg-if/1.0.0 \
     crate://crates.io/chrono/0.4.23 \
-    crate://crates.io/clang-sys/1.4.0 \
+    crate://crates.io/clang-sys/1.6.0 \
     crate://crates.io/clap/2.34.0 \
     crate://crates.io/codespan-reporting/0.11.1 \
     crate://crates.io/colored/2.0.0 \
@@ -192,7 +192,7 @@ SRC_URI += " \
     crate://crates.io/sha1/0.10.5 \
     crate://crates.io/sha2/0.10.6 \
     crate://crates.io/shlex/1.1.0 \
-    crate://crates.io/slab/0.4.7 \
+    crate://crates.io/slab/0.4.8 \
     crate://crates.io/smallvec/1.10.0 \
     crate://crates.io/socket2/0.4.7 \
     crate://crates.io/static_assertions/1.1.0 \
@@ -264,7 +264,6 @@ SRC_URI += " \
     crate://crates.io/windows_x86_64_msvc/0.42.1 \
     crate://crates.io/ws2_32-sys/0.2.1 \
 "
-
 
 
 LIC_FILES_CHKSUM=" \
