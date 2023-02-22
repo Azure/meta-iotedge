@@ -98,7 +98,7 @@ SRC_URI += " \
     crate://crates.io/hex/0.4.3 \
     crate://crates.io/hmac/0.12.1 \
     crate://crates.io/http-body/0.4.5 \
-    crate://crates.io/http/0.2.9 \
+    crate://crates.io/http/0.2.8 \
     crate://crates.io/httparse/1.8.0 \
     crate://crates.io/httpdate/1.0.2 \
     crate://crates.io/humantime/2.1.0 \
