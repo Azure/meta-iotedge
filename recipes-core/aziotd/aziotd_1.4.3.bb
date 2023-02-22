@@ -5,13 +5,13 @@ inherit cargo
 # If this is git based prefer versioned ones if they exist
 # DEFAULT_PREFERENCE = "-1"
 
-# how to get aziotd could be as easy as but default to a git checkout:
-# SRC_URI += "crate://crates.io/aziotd/1.4.3"
-SRC_URI += "gitsm://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;branch=release/1.4"
-SRCREV = "03e383e390670bd75e7aab6e58e363ae2276f437"
+# how to get aziot-keys could be as easy as but default to a git checkout:
+# SRC_URI += "crate://crates.io/aziot-keys/0.1.0"
+SRC_URI += "gitsm://github.com/Azure/iot-identity-service;protocol=https;nobranch=1"
+SRCREV = "cfa39b58ec0931d62597d1c1f4908fa202c23a32"
 S = "${WORKDIR}/git"
-CARGO_SRC_DIR = "aziotd"
-
+CARGO_SRC_DIR = "key/aziot-keys"
+PV:append = ".AUTOINC+cfa39b58ec"
 
 # please note if you have entries that do not begin with crate://
 # you must change them to how that package can be fetched
@@ -40,7 +40,7 @@ SRC_URI += " \
     crate://crates.io/cfg-if/0.1.10 \
     crate://crates.io/cfg-if/1.0.0 \
     crate://crates.io/chrono/0.4.23 \
-    crate://crates.io/clang-sys/1.6.0 \
+    crate://crates.io/clang-sys/1.4.0 \
     crate://crates.io/clap/2.34.0 \
     crate://crates.io/codespan-reporting/0.11.1 \
     crate://crates.io/colored/2.0.0 \
@@ -51,10 +51,10 @@ SRC_URI += " \
     crate://crates.io/crossbeam-epoch/0.9.13 \
     crate://crates.io/crossbeam-utils/0.8.14 \
     crate://crates.io/crypto-common/0.1.6 \
-    crate://crates.io/cxx-build/1.0.91 \
-    crate://crates.io/cxx/1.0.91 \
-    crate://crates.io/cxxbridge-flags/1.0.91 \
-    crate://crates.io/cxxbridge-macro/1.0.91 \
+    crate://crates.io/cxx-build/1.0.89 \
+    crate://crates.io/cxx/1.0.89 \
+    crate://crates.io/cxxbridge-flags/1.0.89 \
+    crate://crates.io/cxxbridge-macro/1.0.89 \
     crate://crates.io/darling/0.14.3 \
     crate://crates.io/darling_core/0.14.3 \
     crate://crates.io/darling_macro/0.14.3 \
@@ -85,7 +85,7 @@ SRC_URI += " \
     crate://crates.io/futures/0.3.26 \
     crate://crates.io/generic-array/0.14.6 \
     crate://crates.io/getrandom/0.2.8 \
-    crate://crates.io/gimli/0.27.2 \
+    crate://crates.io/gimli/0.27.1 \
     crate://crates.io/glob/0.3.1 \
     crate://crates.io/h2/0.3.15 \
     crate://crates.io/hashbrown/0.12.3 \
@@ -98,7 +98,7 @@ SRC_URI += " \
     crate://crates.io/hex/0.4.3 \
     crate://crates.io/hmac/0.12.1 \
     crate://crates.io/http-body/0.4.5 \
-    crate://crates.io/http/0.2.9 \
+    crate://crates.io/http/0.2.8 \
     crate://crates.io/httparse/1.8.0 \
     crate://crates.io/httpdate/1.0.2 \
     crate://crates.io/humantime/2.1.0 \
@@ -136,7 +136,7 @@ SRC_URI += " \
     crate://crates.io/miniz_oxide/0.6.2 \
     crate://crates.io/mio-extras/2.0.6 \
     crate://crates.io/mio/0.6.23 \
-    crate://crates.io/mio/0.8.6 \
+    crate://crates.io/mio/0.8.5 \
     crate://crates.io/miow/0.2.2 \
     crate://crates.io/net2/0.2.38 \
     crate://crates.io/nix/0.26.2 \
@@ -148,7 +148,7 @@ SRC_URI += " \
     crate://crates.io/num-traits/0.2.15 \
     crate://crates.io/num_cpus/1.15.0 \
     crate://crates.io/object/0.30.3 \
-    crate://crates.io/once_cell/1.17.1 \
+    crate://crates.io/once_cell/1.17.0 \
     crate://crates.io/openssl-errors/0.2.0 \
     crate://crates.io/openssl-macros/0.1.0 \
     crate://crates.io/openssl-sys/0.9.80 \
@@ -192,7 +192,7 @@ SRC_URI += " \
     crate://crates.io/sha1/0.10.5 \
     crate://crates.io/sha2/0.10.6 \
     crate://crates.io/shlex/1.1.0 \
-    crate://crates.io/slab/0.4.8 \
+    crate://crates.io/slab/0.4.7 \
     crate://crates.io/smallvec/1.10.0 \
     crate://crates.io/socket2/0.4.7 \
     crate://crates.io/static_assertions/1.1.0 \
@@ -206,14 +206,14 @@ SRC_URI += " \
     crate://crates.io/termcolor/1.2.0 \
     crate://crates.io/textwrap/0.11.0 \
     crate://crates.io/time-core/0.1.0 \
-    crate://crates.io/time-macros/0.2.7 \
+    crate://crates.io/time-macros/0.2.6 \
     crate://crates.io/time/0.1.45 \
-    crate://crates.io/time/0.3.19 \
+    crate://crates.io/time/0.3.17 \
     crate://crates.io/tinyvec/1.6.0 \
     crate://crates.io/tinyvec_macros/0.1.1 \
     crate://crates.io/tokio-macros/1.8.2 \
     crate://crates.io/tokio-openssl/0.6.3 \
-    crate://crates.io/tokio-util/0.7.7 \
+    crate://crates.io/tokio-util/0.7.6 \
     crate://crates.io/tokio/1.25.0 \
     crate://crates.io/toml/0.7.2 \
     crate://crates.io/toml_datetime/0.6.1 \
