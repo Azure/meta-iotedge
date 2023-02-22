@@ -136,7 +136,7 @@ SRC_URI += " \
     crate://crates.io/miniz_oxide/0.6.2 \
     crate://crates.io/mio-extras/2.0.6 \
     crate://crates.io/mio/0.6.23 \
-    crate://crates.io/mio/0.8.6 \
+    crate://crates.io/mio/0.8.4 \
     crate://crates.io/miow/0.2.2 \
     crate://crates.io/net2/0.2.38 \
     crate://crates.io/nix/0.26.2 \
