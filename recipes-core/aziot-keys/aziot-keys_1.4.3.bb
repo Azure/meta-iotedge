@@ -148,7 +148,7 @@ SRC_URI += " \
     crate://crates.io/num-traits/0.2.15 \
     crate://crates.io/num_cpus/1.15.0 \
     crate://crates.io/object/0.30.3 \
-    crate://crates.io/once_cell/1.17.1 \
+    crate://crates.io/once_cell/1.17.0 \
     crate://crates.io/openssl-errors/0.2.0 \
     crate://crates.io/openssl-macros/0.1.0 \
     crate://crates.io/openssl-sys/0.9.80 \

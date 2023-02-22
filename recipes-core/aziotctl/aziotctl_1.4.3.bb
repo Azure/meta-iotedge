@@ -192,7 +192,7 @@ SRC_URI += " \
     crate://crates.io/sha1/0.10.5 \
     crate://crates.io/sha2/0.10.6 \
     crate://crates.io/shlex/1.1.0 \
-    crate://crates.io/slab/0.4.8 \
+    crate://crates.io/slab/0.4.7 \
     crate://crates.io/smallvec/1.10.0 \
     crate://crates.io/socket2/0.4.7 \
     crate://crates.io/static_assertions/1.1.0 \
