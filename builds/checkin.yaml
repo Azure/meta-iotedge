@@ -2,7 +2,7 @@ trigger: none
 pr:
   branches:
     include:
-      - master
+      - main
       - sumo
       - thud
       - warrior
@@ -16,7 +16,7 @@ jobs:
 ################################################################################
     displayName: Kirkstone
     pool:
-      name: "iotedge-1es-hosted-linux"
+      name: meta-iotedge-1es-hosted-linux
       demands:
       - ImageOverride -equals agent-aziotedge-ubuntu-20.04-msmoby
       - DiskSizeGiB -equals 500
