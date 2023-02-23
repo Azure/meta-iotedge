@@ -5,12 +5,12 @@ inherit cargo
 # If this is git based prefer versioned ones if they exist
 # DEFAULT_PREFERENCE = "-1"
 
-# how to get aziot-keys could be as easy as but default to a git checkout:
-# SRC_URI += "crate://crates.io/aziot-keys/0.1.0"
+# how to get aziotd could be as easy as but default to a git checkout:
+# SRC_URI += "crate://crates.io/aziotd/1.4.3"
 SRC_URI += "gitsm://github.com/Azure/iot-identity-service;protocol=https;nobranch=1"
 SRCREV = "cfa39b58ec0931d62597d1c1f4908fa202c23a32"
 S = "${WORKDIR}/git"
-CARGO_SRC_DIR = "key/aziot-keys"
+CARGO_SRC_DIR = "aziotd"
 PV:append = ".AUTOINC+cfa39b58ec"
 
 # please note if you have entries that do not begin with crate://
