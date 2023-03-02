@@ -32,7 +32,6 @@ Branching Strategy and Timelines
 | Yocto Release | IoT Edge version | Branch Name | Branch Status |
 | :- | :- | :- | :- |
 | Kirkstone | 1.4.x | kirkstone | Preliminary Pull Request Submitted |
-| Dunfell | 1.4.x  | main | Active and maintained |
 | Dunfell | 1.4.x  | dunfell | Active and maintained through April 2024 |
 | Dunfell | 1.1.x  | dunfell-1.1 | 1.1.x is retired in Dec'22. Not maintained |
 | Sumo | 1.1.x | sumo | Not active and Not maintained |
