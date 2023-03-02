@@ -22,8 +22,6 @@ Run `bitbake-layers add-layer meta-iotedge`
 * [Warrior](https://github.com/Azure/meta-iotedge/tree/warrior) - `git clone -b warrior https://github.com/Azure/meta-iotedge.git`
 * [Zeus](https://github.com/Azure/meta-iotedge/tree/zeus) - `git clone -b zeus https://github.com/Azure/meta-iotedge.git`
 
-In almost all cases, you should not use the `main` branch of `meta-iotedge` in your image.
-
 Branching Strategy and Timelines
 ===============================
 
