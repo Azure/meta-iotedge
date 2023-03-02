@@ -11,6 +11,7 @@ Adding the meta-iotedge layer to your build
 Use the branch of `meta-iotedge` corresponding to your Yocto release:
 
 **Active and maintained**:
+* [Kirkstone](https://github.com/Azure/meta-iotedge/tree/main) - `git clone -b main https://github.com/Azure/meta-iotedge.git`
 * [Dunfell](https://github.com/Azure/meta-iotedge/tree/dunfell) - `git clone -b dunfell https://github.com/Azure/meta-iotedge.git`
 
 Run `bitbake-layers add-layer meta-iotedge`
@@ -21,15 +22,12 @@ Run `bitbake-layers add-layer meta-iotedge`
 * [Warrior](https://github.com/Azure/meta-iotedge/tree/warrior) - `git clone -b warrior https://github.com/Azure/meta-iotedge.git`
 * [Zeus](https://github.com/Azure/meta-iotedge/tree/zeus) - `git clone -b zeus https://github.com/Azure/meta-iotedge.git`
 
-In almost all cases, you should not use the `main` branch of `meta-iotedge` in your image.
-
 Branching Strategy and Timelines
 ===============================
 
 | Yocto Release | IoT Edge version | Branch Name | Branch Status |
 | :- | :- | :- | :- |
-| Kirkstone | 1.4.x | N/A | ETA TBD |
-| Dunfell | 1.4.x  | main | Active and maintained |
+| Kirkstone | 1.4.x | main | Active and maintained |
 | Dunfell | 1.4.x  | dunfell | Active and maintained through April 2024 |
 | Dunfell | 1.1.x  | dunfell-1.1 | 1.1.x is retired in Dec'22. Not maintained |
 | Sumo | 1.1.x | sumo | Not active and Not maintained |

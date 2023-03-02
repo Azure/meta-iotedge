@@ -1,5 +1,5 @@
 DEPENDS += "openssl virtual/docker"
-RDEPENDS_${PN} += "docker"
+RDEPENDS:${PN} += "docker"
 
 export OPENSSL_DIR = "${STAGING_EXECPREFIXDIR}"
 

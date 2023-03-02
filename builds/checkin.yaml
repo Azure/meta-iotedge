@@ -11,9 +11,9 @@ pr:
 jobs:
 
 ################################################################################
-  - job: dunfell
+  - job: kirkstone
 ################################################################################
-    displayName: Dunfell
+    displayName: Kirkstone
     pool:
       name: meta-iotedge-1es-hosted-linux
       demands:
@@ -22,9 +22,10 @@ jobs:
       - WorkFolder -equals /mnt/storage/_work
     timeoutInMinutes: 2400
     steps:
-      - script: scripts/fetch.sh dunfell
+      - script: scripts/fetch.sh kirkstone
         displayName: Fetch
         env:
           METARUST_REV: '5656b5ad104bbbbe1b711e3bbe35c88f0d9c9a05'
+
       - script: scripts/build.sh
         displayName: Build

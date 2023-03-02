@@ -1,13 +1,14 @@
 DEPENDS += "openssl virtual/docker iotedge aziotd systemd"
-RDEPENDS_${PN} += "docker iotedge aziotd aziot-keys systemd glibc-utils"
+RDEPENDS:${PN} += "docker iotedge aziotd aziot-keys systemd glibc-utils"
 
 inherit systemd
 
-SYSTEMD_AUTO_ENABLE_${PN} = "enable"
-SYSTEMD_SERVICE_${PN} = "aziot-edged.service"
+SYSTEMD_AUTO_ENABLE:${PN} = "enable"
+SYSTEMD_SERVICE:${PN} = "aziot-edged.service"
 
 
 SRC_URI += "file://aziot-edged.service \
+            file://iotedge.conf \
             file://0001-Change-panic-strategy-to-unwind.patch \
 "
 
@@ -27,17 +28,17 @@ do_install () {
 
     # Data dir
     install -d ${D}${localstatedir}/lib
-    install -d ${D}${localstatedir}/log
     install -d ${D}${localstatedir}/lib/aziot
-    install -d ${D}${localstatedir}/log/aziot
     install -d -m 755 -o iotedge -g iotedge ${D}${localstatedir}/lib/aziot/edged
-    install -d -m 755 -o iotedge -g iotedge ${D}${localstatedir}/log/aziot/edged
 
     install -d ${D}${systemd_unitdir}/system
     install -m 644 ${WORKDIR}/aziot-edged.service ${D}${systemd_unitdir}/system
     install -m 644 ${WORKDIR}/git/edgelet/contrib/systemd/debian/aziot-edged.workload.socket ${D}${systemd_unitdir}/system
     install -m 644 ${WORKDIR}/git/edgelet/contrib/systemd/debian/aziot-edged.mgmt.socket ${D}${systemd_unitdir}/system
 
+    #Creates /var/run/iotedge as 755, iotedge:iotedge via systemd-tmpfiles.setup.service
+    install -d ${D}${sysconfdir}/tmpfiles.d
+    install -m 644 ${WORKDIR}/iotedge.conf ${D}${sysconfdir}/tmpfiles.d/iotedge.conf
 }
 
 pkg_postinst_ontarget_${PN}() {
@@ -56,14 +57,13 @@ pkg_postinst_ontarget_${PN}() {
 
 inherit useradd
 USERADD_PACKAGES = "${PN}"
-USERADD_PARAM_${PN} = "-r -g iotedge -c 'iotedge user' -G docker,systemd-journal,aziotcs,aziotks,aziottpm,aziotid -s /sbin/nologin -d ${localstatedir}/lib/aziot/edged iotedge; "
-USERADD_PARAM_${PN} += "-r -g iotedge -c 'edgeAgent user' -s /bin/sh -u 13622 edgeagentuser; "
-USERADD_PARAM_${PN} += "-r -g iotedge -c 'edgeHub user' -s /bin/sh -u 13623 edgehubuser; "
-GROUPADD_PARAM_${PN} = "-r iotedge"
+USERADD_PARAM:${PN} = "-r -g iotedge -c 'iotedge user' -G docker,systemd-journal,aziotcs,aziotks,aziottpm,aziotid -s /sbin/nologin -d ${localstatedir}/lib/aziot/edged iotedge; "
+USERADD_PARAM:${PN} += "-r -g iotedge -c 'edgeAgent user' -s /bin/sh -u 13622 edgeagentuser; "
+USERADD_PARAM:${PN} += "-r -g iotedge -c 'edgeHub user' -s /bin/sh -u 13623 edgehubuser; "
+GROUPADD_PARAM:${PN} = "-r iotedge"
 
-FILES_${PN} += " \
+FILES:${PN} += " \
     ${systemd_unitdir}/system/* \
     ${localstatedir}/lib/ \
-    ${localstatedir}/log/ \
     ${sysconfdir}/aziot/ \
     "

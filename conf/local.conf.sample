@@ -147,13 +147,12 @@ EXTRA_IMAGE_FEATURES ?= "debug-tweaks"
 # enable extra features. Some available options which can be included in this variable
 # are:
 #   - 'buildstats' collect build statistics
-#   - 'image-mklibs' to reduce shared library files size for an image
 #   - 'image-prelink' in order to prelink the filesystem image
 #   - 'image-swab' to perform host system intrusion detection
 # NOTE: if listing mklibs & prelink both, then make sure mklibs is before prelink
 # NOTE: mklibs also needs to be explicitly enabled for a given image, see local.conf.extended
 # image-prelink disabled for now due to issues with IFUNC symbol relocation
-USER_CLASSES ?= "buildstats image-mklibs"
+USER_CLASSES ?= "buildstats"
 
 #
 # Runtime testing of images
@@ -234,15 +233,18 @@ SSTATE_MIRRORS = "\
 # seen. The two lines below enable the SDL backend too. By default libsdl-native will
 # be built, if you want to use your host's libSDL instead of the minimal libsdl built
 # by libsdl-native then uncomment the ASSUME_PROVIDED line below.
-PACKAGECONFIG_append_pn-qemu-native = " sdl"
-PACKAGECONFIG_append_pn-nativesdk-qemu = " sdl"
+PACKAGECONFIG:append:pn-qemu-native = " sdl"
+PACKAGECONFIG:append:pn-nativesdk-qemu = " sdl"
 #ASSUME_PROVIDED += "libsdl-native"
 
 # CONF_VERSION is increased each time build/conf/ changes incompatibly and is used to
 # track the version of this file when it was generated. This can safely be ignored if
 # this doesn't mean anything to you.
-CONF_VERSION = "1"
+CONF_VERSION = "2"
 
-DISTRO_FEATURES_append = " systemd virtualization"
+BBMASK += "poky/meta/recipes-devtools/rust"
+BBMASK += "poky/meta/recipes-devtools/cargo"
+PREFERRED_VERSION_rust ?= "1.65%"
+DISTRO_FEATURES:append = " systemd virtualization"
 VIRTUAL-RUNTIME_init_manager = "systemd"
 VIRTUAL-RUNTIME_initscripts = "systemd-compat-units"
