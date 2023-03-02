@@ -1,5 +1,5 @@
 DEPENDS += "openssl virtual/docker iotedge aziotd systemd"
-RDEPENDS:${PN} += "docker iotedge aziotd aziot-keys systemd"
+RDEPENDS:${PN} += "docker iotedge aziotd aziot-keys systemd glibc-utils"
 
 inherit systemd
 
@@ -36,7 +36,7 @@ do_install () {
     install -m 644 ${WORKDIR}/git/edgelet/contrib/systemd/debian/aziot-edged.workload.socket ${D}${systemd_unitdir}/system
     install -m 644 ${WORKDIR}/git/edgelet/contrib/systemd/debian/aziot-edged.mgmt.socket ${D}${systemd_unitdir}/system
 
-    #Permissions and ownership for /var/run/iotedge
+    #Creates /var/run/iotedge as 755, iotedge:iotedge via systemd-tmpfiles.setup.service
     install -d ${D}${sysconfdir}/tmpfiles.d
     install -m 644 ${WORKDIR}/iotedge.conf ${D}${sysconfdir}/tmpfiles.d/iotedge.conf
 }
