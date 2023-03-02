@@ -10,7 +10,6 @@ Adding the meta-iotedge layer to your build
 
 Use the branch of `meta-iotedge` corresponding to your Yocto release:
 
-**Preliminary Pull Request Submitted**:
 * [Kirkstone](https://github.com/Azure/meta-iotedge/tree/kirkstone) - `git clone -b kirkstone https://github.com/Azure/meta-iotedge.git`
 
 **Active and maintained**:
