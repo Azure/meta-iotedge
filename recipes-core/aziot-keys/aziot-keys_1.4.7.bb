@@ -5,13 +5,13 @@ inherit cargo
 # If this is git based prefer versioned ones if they exist
 # DEFAULT_PREFERENCE = "-1"
 
-# how to get aziotctl could be as easy as but default to a git checkout:
-# SRC_URI += "crate://crates.io/aziotctl/1.4.6"
+# how to get aziot-keys could be as easy as but default to a git checkout:
+# SRC_URI += "crate://crates.io/aziot-keys/0.1.0"
 SRC_URI += "gitsm://github.com/Azure/iot-identity-service.git;protocol=https;nobranch=1"
-SRCREV = "e4b08714e1928937746221a8c840ac73b7ce2170"
+SRCREV = "91e058880c4eb27756a15b74b52a031e0604207a"
 S = "${WORKDIR}/git"
-CARGO_SRC_DIR = "aziotctl"
-PV:append = ".AUTOINC+e4b08714e1"
+CARGO_SRC_DIR = "key/aziot-keys"
+PV:append = ".AUTOINC+91e058880c"
 
 # please note if you have entries that do not begin with crate://
 # you must change them to how that package can be fetched
@@ -268,12 +268,12 @@ LIC_FILES_CHKSUM = " \
     file://LICENSE;md5=4f9c2c296f77b3096b6c11a16fa7c66e \
 "
 
-SUMMARY = "aziotctl is used to manage the IoT Identity Service and related services."
+SUMMARY = "aziot-keys is the default implementation of cryptographic operations used by the Keys Service."
 HOMEPAGE = "https://azure.github.io/iot-identity-service/"
 LICENSE = "MIT"
 
 # includes this file if it exists but does not fail
 # this is useful for anything you may want to override from
 # what cargo-bitbake generates.
-include aziotctl-${PV}.inc
-include aziotctl.inc
+include aziot-keys-${PV}.inc
+include aziot-keys.inc
