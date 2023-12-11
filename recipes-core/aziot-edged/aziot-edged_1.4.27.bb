@@ -231,7 +231,7 @@ SRC_URI += " \
     crate://crates.io/winnow/0.4.7 \
     crate://crates.io/yaml-rust/0.4.5 \
     crate://crates.io/zip/0.6.6 \
-    "
+"
 
 LIC_FILES_CHKSUM = " \
     file://../LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \
