@@ -23,7 +23,7 @@ SRC_URI += "file://aziot-certd.service \
 do_install () {
     # Binaries
     install -d ${D}${bindir}
-    install -m 755 ${WORKDIR}/build/target/${TARGET_SYS}/release/aziotd ${D}${bindir}/aziotd
+    install -m 755 ${WORKDIR}/build/target/${RUST_TARGET_SYS}/release/aziotd ${D}${bindir}/aziotd
     install -d ${D}${systemd_unitdir}/system
 
     # Create symbolic links
