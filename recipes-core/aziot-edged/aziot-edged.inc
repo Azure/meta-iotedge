@@ -15,7 +15,7 @@ SRC_URI += "file://aziot-edged.service \
 do_install () {
     # Binaries
     install -d ${D}${bindir}
-    install -m 755 ${WORKDIR}/build/target/${TARGET_SYS}/release/aziot-edged ${D}${bindir}/aziot-edged
+    install -m 755 ${WORKDIR}/build/target/${RUST_TARGET_SYS}/release/aziot-edged ${D}${bindir}/aziot-edged
 
     # Create symbolic links
     install -d ${D}${libexecdir}/aziot
