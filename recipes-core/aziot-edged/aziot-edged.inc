@@ -7,9 +7,7 @@ SYSTEMD_AUTO_ENABLE_${PN} = "enable"
 SYSTEMD_SERVICE_${PN} = "aziot-edged.service"
 
 
-SRC_URI += "file://aziot-edged.service \
-            file://0001-Change-panic-strategy-to-unwind.patch \
-"
+SRC_URI += "file://aziot-edged.service"
 
 do_install () {
     # Binaries
