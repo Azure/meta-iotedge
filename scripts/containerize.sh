@@ -39,10 +39,10 @@ fi
 # Kick off Docker
 einfo "*** Launching container ..."
 exec docker run \
-    --privileged \
+    --cap-add SETFCAP \
     -e BUILD_UID=${my_uid} \
     -e BUILD_GID=${my_gid} \
-    -e TEMPLATECONF=meta-iotedge/conf \
+    -e TEMPLATECONF=meta-iotedge/conf/templates/default \
     -e MACHINE=${MACHINE:-qemux86-64} \
     ${SSH_AUTH_SOCK:+-e SSH_AUTH_SOCK="/tmp/ssh-agent/${SSH_AUTH_NAME}"} \
     -v ${HOME}/.ssh:/var/build/.ssh \
