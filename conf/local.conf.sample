@@ -242,7 +242,6 @@ PACKAGECONFIG:append:pn-nativesdk-qemu = " sdl"
 # this doesn't mean anything to you.
 CONF_VERSION = "2"
 
-PREFERRED_VERSION_rust ?= "1.65%"
 DISTRO_FEATURES:append = " systemd virtualization"
 VIRTUAL-RUNTIME_init_manager = "systemd"
 VIRTUAL-RUNTIME_initscripts = "systemd-compat-units"
