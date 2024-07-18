@@ -9,7 +9,6 @@ BBLAYERS ?= " \
   ##OEROOT##/meta-iotedge \
   ##OEROOT##/meta \
   ##OEROOT##/meta-poky \
-  ##OEROOT##/meta-rust \
   ##OEROOT##/meta-yocto-bsp \
   ##OEROOT##/meta-openembedded/meta-filesystems \
   ##OEROOT##/meta-openembedded/meta-oe \
