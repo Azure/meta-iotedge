@@ -523,7 +523,9 @@ export USER_AZIOTCS="aziotcs"
 export USER_AZIOTKS="aziotks"
 export USER_AZIOTTPM="aziottpm"
 
-RUSTFLAGS += " -C panic=unwind"
+do_patch() {
+    sed -i '/panic = "abort"/d' ${WORKDIR}/git/Cargo.toml
+}
 
 # includes this file if it exists but does not fail
 # this is useful for anything you may want to override from

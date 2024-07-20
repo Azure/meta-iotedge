@@ -509,8 +509,6 @@ SRC_URI[windows_x86_64_msvc-0.48.0.sha256sum] = "1a515f5799fe4961cb532f983ce2b23
 SRC_URI[winnow-0.4.7.sha256sum] = "ca0ace3845f0d96209f0375e6d367e3eb87eb65d27d445bdc9f1843a26f39448"
 SRC_URI[ws2_32-sys-0.2.1.sha256sum] = "d59cefebd0c892fa2dd6de581e937301d8552cb44489cdff035c6187cb63fa5e"
 
-RUSTFLAGS += " -C panic=unwind"
-
 LIC_FILES_CHKSUM = " \
     file://LICENSE;md5=4f9c2c296f77b3096b6c11a16fa7c66e \
 "
@@ -518,6 +516,10 @@ LIC_FILES_CHKSUM = " \
 SUMMARY = "aziot-keys is the default implementation of cryptographic operations used by the Keys Service."
 HOMEPAGE = "https://azure.github.io/iot-identity-service/"
 LICENSE = "MIT"
+
+do_patch() {
+    sed -i '/panic = "abort"/d' ${WORKDIR}/git/Cargo.toml
+}
 
 # includes this file if it exists but does not fail
 # this is useful for anything you may want to override from

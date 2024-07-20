@@ -518,17 +518,15 @@ SUMMARY = "aziotctl is used to manage the IoT Identity Service and related servi
 HOMEPAGE = "https://azure.github.io/iot-identity-service/"
 LICENSE = "MIT"
 
-RUSTFLAGS += " -C panic=unwind"
-
 export SOCKET_DIR="/run/aziot"
 export USER_AZIOTID="aziotid"
 export USER_AZIOTCS="aziotcs"
 export USER_AZIOTKS="aziotks"
 export USER_AZIOTTPM="aziottpm"
 
-#do_compile() {
-#    cargo_do_compile
-#}
+do_patch() {
+    sed -i '/panic = "abort"/d' ${WORKDIR}/git/Cargo.toml
+}
 
 # includes this file if it exists but does not fail
 # this is useful for anything you may want to override from

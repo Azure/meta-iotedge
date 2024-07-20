@@ -589,9 +589,8 @@ export USER_AZIOTCS="aziotcs"
 export USER_AZIOTKS="aziotks"
 export USER_AZIOTTPM="aziottpm"
 
-RUSTFLAGS += " -C panic=unwind"
-
 do_patch() {
+    sed -i "/panic = 'abort'/d" ${WORKDIR}/git/edgelet/Cargo.toml
     sed -i '/source = "git/d' ${WORKDIR}/git/edgelet/Cargo.lock
     cp ${WORKDIR}/git/edgelet/Cargo.lock ${WORKDIR}/git/edgelet/aziot-edged/Cargo.lock
 } 
