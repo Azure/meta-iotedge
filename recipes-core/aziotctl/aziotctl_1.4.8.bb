@@ -7,11 +7,11 @@ inherit cargo
 
 # how to get aziotctl could be as easy as but default to a git checkout:
 # SRC_URI += "crate://crates.io/aziotctl/1.4.8"
-SRC_URI += "gitsm://github.com/Azure/iot-identity-service.git;protocol=https;nobranch=1"
+SRC_URI += "gitsm://github.com/Azure/iot-identity-service;protocol=https;nobranch=1"
 SRCREV = "657b163c8ecdf89cebcc57e1751d47cb1999de2c"
 S = "${WORKDIR}/git"
 CARGO_SRC_DIR = "aziotctl"
-PV:append = ".AUTOINC+657b163c8e"
+
 
 # please note if you have entries that do not begin with crate://
 # you must change them to how that package can be fetched
