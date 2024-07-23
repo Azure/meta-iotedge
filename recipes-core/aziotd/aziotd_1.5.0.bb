@@ -523,6 +523,8 @@ export USER_AZIOTCS="aziotcs"
 export USER_AZIOTKS="aziotks"
 export USER_AZIOTTPM="aziottpm"
 
+RUSTFLAGS += "-Clink-arg=-Wl,-rpath,${libdir}/rustlib/${RUST_HOST_SYS}/lib"
+
 do_patch() {
     sed -i '/panic = "abort"/d' ${WORKDIR}/git/Cargo.toml
 }

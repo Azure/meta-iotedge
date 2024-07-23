@@ -2,7 +2,7 @@ DEPENDS += "openssl virtual/docker aziotctl aziot-keys tpm2-tss clang-native lib
 RDEPENDS:${PN} += "docker libtss2 libtss2-mu libtss2-tcti-device aziot-keys"
 TOOLCHAIN = "clang"
 
-inherit systemd 
+inherit systemd
 
 SYSTEMD_AUTO_ENABLE:${PN} = "enable"
 SYSTEMD_SERVICE:${PN} = "aziot-certd.service "
