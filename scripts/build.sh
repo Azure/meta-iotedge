@@ -3,7 +3,12 @@
 # Grab the MACHINE from the environment; otherwise, set it to a sane default
 export MACHINE="${MACHINE-qemux86-64}"
 
-# Install and set nightly Rust toolchain
+# Install rustup if not already installed
+if [ ! -x "$(command -v rustup)" ]; then
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    source $HOME/.cargo/env
+fi
+
 rustup toolchain install nightly
 rustup default nightly
 
