@@ -3,6 +3,10 @@
 # Grab the MACHINE from the environment; otherwise, set it to a sane default
 export MACHINE="${MACHINE-qemux86-64}"
 
+# Install and set nightly Rust toolchain
+rustup toolchain install nightly
+rustup default nightly
+
 # What to build
 BUILD_TARGETS="\
     iotedge \
