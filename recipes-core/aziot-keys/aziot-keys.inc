@@ -1,16 +1,22 @@
-DEPENDS += "openssl virtual/docker "
+DEPENDS += "curl openssl virtual/docker "
 RDEPENDS:${PN} += "docker "
 
+# Path to the script in your layer
+SRC_URI += "file://rustup_init.sh"
+
+# Ensure WORKDIR is used for installation
 do_configure() {
-    ping -c 3 sh.rustup.rs
     export CARGO_HOME="${WORKDIR}/cargo_home"
     export RUSTUP_HOME="${WORKDIR}/rustup_home"
 
-    # Install rustup if not already installed
-    if [ ! -f "$CARGO_HOME/bin/rustup" ]; then
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
-        mkdir -p $CARGO_HOME/bin
-        ln -sf $RUSTUP_HOME/bin/* $CARGO_HOME/bin/
+    # Copy the script to WORKDIR
+    cp ${WORKDIR}/rustup_init.sh ${S}/rustup_init.sh
+    chmod +x ${S}/rustup_init.sh
+
+    # Execute the script
+    if ! ${S}/rustup_init.sh; then
+        echo "ERROR: Failed to setup Rust"
+        exit 1
     fi
 
     source $CARGO_HOME/env
