@@ -244,7 +244,7 @@ CONF_VERSION = "2"
 
 BBMASK += "poky/meta/recipes-devtools/rust"
 BBMASK += "poky/meta/recipes-devtools/cargo"
-PREFERRED_VERSION_rust ?= "1.65%"
+PREFERRED_VERSION_rust ?= "1.73%"
 DISTRO_FEATURES:append = " systemd virtualization"
 VIRTUAL-RUNTIME_init_manager = "systemd"
 VIRTUAL-RUNTIME_initscripts = "systemd-compat-units"

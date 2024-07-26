@@ -1,9 +1,18 @@
-diff --git a/Cargo.toml b/Cargo.toml
-index f936b9044..415655f76 100644
---- a/Cargo.toml
-+++ b/Cargo.toml
-@@ -15,7 +15,7 @@ members = [
- ]
+From 00d4a191d46a9c87ae700e0ee01cbe3b41097c5a Mon Sep 17 00:00:00 2001
+From: gaya <33068020+ggjjj@users.noreply.github.com>
+Date: Fri, 26 Jul 2024 22:36:52 +0000
+Subject: [PATCH] Change panic strategy to unwind
+
+---
+ edgelet/Cargo.toml | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/edgelet/Cargo.toml b/edgelet/Cargo.toml
+index d0fdba5c8..fd7a84b0d 100644
+--- a/edgelet/Cargo.toml
++++ b/edgelet/Cargo.toml
+@@ -16,10 +16,10 @@ members = [
+ resolver = "2"
  
  [profile.dev]
 -panic = 'abort'
@@ -12,3 +21,9 @@ index f936b9044..415655f76 100644
  [profile.release]
 -panic = 'abort'
 +panic = 'unwind'
+ # Release builds will have full symbols. The packaging phase will strip symbols from binaries and
+ # make them available in a separate package.
+ # Notes: Snaps don't have a good story for debug symbols, so for now we'll override this setting in
+-- 
+2.45.2
+
