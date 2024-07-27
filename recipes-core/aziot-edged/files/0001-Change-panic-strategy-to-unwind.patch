@@ -1,7 +1,7 @@
-diff --git a/edgelet/Cargo.toml b/edgelet/Cargo.toml
+diff --git a/Cargo.toml b/Cargo.toml
 index d0fdba5c8..fd7a84b0d 100644
---- a/edgelet/Cargo.toml
-+++ b/edgelet/Cargo.toml
+--- a/Cargo.toml
++++ b/Cargo.toml
 @@ -16,10 +16,10 @@ members = [
  resolver = "2"
  
