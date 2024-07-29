@@ -3,11 +3,7 @@ pr:
   branches:
     include:
       - main
-      - sumo
-      - thud
-      - warrior
-      - zeus
-      - dunfell
+      - kirkstone
 jobs:
 
 ################################################################################
