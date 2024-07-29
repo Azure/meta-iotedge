@@ -12,11 +12,12 @@ Use the branch of `meta-iotedge` corresponding to your Yocto release:
 
 **Active and maintained**:
 * [Kirkstone](https://github.com/Azure/meta-iotedge/tree/main) - `git clone -b main https://github.com/Azure/meta-iotedge.git`
-* [Dunfell](https://github.com/Azure/meta-iotedge/tree/dunfell) - `git clone -b dunfell https://github.com/Azure/meta-iotedge.git`
+
 
 Run `bitbake-layers add-layer meta-iotedge`
 
 **Not active and Not maintained**
+* [Dunfell](https://github.com/Azure/meta-iotedge/tree/dunfell) - `git clone -b dunfell https://github.com/Azure/meta-iotedge.git`
 * [Sumo](https://github.com/Azure/meta-iotedge/tree/sumo) - `git clone -b sumo https://github.com/Azure/meta-iotedge.git`
 * [Thud](https://github.com/Azure/meta-iotedge/tree/thud) - `git clone -b thud https://github.com/Azure/meta-iotedge.git`
 * [Warrior](https://github.com/Azure/meta-iotedge/tree/warrior) - `git clone -b warrior https://github.com/Azure/meta-iotedge.git`
@@ -27,9 +28,11 @@ Branching Strategy and Timelines
 
 | Yocto Release | IoT Edge version | Branch Name | Branch Status |
 | :- | :- | :- | :- |
+| Scrathgap | 1.5.x | scarthgap | TBD |
+| Kirkstone | 1.5.x | kirkstone | TBD |
 | Kirkstone | 1.4.x | main | Active and maintained |
-| Dunfell | 1.4.x  | dunfell | Active and maintained through April 2024 |
-| Dunfell | 1.1.x  | dunfell-1.1 | 1.1.x is retired in Dec'22. Not maintained |
+| Dunfell | 1.4.x  | dunfell | Not active and Not maintained |
+| Dunfell | 1.1.x  | dunfell-1.1 | Not active and Not maintained |
 | Sumo | 1.1.x | sumo | Not active and Not maintained |
 | Thud | 1.1.x | thud | Not active and Not maintained |
 | Warrior | 1.1.x | warrior | Not active and Not maintained |
