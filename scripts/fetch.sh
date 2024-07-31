@@ -19,6 +19,13 @@ METAOE_URI="git://git.openembedded.org/meta-openembedded.git"
 METAOE_PATH="poky/meta-openembedded"
 METAOE_REV="${METAOE_REV-refs/remotes/origin/${branch}}"
 
+if [ $branch = 'kirkstone' ]; then
+	REPOS+=" metarust"
+	METARUST_URI="https://github.com/meta-rust/meta-rust.git"
+	METARUST_PATH="poky/meta-rust"
+	METARUST_REV="${METARUST_REV-refs/remotes/origin/master}"
+fi
+
 METAVIRT_URI="git://git.yoctoproject.org/meta-virtualization"
 METAVIRT_PATH="poky/meta-virtualization"
 METAVIRT_REV="${METAVIRT_REV-refs/remotes/origin/${branch}}"
