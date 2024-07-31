@@ -246,7 +246,4 @@ VIRTUAL-RUNTIME_initscripts = "systemd-compat-units"
 
 BBMASK += "poky/meta/recipes-devtools/rust"
 BBMASK += "poky/meta/recipes-devtools/cargo"
-PREFERRED_VERSION_libstd-rs ?= "1.73%"
-PREFERRED_VERSION_cargo-native ?= "1.73%"
-PREFERRED_VERSION_rust-llvm-native ?= "1.73%"
-PREFERRED_VERSION_rust-native ?= "1.73%"
+RUSTVERSION = "1.78%"
