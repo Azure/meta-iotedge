@@ -9,14 +9,9 @@ SYSTEMD_SERVICE:${PN} = "aziot-edged.service"
 
 SRC_URI += "file://aziot-edged.service \
             file://iotedge.conf \
-            file://0001-Change-panic-strategy-to-unwind.patch \
 "
 
-do_install () {
-    # Binaries
-    install -d ${D}${bindir}
-    install -m 755 ${WORKDIR}/build/target/${TARGET_SYS}/release/aziot-edged ${D}${bindir}/aziot-edged
-
+do_install:append () {
     # Create symbolic links
     install -d ${D}${libexecdir}/aziot
     ln -s ${bindir}/aziot-edged ${D}${libexecdir}/aziot/aziot-edged

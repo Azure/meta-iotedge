@@ -2,7 +2,7 @@ DEPENDS += "openssl virtual/docker aziotctl aziot-keys tpm2-tss clang-native lib
 RDEPENDS:${PN} += "docker libtss2 libtss2-mu libtss2-tcti-device aziot-keys"
 TOOLCHAIN = "clang"
 
-inherit systemd 
+inherit systemd
 
 SYSTEMD_AUTO_ENABLE:${PN} = "enable"
 SYSTEMD_SERVICE:${PN} = "aziot-certd.service "
@@ -15,15 +15,11 @@ SRC_URI += "file://aziot-certd.service \
             file://aziot-keyd.service \
             file://aziot-tpmd.service \
             file://keys.generated.rs \
-            file://0001-Change-panic-strategy-to-unwind.patch \
 "
 
 
 
-do_install () {
-    # Binaries
-    install -d ${D}${bindir}
-    install -m 755 ${WORKDIR}/build/target/${TARGET_SYS}/release/aziotd ${D}${bindir}/aziotd
+do_install:append  () {
     install -d ${D}${systemd_unitdir}/system
 
     # Create symbolic links
@@ -57,13 +53,25 @@ do_install () {
 
     # Install all required services
     install -m 644 ${WORKDIR}/aziot-certd.service ${D}${systemd_unitdir}/system
-    install -m 644 ${WORKDIR}/git/cert/aziot-certd/aziot-certd.socket ${D}${systemd_unitdir}/system
     install -m 644 ${WORKDIR}/aziot-identityd.service ${D}${systemd_unitdir}/system
-    install -m 644 ${WORKDIR}/git/identity/aziot-identityd/aziot-identityd.socket ${D}${systemd_unitdir}/system
     install -m 644 ${WORKDIR}/aziot-keyd.service ${D}${systemd_unitdir}/system
-    install -m 644 ${WORKDIR}/git/key/aziot-keyd/aziot-keyd.socket ${D}${systemd_unitdir}/system
     install -m 644 ${WORKDIR}/aziot-tpmd.service ${D}${systemd_unitdir}/system
-    install -m 644 ${WORKDIR}/git/tpm/aziot-tpmd/aziot-tpmd.socket ${D}${systemd_unitdir}/system
+
+    install -m 644 ${WORKDIR}/git/cert/aziot-certd/aziot-certd.socket.in ${D}${systemd_unitdir}/system/aziot-certd.socket
+    install -m 644 ${WORKDIR}/git/identity/aziot-identityd/aziot-identityd.socket.in ${D}${systemd_unitdir}/system/aziot-identityd.socket
+    install -m 644 ${WORKDIR}/git/key/aziot-keyd/aziot-keyd.socket.in ${D}${systemd_unitdir}/system/aziot-keyd.socket
+    install -m 644 ${WORKDIR}/git/tpm/aziot-tpmd/aziot-tpmd.socket.in ${D}${systemd_unitdir}/system/aziot-tpmd.socket
+
+    sed -i \
+        -e "s|@user_aziotid@|${USER_AZIOTID}|" \
+		-e "s|@user_aziotks@|${USER_AZIOTKS}|" \
+		-e "s|@user_aziotcs@|${USER_AZIOTCS}|" \
+		-e "s|@user_aziottpm@|${USER_AZIOTTPM}|" \
+		-e "s|@socket_dir@|${SOCKET_DIR}|" \
+        ${D}${systemd_unitdir}/system/aziot-certd.socket \
+        ${D}${systemd_unitdir}/system/aziot-identityd.socket \
+        ${D}${systemd_unitdir}/system/aziot-keyd.socket \
+        ${D}${systemd_unitdir}/system/aziot-tpmd.socket
 }
 
 inherit useradd
