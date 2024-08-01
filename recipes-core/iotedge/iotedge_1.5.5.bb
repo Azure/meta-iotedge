@@ -590,11 +590,8 @@ export USER_AZIOTCS="aziotcs"
 export USER_AZIOTKS="aziotks"
 export USER_AZIOTTPM="aziottpm"
 
-do_patch() {
-    sed -i "/panic = 'abort'/d" ${WORKDIR}/git/edgelet/Cargo.toml
-    sed -i '/source = "git/d' ${WORKDIR}/git/edgelet/Cargo.lock
-    cp ${WORKDIR}/git/edgelet/Cargo.lock ${WORKDIR}/git/edgelet/iotedge/Cargo.lock
-} 
+SRC_URI += " file://0001-Remove-git-from-Cargo.patch"
+SRC_URI += " file://0002-Work-around-Rust-1.78-dead_code-lint-issues.patch"
 
 SUMMARY = "The iotedge tool is used to manage the IoT Edge runtime."
 HOMEPAGE = "https://aka.ms/iotedge"

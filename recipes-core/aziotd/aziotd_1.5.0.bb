@@ -525,9 +525,7 @@ export USER_AZIOTTPM="aziottpm"
 
 RUSTFLAGS += "-Clink-arg=-Wl,-rpath,${libdir}/rustlib/${RUST_HOST_SYS}/lib"
 
-do_patch() {
-    sed -i '/panic = "abort"/d' ${WORKDIR}/git/Cargo.toml
-}
+SRC_URI+= " file://0001-Remove-panic.patch"
 
 # includes this file if it exists but does not fail
 # this is useful for anything you may want to override from

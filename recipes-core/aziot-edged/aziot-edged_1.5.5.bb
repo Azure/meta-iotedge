@@ -589,11 +589,8 @@ export USER_AZIOTCS="aziotcs"
 export USER_AZIOTKS="aziotks"
 export USER_AZIOTTPM="aziottpm"
 
-do_patch() {
-    sed -i "/panic = 'abort'/d" ${WORKDIR}/git/edgelet/Cargo.toml
-    sed -i '/source = "git/d' ${WORKDIR}/git/edgelet/Cargo.lock
-    cp ${WORKDIR}/git/edgelet/Cargo.lock ${WORKDIR}/git/edgelet/aziot-edged/Cargo.lock
-} 
+SRC_URI += " file://0001-Remove-git-from-Cargo.patch"
+SRC_URI += " file://0002-Work-around-Rust-1.78-dead_code-lint-issues.patch"
 
 SUMMARY = "The aziot-edged is the main binary for the IoT edge daemon."
 HOMEPAGE = "https://aka.ms/iotedge"

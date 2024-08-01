@@ -524,9 +524,7 @@ export USER_AZIOTCS="aziotcs"
 export USER_AZIOTKS="aziotks"
 export USER_AZIOTTPM="aziottpm"
 
-do_patch() {
-    sed -i '/panic = "abort"/d' ${WORKDIR}/git/Cargo.toml
-}
+SRC_URI+= " file://0001-Remove-panic.patch"
 
 # includes this file if it exists but does not fail
 # this is useful for anything you may want to override from
