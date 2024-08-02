@@ -12,11 +12,7 @@ SRC_URI += "file://aziot-edged.service \
             file://0001-Change-panic-strategy-to-unwind.patch \
 "
 
-do_install () {
-    # Binaries
-    install -d ${D}${bindir}
-    install -m 755 ${WORKDIR}/build/target/${TARGET_SYS}/release/aziot-edged ${D}${bindir}/aziot-edged
-
+do_install:append () {
     # Create symbolic links
     install -d ${D}${libexecdir}/aziot
     ln -s ${bindir}/aziot-edged ${D}${libexecdir}/aziot/aziot-edged
@@ -47,6 +43,12 @@ USERADD_PARAM:${PN} = "-r -g iotedge -c 'iotedge user' -G docker,systemd-journal
 USERADD_PARAM:${PN} += "-r -g iotedge -c 'edgeAgent user' -s /bin/sh -u 13622 edgeagentuser; "
 USERADD_PARAM:${PN} += "-r -g iotedge -c 'edgeHub user' -s /bin/sh -u 13623 edgehubuser; "
 GROUPADD_PARAM:${PN} = "-r iotedge"
+
+export SOCKET_DIR="/run/aziot"
+export USER_AZIOTID="aziotid"
+export USER_AZIOTCS="aziotcs"
+export USER_AZIOTKS="aziotks"
+export USER_AZIOTTPM="aziottpm"
 
 FILES:${PN} += " \
     ${systemd_unitdir}/system/* \
