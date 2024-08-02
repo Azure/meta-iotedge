@@ -3,6 +3,7 @@ RDEPENDS:${PN} += "docker "
 
 SRC_URI +="file://0001-Change-panic-strategy-to-unwind.patch"
 
+export OPENSSL_DIR = "${STAGING_EXECPREFIXDIR}"
 export SOCKET_DIR="/run/aziot"
 export USER_AZIOTID="aziotid"
 export USER_AZIOTCS="aziotcs"
