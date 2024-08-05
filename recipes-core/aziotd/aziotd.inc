@@ -15,7 +15,7 @@ SRC_URI += "file://aziot-certd.service \
             file://aziot-keyd.service \
             file://aziot-tpmd.service \
             file://keys.generated.rs \
-            file://0001-Remove-panic.patch
+            file://0001-Remove-panic.patch \
 "
 
 
