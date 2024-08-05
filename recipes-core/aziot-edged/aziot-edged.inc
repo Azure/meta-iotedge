@@ -43,6 +43,12 @@ USERADD_PARAM:${PN} += "-r -g iotedge -c 'edgeAgent user' -s /bin/sh -u 13622 ed
 USERADD_PARAM:${PN} += "-r -g iotedge -c 'edgeHub user' -s /bin/sh -u 13623 edgehubuser; "
 GROUPADD_PARAM:${PN} = "-r iotedge"
 
+export SOCKET_DIR="/run/aziot"
+export USER_AZIOTID="aziotid"
+export USER_AZIOTCS="aziotcs"
+export USER_AZIOTKS="aziotks"
+export USER_AZIOTTPM="aziottpm"
+
 FILES:${PN} += " \
     ${systemd_unitdir}/system/* \
     ${localstatedir}/lib/ \
