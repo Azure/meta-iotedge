@@ -13,8 +13,7 @@ die() {
 }
 
 # Save the commands for future use
-TEMPLATE=${1}
-cmd=${@:2}
+cmd=$@
 
 # If no command was specified, just drop us into a shell if we're interactive
 [ $# -eq 0 ] && tty -s && cmd="/bin/bash"
@@ -43,7 +42,7 @@ exec docker run \
     --cap-add SETFCAP \
     -e BUILD_UID=${my_uid} \
     -e BUILD_GID=${my_gid} \
-    -e TEMPLATECONF=meta-iotedge/conf/templates/${TEMPLATE} \
+    -e TEMPLATECONF=meta-iotedge/conf \
     -e MACHINE=${MACHINE:-qemux86-64} \
     ${SSH_AUTH_SOCK:+-e SSH_AUTH_SOCK="/tmp/ssh-agent/${SSH_AUTH_NAME}"} \
     -v ${HOME}/.ssh:/var/build/.ssh \
