@@ -271,8 +271,6 @@ SUMMARY = "aziot-keys is the default implementation of cryptographic operations 
 HOMEPAGE = "https://azure.github.io/iot-identity-service/"
 LICENSE = "MIT"
 
-SRC_URI+= " file://0001-Remove-panic.patch"
-
 # includes this file if it exists but does not fail
 # this is useful for anything you may want to override from
 # what cargo-bitbake generates.
