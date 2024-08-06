@@ -5,13 +5,13 @@ inherit cargo pkgconfig
 # If this is git based prefer versioned ones if they exist
 # DEFAULT_PREFERENCE = "-1"
 
-# how to get aziot-keys could be as easy as but default to a git checkout:
-# SRC_URI += "crate://crates.io/aziot-keys/0.1.0"
+# how to get aziotd could be as easy as but default to a git checkout:
+# SRC_URI += "crate://crates.io/aziotd/1.4.8"
 SRC_URI += "gitsm://github.com/Azure/iot-identity-service.git;protocol=https;nobranch=1"
-SRCREV = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
+SRCREV = "657b163c8ecdf89cebcc57e1751d47cb1999de2c"
 S = "${WORKDIR}/git"
-CARGO_SRC_DIR = "key/aziot-keys"
-
+CARGO_SRC_DIR = "aziotd"
+PV:append = ".AUTOINC+657b163c8e"
 
 # please note if you have entries that do not begin with crate://
 # you must change them to how that package can be fetched
@@ -21,11 +21,7 @@ SRC_URI += " \
     crate://crates.io/aho-corasick/1.0.2 \
     crate://crates.io/android-tzdata/0.1.1 \
     crate://crates.io/android_system_properties/0.1.5 \
-    crate://crates.io/anstream/0.3.2 \
-    crate://crates.io/anstyle-parse/0.2.1 \
-    crate://crates.io/anstyle-query/1.0.0 \
-    crate://crates.io/anstyle-wincon/1.0.1 \
-    crate://crates.io/anstyle/1.0.1 \
+    crate://crates.io/ansi_term/0.12.1 \
     crate://crates.io/anyhow/1.0.71 \
     crate://crates.io/async-recursion/1.0.4 \
     crate://crates.io/async-trait/0.1.68 \
@@ -34,9 +30,8 @@ SRC_URI += " \
     crate://crates.io/backtrace/0.3.67 \
     crate://crates.io/base64/0.13.1 \
     crate://crates.io/base64/0.21.2 \
-    crate://crates.io/bindgen/0.69.4 \
+    crate://crates.io/bindgen/0.64.0 \
     crate://crates.io/bitflags/1.3.2 \
-    crate://crates.io/bitflags/2.4.2 \
     crate://crates.io/block-buffer/0.10.4 \
     crate://crates.io/bumpalo/3.13.0 \
     crate://crates.io/byte-unit/4.0.19 \
@@ -47,11 +42,7 @@ SRC_URI += " \
     crate://crates.io/cfg-if/1.0.0 \
     crate://crates.io/chrono/0.4.26 \
     crate://crates.io/clang-sys/1.6.1 \
-    crate://crates.io/clap/4.3.8 \
-    crate://crates.io/clap_builder/4.3.8 \
-    crate://crates.io/clap_derive/4.3.2 \
-    crate://crates.io/clap_lex/0.5.0 \
-    crate://crates.io/colorchoice/1.0.0 \
+    crate://crates.io/clap/2.34.0 \
     crate://crates.io/colored/2.0.0 \
     crate://crates.io/core-foundation-sys/0.8.4 \
     crate://crates.io/cpufeatures/0.2.8 \
@@ -93,11 +84,12 @@ SRC_URI += " \
     crate://crates.io/getrandom/0.2.10 \
     crate://crates.io/gimli/0.27.3 \
     crate://crates.io/glob/0.3.1 \
+    crate://crates.io/h2/0.3.20 \
     crate://crates.io/hashbrown/0.12.3 \
     crate://crates.io/hashbrown/0.14.0 \
     crate://crates.io/headers-core/0.2.0 \
     crate://crates.io/headers/0.3.8 \
-    crate://crates.io/heck/0.4.1 \
+    crate://crates.io/heck/0.3.3 \
     crate://crates.io/hermit-abi/0.1.19 \
     crate://crates.io/hermit-abi/0.2.6 \
     crate://crates.io/hermit-abi/0.3.1 \
@@ -128,7 +120,7 @@ SRC_URI += " \
     crate://crates.io/kernel32-sys/0.2.2 \
     crate://crates.io/lazy_static/1.4.0 \
     crate://crates.io/lazycell/1.3.0 \
-    crate://crates.io/libc/0.2.153 \
+    crate://crates.io/libc/0.2.147 \
     crate://crates.io/libloading/0.7.4 \
     crate://crates.io/linked-hash-map/0.5.6 \
     crate://crates.io/linked_hash_set/0.1.4 \
@@ -143,7 +135,7 @@ SRC_URI += " \
     crate://crates.io/miniz_oxide/0.6.2 \
     crate://crates.io/mio-extras/2.0.6 \
     crate://crates.io/mio/0.6.23 \
-    crate://crates.io/mio/0.8.11 \
+    crate://crates.io/mio/0.8.8 \
     crate://crates.io/miow/0.2.2 \
     crate://crates.io/net2/0.2.39 \
     crate://crates.io/nix/0.26.2 \
@@ -161,11 +153,14 @@ SRC_URI += " \
     crate://crates.io/parking_lot/0.12.1 \
     crate://crates.io/parking_lot_core/0.9.8 \
     crate://crates.io/paste/1.0.12 \
+    crate://crates.io/peeking_take_while/0.1.2 \
     crate://crates.io/percent-encoding/2.3.0 \
     crate://crates.io/pin-project-lite/0.2.9 \
     crate://crates.io/pin-utils/0.1.0 \
     crate://crates.io/pkg-config/0.3.27 \
     crate://crates.io/ppv-lite86/0.2.17 \
+    crate://crates.io/proc-macro-error-attr/1.0.4 \
+    crate://crates.io/proc-macro-error/1.0.4 \
     crate://crates.io/proc-macro2/1.0.63 \
     crate://crates.io/quote/1.0.28 \
     crate://crates.io/rand/0.8.5 \
@@ -183,7 +178,6 @@ SRC_URI += " \
     crate://crates.io/ryu/1.0.13 \
     crate://crates.io/same-file/1.0.6 \
     crate://crates.io/scopeguard/1.1.0 \
-    crate://crates.io/semver/1.0.22 \
     crate://crates.io/serde/1.0.164 \
     crate://crates.io/serde_derive/1.0.164 \
     crate://crates.io/serde_json/1.0.99 \
@@ -200,11 +194,15 @@ SRC_URI += " \
     crate://crates.io/socket2/0.4.9 \
     crate://crates.io/static_assertions/1.1.0 \
     crate://crates.io/strsim/0.10.0 \
+    crate://crates.io/strsim/0.8.0 \
+    crate://crates.io/structopt-derive/0.4.18 \
+    crate://crates.io/structopt/0.3.26 \
     crate://crates.io/subtle/2.5.0 \
     crate://crates.io/syn/1.0.109 \
     crate://crates.io/syn/2.0.22 \
     crate://crates.io/sysinfo/0.27.8 \
     crate://crates.io/termcolor/1.2.0 \
+    crate://crates.io/textwrap/0.11.0 \
     crate://crates.io/time-core/0.1.1 \
     crate://crates.io/time-macros/0.2.9 \
     crate://crates.io/time/0.1.45 \
@@ -213,6 +211,7 @@ SRC_URI += " \
     crate://crates.io/tinyvec_macros/0.1.1 \
     crate://crates.io/tokio-macros/2.1.0 \
     crate://crates.io/tokio-openssl/0.6.3 \
+    crate://crates.io/tokio-util/0.7.8 \
     crate://crates.io/tokio/1.28.2 \
     crate://crates.io/toml/0.7.5 \
     crate://crates.io/toml_datetime/0.6.3 \
@@ -227,11 +226,13 @@ SRC_URI += " \
     crate://crates.io/unicode-bidi/0.3.13 \
     crate://crates.io/unicode-ident/1.0.9 \
     crate://crates.io/unicode-normalization/0.1.22 \
+    crate://crates.io/unicode-segmentation/1.10.1 \
+    crate://crates.io/unicode-width/0.1.10 \
     crate://crates.io/url/2.4.0 \
     crate://crates.io/utf8-width/0.1.6 \
-    crate://crates.io/utf8parse/0.2.1 \
     crate://crates.io/uuid/1.4.0 \
     crate://crates.io/vcpkg/0.2.15 \
+    crate://crates.io/vec_map/0.8.2 \
     crate://crates.io/version_check/0.9.4 \
     crate://crates.io/walkdir/2.3.3 \
     crate://crates.io/want/0.3.1 \
@@ -267,12 +268,12 @@ LIC_FILES_CHKSUM = " \
     file://LICENSE;md5=4f9c2c296f77b3096b6c11a16fa7c66e \
 "
 
-SUMMARY = "aziot-keys is the default implementation of cryptographic operations used by the Keys Service."
+SUMMARY = "aziotd is the main binary for the IoT Identity Service and related services."
 HOMEPAGE = "https://azure.github.io/iot-identity-service/"
 LICENSE = "MIT"
 
 # includes this file if it exists but does not fail
 # this is useful for anything you may want to override from
 # what cargo-bitbake generates.
-include aziot-keys-${PV}.inc
-include aziot-keys.inc
+include aziotd-${PV}.inc
+include aziotd.inc
