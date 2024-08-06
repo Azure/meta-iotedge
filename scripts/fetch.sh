@@ -21,7 +21,8 @@ METAOE_REV="${METAOE_REV-refs/remotes/origin/${branch}}"
 
 METARUST_URI="https://github.com/meta-rust/meta-rust.git"
 METARUST_PATH="poky/meta-rust"
-METARUST_REV="${METARUST_REV-refs/remotes/origin/${branch}}"
+METARUST_REV="${METARUST_REV-refs/remotes/origin/master}"
+
 
 METAVIRT_URI="git://git.yoctoproject.org/meta-virtualization"
 METAVIRT_PATH="poky/meta-virtualization"

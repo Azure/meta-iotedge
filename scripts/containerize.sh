@@ -39,7 +39,7 @@ fi
 # Kick off Docker
 einfo "*** Launching container ..."
 exec docker run \
-    --privileged \
+    --cap-add SETFCAP \
     -e BUILD_UID=${my_uid} \
     -e BUILD_GID=${my_gid} \
     -e TEMPLATECONF=meta-iotedge/conf \

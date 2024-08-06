@@ -5,7 +5,6 @@ After=aziot-keyd.socket
 
 [Service]
 Environment="AZIOT_LOG=error"
-Environment="LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/rust"
 ExecStart=/usr/bin/aziot-keyd
 KillMode=process
 Restart=on-failure
