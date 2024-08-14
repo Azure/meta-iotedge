@@ -20,6 +20,7 @@ jobs:
     steps:
       - script: scripts/fetch.sh kirkstone
         displayName: Fetch
-
+        env:
+          METARUST_REV: '93f551996e95f45e298259937c0975a2e6663911'
       - script: scripts/build.sh kirkstone
         displayName: Build
