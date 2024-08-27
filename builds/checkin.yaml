@@ -23,20 +23,3 @@ jobs:
 
       - script: scripts/build.sh
         displayName: Build
-################################################################################
-  - job: kirkstone
-################################################################################
-    displayName: Kirkstone
-    pool:
-      name: meta-iotedge-1es-hosted-linux
-      demands:
-      - ImageOverride -equals agent-aziotedge-ubuntu-20.04-msmoby
-      - DiskSizeGiB -equals 500
-      - WorkFolder -equals /mnt/storage/_work
-    timeoutInMinutes: 2400
-    steps:
-      - script: scripts/fetch.sh kirkstone
-        displayName: Fetch
-
-      - script: scripts/build.sh kirkstone
-        displayName: Build
