@@ -7,9 +7,9 @@ pr:
 jobs:
 
 ################################################################################
-  - job: kirkstone
+  - job: scrathgap
 ################################################################################
-    displayName: Kirkstone
+    displayName: Scrathgap
     pool:
       name: meta-iotedge-1es-hosted-linux
       demands:
@@ -18,8 +18,8 @@ jobs:
       - WorkFolder -equals /mnt/storage/_work
     timeoutInMinutes: 2400
     steps:
-      - script: scripts/fetch.sh kirkstone
+      - script: scripts/fetch.sh scrathgap
         displayName: Fetch
 
-      - script: scripts/build.sh kirkstone
+      - script: scripts/build.sh scrathgap
         displayName: Build
