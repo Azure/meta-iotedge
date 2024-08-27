@@ -9,6 +9,8 @@ SYSTEMD_SERVICE:${PN} = "aziot-edged.service"
 
 SRC_URI += "file://aziot-edged.service \
             file://iotedge.conf \
+            file://0001-Remove-git-from-Cargo.patch \
+            file://0002-Work-around-Rust-1.78-dead_code-lint-issues.patch \
 "
 
 do_install:append () {
@@ -35,6 +37,12 @@ do_install:append () {
     install -d ${D}${sysconfdir}/tmpfiles.d
     install -m 644 ${WORKDIR}/iotedge.conf ${D}${sysconfdir}/tmpfiles.d/iotedge.conf
 }
+
+export SOCKET_DIR="/run/aziot"
+export USER_AZIOTID="aziotid"
+export USER_AZIOTCS="aziotcs"
+export USER_AZIOTKS="aziotks"
+export USER_AZIOTTPM="aziottpm"
 
 inherit useradd
 USERADD_PACKAGES = "${PN}"

@@ -15,6 +15,7 @@ SRC_URI += "file://aziot-certd.service \
             file://aziot-keyd.service \
             file://aziot-tpmd.service \
             file://keys.generated.rs \
+            file://0001-Remove-panic.patch \
 "
 
 
@@ -73,6 +74,14 @@ do_install:append  () {
         ${D}${systemd_unitdir}/system/aziot-keyd.socket \
         ${D}${systemd_unitdir}/system/aziot-tpmd.socket
 }
+
+export SOCKET_DIR="/run/aziot"
+export USER_AZIOTID="aziotid"
+export USER_AZIOTCS="aziotcs"
+export USER_AZIOTKS="aziotks"
+export USER_AZIOTTPM="aziottpm"
+
+RUSTFLAGS += "-Clink-arg=-Wl,-rpath,${libdir}/rustlib/${RUST_HOST_SYS}/lib"
 
 inherit useradd
 USERADD_PACKAGES = "${PN}"
