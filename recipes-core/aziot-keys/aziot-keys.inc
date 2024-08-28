@@ -1,4 +1,4 @@
-DEPENDS += "openssl virtual/docker "
+DEPENDS += "openssl virtual/docker pkgconfig"
 RDEPENDS:${PN} += "docker "
 
-SRC_URI +="file://0001-Change-panic-strategy-to-unwind.patch"
+SRC_URI+= " file://0001-Remove-panic.patch"
