@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # what container are we using to build this
-CONTAINER="crops/poky:ubuntu-20.04"
+CONTAINER="metaiotedge.azurecr.io/poky:ubuntu-20.04"
 
 einfo() {
 	echo "$*" >&2
@@ -39,7 +39,7 @@ fi
 # Kick off Docker
 einfo "*** Launching container ..."
 exec docker run \
-    --privileged \
+    --cap-add SETFCAP \
     -e BUILD_UID=${my_uid} \
     -e BUILD_GID=${my_gid} \
     -e TEMPLATECONF=meta-iotedge/conf \
