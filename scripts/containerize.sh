@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # what container are we using to build this
-CONTAINER="crops/poky:ubuntu-20.04"
+CONTAINER="metaiotedge.azurecr.io/poky:ubuntu-20.04"
 
 einfo() {
 	echo "$*" >&2
