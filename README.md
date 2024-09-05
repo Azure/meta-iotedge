@@ -11,7 +11,7 @@ Adding the meta-iotedge layer to your build
 Use the branch of `meta-iotedge` corresponding to your Yocto release:
 
 **Active and maintained**:
-* [Scrathgap](https://github.com/Azure/meta-iotedge/tree/main)  - `git clone -b main https://github.com/Azure/meta-iotedge.git`
+* [Scarthgap](https://github.com/Azure/meta-iotedge/tree/main)  - `git clone -b main https://github.com/Azure/meta-iotedge.git`
 * [Kirkstone](https://github.com/Azure/meta-iotedge/tree/kirkstone) - `git clone -b main https://github.com/Azure/meta-iotedge.git`
 
 
@@ -29,7 +29,7 @@ Branching Strategy and Timelines
 
 | Yocto Release | IoT Edge version | Branch Name | Branch Status |
 | :- | :- | :- | :- |
-| Scrathgap | 1.5.x | main | Active and maintained |
+| Scarthgap | 1.5.x | main | Active and maintained |
 | Kirkstone | 1.5.x | kirkstone | Active and maintained |
 | Kirkstone | 1.4.x | kirkstone | Out of Support Nov'2024 |
 | Dunfell | 1.4.x  | dunfell | Not active and Not maintained |
