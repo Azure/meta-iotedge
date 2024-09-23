@@ -1,46 +1,65 @@
 # Clone iotedge and checkout 1.5.11
+```
 cd ~/code/iotedge
 git checkout 1.5.11
+```
 
 # generate iotedge bitbake
+```
 cd ~/code/iotedge/edgelet/iotedge
 cargo-bitbake bitbake
 cp iotedge_0.1.0.bb ~/code/yocto-workdir/meta-iotedge/poky/meta-iotedge/recipes-core/iotedge/iotedge_1.5.11.bb
+```
 
 # generate aziot-edge bitbake
+```
 cd ~/code/iotedge/edgelet/aziot-edge
 cargo-bitbake bitbake
 cp aziot-edged_0.1.0.bb ~/code/yocto-workdir/meta-iotedge/poky/meta-iotedge/recipes-core/aziot-edged/aziot-edged_1.5.11.bb
+```
 
 # clone iot-identity-service and checkout 1.5.3
+```
 cd ~/code/iot-identity-service
 git checkout 1.5.3
+```
 
 # generate aziot-keys bitbake
+```
 cd ~/code/iot-identity-service/key/aziot-keys
 cargo-bitbake bitbake
 cp aziot-keys_0.1.0.bb ~/code/yocto-workdir/meta-iotedge/recipes-core/aziot-keys/aziot-keys_1.5.3.bb
+```
 
 # generate aziotctl bitbake
-# first aziot-keyd dependency
+bindgen needs to be added to aziot-keyd because iotedge uses a Makefile to generate this.
+```
 cd ~/code/iot-identity-service/keys/aziot-keyd
 cargo add --build bindgen@0.69.4 
 cd ~/code/iot-identity-service/aziotctl
 cargo-bitbake bitbake
 cp aziotctl_1.5.3.bb ~/code/yocto-workdir/meta-iotedge/recipes-core/aziotctl/aziotctl_1.5.3.bb
+```
 
 # generate aziotd bitbake
+```
 cd ~/code/iot-identity-service/aziotd
 cargo-bitbake bitbake
 cp aziotd_1.5.3.bb ~/code/yocto-workdir/meta-iotedge/recipes-core/aziotd/aziotd_1.5.3.bb
+```
 
-# patch CARGO_SRC_DIR
+# patch CARGO_SRC_DIR for iotedge
+```
 sed -i "s/CARGO_SRC_DIR = \"iotedge\"/CARGO_SRC_DIR = \"edgelet\/iotedge\"/" ~/code/yocto-workdir/meta-iotedge/poky/meta-iotedge/recipes-core/iotedge/iotedge_1.5.11.bb
+```
 
-# patch CARGO_SRC_DIR
+# patch CARGO_SRC_DIR for aziot-edged
+```
 sed -i "s/CARGO_SRC_DIR = \"aziot-edged\"/CARGO_SRC_DIR = \"edgelet\/aziot-edged\"/" ~/code/yocto-workdir/meta-iotedge/poky/meta-iotedge/recipes-core/aziot-edged/aziot-edged_1.5.11.bb
+```
 
 # Patch iotedge
+```
 PATCH_TARGET="$HOME/code/yocto-workdir/meta-iotedge/poky/meta-iotedge/recipes-core/iotedge/iotedge_1.5.11.bb $HOME/code/yocto-workdir/meta-iotedge/poky/meta-iotedge/recipes-core/aziot-edged/aziot-edged_1.5.11.bb"
 sed -i "s/destsuffix=aziot-cert-client-async/destsuffix=cert\/aziot-cert-client-async;subpath=cert\/aziot-cert-client-async/" $PATCH_TARGET
 sed -i "s/destsuffix=aziot-cert-common-http/destsuffix=cert\/aziot-cert-common-http;subpath=cert\/aziot-cert-common-http/" $PATCH_TARGET
@@ -88,41 +107,58 @@ sed -i "s/\${WORKDIR}\/cert-renewal/\${WORKDIR}\/cert\/cert-renewal/" $PATCH_TAR
 sed -i "s/\${WORKDIR}\/pkcs11/\${WORKDIR}\/pkcs11\/pkcs11/" $PATCH_TARGET
 sed -i "s/\${WORKDIR}\/pkcs11-sys/\${WORKDIR}\/pkcs11\/pkcs11-sys/" $PATCH_TARGET
 sed -i "s/file:\/\/MIT;md5=generateme /file:\/\/LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d file:\/\/THIRDPARTYNOTICES;md5=11604c6170b98c376be25d0ca6989d9b/"  $PATCH_TARGET
+```
 
 # Patch the branch hashes from iot-identity-service. Replace the
+```
 sed -i "s/\"main\"/\"72cea820a241aac81cf42bb6693a6e26ac25187c\"/"  $PATCH_TARGET
+```
 
 # Patch the licenses
+```
 SERVICE_PATCH_TARGET="$HOME/code/yocto-workdir/meta-iotedge/recipes-core/aziot-keys/aziot-keys_1.5.3.bb $HOME/code/yocto-workdir/meta-iotedge/recipes-core/aziotctl/aziotctl_1.5.3.bb $HOME/code/yocto-workdir/meta-iotedge/recipes-core/aziotd/aziotd_1.5.3.bb"
 sed -i "s/file:\/\/MIT;md5=generateme/file:\/\/LICENSE;md5=4f9c2c296f77b3096b6c11a16fa7c66e/" $SERVICE_PATCH_TARGET
+```
 
 # Add pkgconfig to aziot-keys
+```
 sed -i "s/inherit cargo/inherit cargo pkgconfig/" $HOME/code/yocto-workdir/meta-iotedge/recipes-core/aziot-keys/aziot-keys_1.5.3.bb $HOME/code/yocto-workdir/meta-iotedge/recipes-core/aziotd/aziotd_1.5.3.bb
+```
 
 #Get the missing SRC_URI checksums 
+This command will tell you which SRC_URI hashes you need to add to the file,
+```
 bitbake aziot-keys
-#copying the missing checksums into the bb file from the output error message.
+```
+copying the missing checksums into the bb file from the output error message.
+repeat this step for aziotctl and aziotd
 
 # Generate aziot-keys patch
+```
 devtool modify aziot-keys
 cd workspace/sources/aziot-keys
 sed -i "/panic = \"abort\"/d" Cargo.toml
 git commit -am "Remove panic"
 devtool update-recipe aziot-keys
-
-# repeat the previous SRC_URI and patch step for aziotctl and aziotd
+```
+repeat this step for aziotctl and aziotd
 
 # Also fix the rustdoc problem for aziotd
+```
 cd workspace/source/aziotd
 sed -i "s/\/\/\/ The TPM's Endorsement Key/\/\/ The TPM's Endorsement Key/" tpm/aziot-tpmd/src/http/get_tpm_keys.rs tpm/aziot-tpm-common-http/src/lib.rs
 sed -i "s/\/\/\/ The TPM's Storage Root Key/\/\/ The TPM's Storage Root Key/" tpm/aziot-tpmd/src/http/get_tpm_keys.rs tpm/aziot-tpm-common-http/src/lib.rs
 git commit -am "Fix rustdoc warning"
+```
 
 # Patch aziot-keyd
+```
 cd keys/aziot-keyd
 cargo add --build bindgen@0.69.4
+```
 
-# Add the following to build.rs in aziot-keyd
+add the following to build.rs in aziot-keyd
+```
     // to bindgen, and lets you build up options for
     // the resulting bindings.
     let bindings = bindgen::Builder::default()
@@ -140,16 +176,21 @@ cargo add --build bindgen@0.69.4
     bindings
         .write_to_file("src/keys.generated.rs")
         .expect("Couldn't write bindings!");
+```
+
+```
 git commit -a -m "Fix keys.generated.rs bindings"
 devtool update-recipe aziotd
-
-# Make sure aziotd builds
-bitbake aziotd
+```
 
 # Run Fix up the aziot-edged and iotedge SRC_URI hashes by running this command and copying the output.
+Add the missing SRC_URI hashes to the bb file.
+```
 bitbake aziot-edged
+```
 
 # patch iotedge
+```
 devtool modify iotedge
 cd workspace/sources/iotedge
 sed -i "/panic = 'abort'/d" edgelet/Cargo.toml
@@ -159,7 +200,9 @@ ln -s ../Cargo.lock Cargo.lock
 git add -A
 git commit -m "Fix Cargo.lock and panic"
 devtool update-recipe iotedge
+```
 
+```
 devtool modify aziot-edged
 cd workspace/sources/aziot-edged
 sed -i "/panic = 'abort'/d" edgelet/Cargo.toml
@@ -169,3 +212,4 @@ ln -s ../Cargo.lock Cargo.lock
 git add -A
 git commit -m "Fix Cargo.lock and panic"
 devtool update-recipe aziot-edged
+```
