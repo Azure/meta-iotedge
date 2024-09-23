@@ -7,9 +7,16 @@ SYSTEMD_AUTO_ENABLE:${PN} = "enable"
 SYSTEMD_SERVICE:${PN} = "aziot-edged.service"
 
 
-SRC_URI += "file://aziot-edged.service \
-            file://iotedge.conf \
-"
+SRC_URI = "file://aziot-edged.service \
+           file://iotedge.conf \
+           file://0001-Fix-Cargo.lock-and-panic.patch \
+           "
+
+export SOCKET_DIR="/run/aziot"
+export USER_AZIOTID="aziotid"
+export USER_AZIOTCS="aziotcs"
+export USER_AZIOTKS="aziotks"
+export USER_AZIOTTPM="aziottpm"
 
 do_install:append () {
     # Create symbolic links
@@ -41,7 +48,7 @@ USERADD_PACKAGES = "${PN}"
 USERADD_PARAM:${PN} = "-r -g iotedge -c 'iotedge user' -G docker,systemd-journal,aziotcs,aziotks,aziottpm,aziotid -s /sbin/nologin -d ${localstatedir}/lib/aziot/edged iotedge; "
 USERADD_PARAM:${PN} += "-r -g iotedge -c 'edgeAgent user' -s /bin/sh -u 13622 edgeagentuser; "
 USERADD_PARAM:${PN} += "-r -g iotedge -c 'edgeHub user' -s /bin/sh -u 13623 edgehubuser; "
-GROUPADD_PARAM:${PN} = "-r iotedge"
+GROUPADD_PARAM:${PN} = "-r iotedge; "
 
 FILES:${PN} += " \
     ${systemd_unitdir}/system/* \

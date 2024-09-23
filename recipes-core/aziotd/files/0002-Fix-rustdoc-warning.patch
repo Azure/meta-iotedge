@@ -1,0 +1,42 @@
+From d65246db44dcd25dffc5a134414ff07a098ec80b Mon Sep 17 00:00:00 2001
+From: Your Name <you@example.com>
+Date: Mon, 23 Sep 2024 05:06:58 +0000
+Subject: [PATCH] Fix rustdoc warning
+
+---
+ tpm/aziot-tpm-common-http/src/lib.rs    | 4 ++--
+ tpm/aziot-tpmd/src/http/get_tpm_keys.rs | 4 ++--
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/tpm/aziot-tpm-common-http/src/lib.rs b/tpm/aziot-tpm-common-http/src/lib.rs
+index ee6e6ca..0f39466 100644
+--- a/tpm/aziot-tpm-common-http/src/lib.rs
++++ b/tpm/aziot-tpm-common-http/src/lib.rs
+@@ -37,9 +37,9 @@ pub mod get_tpm_keys {
+ 
+     #[derive(Debug, Deserialize, Serialize)]
+     pub struct Response {
+-        /// The TPM's Endorsement Key
++        // The TPM's Endorsement Key
+         pub endorsement_key: http_common::ByteString,
+-        /// The TPM's Storage Root Key
++        // The TPM's Storage Root Key
+         pub storage_root_key: http_common::ByteString,
+     }
+ }
+diff --git a/tpm/aziot-tpmd/src/http/get_tpm_keys.rs b/tpm/aziot-tpmd/src/http/get_tpm_keys.rs
+index 181e6c6..883b44e 100644
+--- a/tpm/aziot-tpmd/src/http/get_tpm_keys.rs
++++ b/tpm/aziot-tpmd/src/http/get_tpm_keys.rs
+@@ -42,9 +42,9 @@ impl http_common::server::Route for Route {
+             .map_err(|e| super::to_http_error(&Error::Internal(InternalError::GetTpmKeys(e))))?;
+ 
+         let res = aziot_tpm_common_http::get_tpm_keys::Response {
+-            /// The TPM's Endorsement Key
++            // The TPM's Endorsement Key
+             endorsement_key: http_common::ByteString(endorsement_key),
+-            /// The TPM's Storage Root Key
++            // The TPM's Storage Root Key
+             storage_root_key: http_common::ByteString(storage_root_key),
+         };
+ 

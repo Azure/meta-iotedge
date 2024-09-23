@@ -10,14 +10,17 @@ SYSTEMD_SERVICE:${PN} += "aziot-identityd.service "
 SYSTEMD_SERVICE:${PN} += "aziot-keyd.service "
 SYSTEMD_SERVICE:${PN} += "aziot-tpmd.service "
 
-SRC_URI += "file://aziot-certd.service \
-            file://aziot-identityd.service \
-            file://aziot-keyd.service \
-            file://aziot-tpmd.service \
-            file://keys.generated.rs \
+export SOCKET_DIR="/run/aziot"
+export USER_AZIOTID="aziotid"
+export USER_AZIOTCS="aziotcs"
+export USER_AZIOTKS="aziotks"
+export USER_AZIOTTPM="aziottpm"
+
+SRC_URI = "file://aziot-certd.service \
+           file://aziot-identityd.service \
+           file://aziot-keyd.service \
+           file://aziot-tpmd.service \
 "
-
-
 
 do_install:append  () {
     install -d ${D}${systemd_unitdir}/system
