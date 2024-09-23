@@ -34,14 +34,18 @@ cp aziot-keys_0.1.0.bb ~/code/yocto-workdir/meta-iotedge/recipes-core/aziot-keys
 # generate aziotctl bitbake
 bindgen needs to be added to aziot-keyd because iotedge uses a Makefile to generate this.
 ```
-cd ~/code/iot-identity-service/keys/aziot-keyd
-cargo add --build bindgen@0.69.4 
-cd ~/code/iot-identity-service/aziotctl
 cargo-bitbake bitbake
 cp aziotctl_1.5.3.bb ~/code/yocto-workdir/meta-iotedge/recipes-core/aziotctl/aziotctl_1.5.3.bb
 ```
 
 # generate aziotd bitbake
+Patch to aziot-keyd file. We will need bindgen for aziot-keyd to build, which aziotd depends on.
+```
+cd ~/code/iot-identity-service/keys/aziot-keyd
+cargo add --build bindgen@0.69.4 
+cd ~/code/iot-identity-service/aziotctl
+```
+
 ```
 cd ~/code/iot-identity-service/aziotd
 cargo-bitbake bitbake
