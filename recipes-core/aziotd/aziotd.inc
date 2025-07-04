@@ -85,7 +85,7 @@ GROUPADD_PARAM:${PN} = "-r aziotcs; "
 GROUPADD_PARAM:${PN} += "-r aziotks; "
 GROUPADD_PARAM:${PN} += "-r aziotid; "
 GROUPADD_PARAM:${PN} += "-r aziottpm; "
-RUSTFLAGS += "-Clink-arg=-Wl,-rpath,${libdir}/rustlib/${RUST_HOST_SYS}/lib"
+RUSTFLAGS += "-Clink-arg=-Wl,-rpath,${rustlibdir}"
 
 export SOCKET_DIR="/run/aziot"
 export USER_AZIOTID="aziotid"
