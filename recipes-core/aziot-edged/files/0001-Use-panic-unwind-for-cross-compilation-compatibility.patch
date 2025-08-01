@@ -1,0 +1,26 @@
+From 85fbcd58b491f9e09469a72e60e091442525d67b Mon Sep 17 00:00:00 2001
+From: Pete Davidson <pete@lexmark.com>
+Date: Fri, 1 Aug 2025 14:15:06 -0400
+Subject: [PATCH] Use panic unwind for cross-compilation compatibility
+
+---
+ edgelet/Cargo.toml | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/edgelet/Cargo.toml b/edgelet/Cargo.toml
+index d0fdba5c8..fd7a84b0d 100644
+--- a/edgelet/Cargo.toml
++++ b/edgelet/Cargo.toml
+@@ -16,10 +16,10 @@ members = [
+ resolver = "2"
+ 
+ [profile.dev]
+-panic = 'abort'
++panic = 'unwind'
+ 
+ [profile.release]
+-panic = 'abort'
++panic = 'unwind'
+ # Release builds will have full symbols. The packaging phase will strip symbols from binaries and
+ # make them available in a separate package.
+ # Notes: Snaps don't have a good story for debug symbols, so for now we'll override this setting in
