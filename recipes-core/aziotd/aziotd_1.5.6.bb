@@ -5,12 +5,12 @@ inherit cargo pkgconfig
 # If this is git based prefer versioned ones if they exist
 # DEFAULT_PREFERENCE = "-1"
 
-# how to get aziot-keys could be as easy as but default to a git checkout:
-# SRC_URI += "crate://crates.io/aziot-keys/0.1.0"
+# how to get aziotd could be as easy as but default to a git checkout:
+# SRC_URI += "crate://crates.io/aziotd/1.5.0"
 SRC_URI += "gitsm://github.com/Azure/iot-identity-service.git;protocol=https;nobranch=1"
-SRCREV = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
+SRCREV = "833381accec8d53436cac20fc3fb85303e4504eb"
 S = "${WORKDIR}/git"
-CARGO_SRC_DIR = "key/aziot-keys"
+CARGO_SRC_DIR = "aziotd"
 
 
 # please note if you have entries that do not begin with crate://
@@ -194,7 +194,7 @@ SRC_URI += " \
     crate://crates.io/serial_test_derive/1.0.0 \
     crate://crates.io/sha1/0.10.5 \
     crate://crates.io/sha2/0.10.7 \
-    crate://crates.io/shlex/1.1.0 \
+    crate://crates.io/shlex/1.3.0 \
     crate://crates.io/slab/0.4.8 \
     crate://crates.io/smallvec/1.10.0 \
     crate://crates.io/socket2/0.4.9 \
@@ -441,7 +441,7 @@ SRC_URI[serial_test-1.0.0.sha256sum] = "538c30747ae860d6fb88330addbbd3e0ddbe46d6
 SRC_URI[serial_test_derive-1.0.0.sha256sum] = "079a83df15f85d89a68d64ae1238f142f172b1fa915d0d76b26a7cba1b659a69"
 SRC_URI[sha1-0.10.5.sha256sum] = "f04293dc80c3993519f2d7f6f511707ee7094fe0c6d3406feb330cdb3540eba3"
 SRC_URI[sha2-0.10.7.sha256sum] = "479fb9d862239e610720565ca91403019f2f00410f1864c5aa7479b950a76ed8"
-SRC_URI[shlex-1.1.0.sha256sum] = "43b2853a4d09f215c24cc5489c992ce46052d359b5109343cbafbf26bc62f8a3"
+SRC_URI[shlex-1.3.0.sha256sum] = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 SRC_URI[slab-0.4.8.sha256sum] = "6528351c9bc8ab22353f9d776db39a20288e8d6c37ef8cfe3317cf875eecfc2d"
 SRC_URI[smallvec-1.10.0.sha256sum] = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 SRC_URI[socket2-0.4.9.sha256sum] = "64a4a911eed85daf18834cfaa86a79b7d266ff93ff5ba14005426219480ed662"
@@ -513,14 +513,12 @@ LIC_FILES_CHKSUM = " \
     file://LICENSE;md5=4f9c2c296f77b3096b6c11a16fa7c66e \
 "
 
-SUMMARY = "aziot-keys is the default implementation of cryptographic operations used by the Keys Service."
+SUMMARY = "aziotd is the main binary for the IoT Identity Service and related services."
 HOMEPAGE = "https://azure.github.io/iot-identity-service/"
 LICENSE = "MIT"
-
-SRC_URI+= " file://0001-Remove-panic.patch"
 
 # includes this file if it exists but does not fail
 # this is useful for anything you may want to override from
 # what cargo-bitbake generates.
-include aziot-keys-${PV}.inc
-include aziot-keys.inc
+include aziotd-${PV}.inc
+include aziotd.inc
