@@ -13,7 +13,7 @@ jobs:
     pool:
       name: meta-iotedge-1es-hosted-linux
       demands:
-      - ImageOverride -equals agent-aziotedge-ubuntu-20.04-msmoby
+      - ImageOverride -equals agent-aziotedge-ubuntu-22.04-msmoby
       - DiskSizeGiB -equals 500
       - WorkFolder -equals /mnt/storage/_work
     timeoutInMinutes: 2400
