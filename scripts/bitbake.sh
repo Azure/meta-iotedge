@@ -14,4 +14,8 @@ targets=$@
 
 source ${DIR}/poky/oe-init-build-env build
 
-bitbake ${targets}
+
+echo "Full CPU Info:"
+cat /proc/cpuinfo
+
+bitbake ${targets} -v
