@@ -37,6 +37,9 @@
 # This sets the default machine to be qemux86 if no other machine is selected:
 MACHINE ??= "qemux86-64"
 
+# Increase BitBake server timeout for slower container starts
+BB_SERVER_TIMEOUT = "600"
+
 #
 # Where to place downloads
 #
@@ -77,6 +80,10 @@ MACHINE ??= "qemux86-64"
 # The default is a tmp directory under TOPDIR.
 #
 #TMPDIR = "${TOPDIR}/tmp"
+
+# Limit parallelism to reduce BitBake server load in constrained environments
+BB_NUMBER_THREADS ?= "4"
+PARALLEL_MAKE ?= "-j 4"
 
 #
 # Default policy config

@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # what container are we using to build this
-CONTAINER="metaiotedge.azurecr.io/poky:ubuntu-20.04"
+# default to a public Yocto build image; override with CONTAINER env var if needed
+CONTAINER="${CONTAINER:-crops/poky:ubuntu-22.04}"
 
 einfo() {
 	echo "$*" >&2
@@ -24,6 +25,16 @@ cmd=${@:2}
 my_uid=$(id -u)
 my_gid=$(id -g)
 
+# Some build images require a non-zero gid for the workspace mount.
+if [[ "${my_gid}" == "0" ]]; then
+    alt_gid=$(id -G | tr ' ' '\n' | grep -v '^0$' | head -n 1)
+    if [[ -n "${alt_gid}" ]]; then
+        my_gid="${alt_gid}"
+    else
+        my_gid="1000"
+    fi
+fi
+
 # Are we in an interactive terminal?
 tty -s && termint=t
 
@@ -43,6 +54,8 @@ exec docker run \
     --cap-add SETFCAP \
     -e BUILD_UID=${my_uid} \
     -e BUILD_GID=${my_gid} \
+    -e BB_SERVER_TIMEOUT=${BB_SERVER_TIMEOUT:-600} \
+    -e BB_COMMAND_TIMEOUT=${BB_COMMAND_TIMEOUT:-300} \
     -e TEMPLATECONF=meta-iotedge/conf/templates/${TEMPLATE} \
     -e MACHINE=${MACHINE:-qemux86-64} \
     ${SSH_AUTH_SOCK:+-e SSH_AUTH_SOCK="/tmp/ssh-agent/${SSH_AUTH_NAME}"} \

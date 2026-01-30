@@ -12,7 +12,7 @@ Use the branch of `meta-iotedge` corresponding to your Yocto release:
 
 **Active and maintained**:
 * [Scarthgap](https://github.com/Azure/meta-iotedge/tree/main)  - `git clone -b main https://github.com/Azure/meta-iotedge.git`
-* [Kirkstone](https://github.com/Azure/meta-iotedge/tree/kirkstone) - `git clone -b main https://github.com/Azure/meta-iotedge.git`
+* [Kirkstone](https://github.com/Azure/meta-iotedge/tree/kirkstone) - `git clone -b kirkstone https://github.com/Azure/meta-iotedge.git`
 
 
 Run `bitbake-layers add-layer meta-iotedge`
@@ -38,6 +38,11 @@ Branching Strategy and Timelines
 | Thud | 1.1.x | thud | Not active and Not maintained |
 | Warrior | 1.1.x | warrior | Not active and Not maintained |
 | Zeus | 1.1.x | zeus | Not active and Not maintained |
+
+Release process
+===============
+
+See the step-by-step guide in [docs/release.md](docs/release.md).
 
 
 Contributing

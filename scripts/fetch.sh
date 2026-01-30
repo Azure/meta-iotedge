@@ -11,28 +11,57 @@ branch=${1-master}
 # NOTE: poky must remain first.
 REPOS="poky metaoe metavirt metasecurity metaclang"
 
-POKY_URI="git://git.yoctoproject.org/poky.git"
+POKY_URI="https://git.yoctoproject.org/poky.git"
+POKY_UPSTREAM_URI="${POKY_URI}"
 POKY_PATH="poky"
 POKY_REV="${POKY_REV-refs/remotes/origin/${branch}}"
 
-METAOE_URI="git://git.openembedded.org/meta-openembedded.git"
+METAOE_URI="https://git.openembedded.org/meta-openembedded.git"
+METAOE_UPSTREAM_URI="${METAOE_URI}"
 METAOE_PATH="poky/meta-openembedded"
 METAOE_REV="${METAOE_REV-refs/remotes/origin/${branch}}"
 
-METAVIRT_URI="git://git.yoctoproject.org/meta-virtualization"
+METAVIRT_URI="https://git.yoctoproject.org/meta-virtualization"
+METAVIRT_UPSTREAM_URI="${METAVIRT_URI}"
 METAVIRT_PATH="poky/meta-virtualization"
 METAVIRT_REV="${METAVIRT_REV-refs/remotes/origin/${branch}}"
 
-METASECURITY_URI="git://git.yoctoproject.org/meta-security"
+METASECURITY_URI="https://git.yoctoproject.org/meta-security"
+METASECURITY_UPSTREAM_URI="${METASECURITY_URI}"
 METASECURITY_PATH="poky/meta-security"
 METASECURITY_REV="${METASECURITY_REV-refs/remotes/origin/${branch}}"
 
 METACLANG_URI="https://github.com/kraj/meta-clang"
+METACLANG_UPSTREAM_URI="${METACLANG_URI}"
 METACLANG_PATH="poky/meta-clang"
 METACLANG_REV="${METACLANG_REV-refs/remotes/origin/${branch}}"
 
 METAIOTEDGE_URI="."
 METAIOTEDGE_PATH="poky/meta-iotedge"
+
+# Optional GitHub mirrors for Yocto repos
+# Default to GitHub mirrors for faster fetch; set GIT_MIRROR=yocto to use upstream.
+: "${GIT_MIRROR:=github}"
+
+verify_github_mirror() {
+	local name="$1"
+	local mirror_uri="$2"
+	local fallback_uri="$3"
+	if git ls-remote --heads "${mirror_uri}" >/dev/null 2>&1; then
+		echo "Using GitHub mirror for ${name}: ${mirror_uri}"
+		echo "${mirror_uri}"
+	else
+		echo "GitHub mirror not found for ${name}, using upstream: ${fallback_uri}"
+		echo "${fallback_uri}"
+	fi
+}
+
+if [[ "${GIT_MIRROR}" == "github" ]]; then
+	POKY_URI=$(verify_github_mirror "poky" "https://github.com/yoctoproject/poky.git" "${POKY_UPSTREAM_URI}")
+	METAOE_URI=$(verify_github_mirror "meta-openembedded" "https://github.com/openembedded/meta-openembedded.git" "${METAOE_UPSTREAM_URI}")
+	METAVIRT_URI=$(verify_github_mirror "meta-virtualization" "https://github.com/yoctoproject/meta-virtualization.git" "${METAVIRT_UPSTREAM_URI}")
+	METASECURITY_URI=$(verify_github_mirror "meta-security" "https://github.com/yoctoproject/meta-security.git" "${METASECURITY_UPSTREAM_URI}")
+fi
 
 die() {
 	echo "$*" >&2
@@ -44,6 +73,27 @@ update_repo() {
 	path=$2
 	rev=$3
 
+	clone_with_fallback() {
+		local primary_uri="$1"
+		local target_path="$2"
+		if git clone "${primary_uri}" "${target_path}"; then
+			return 0
+		fi
+
+		if [[ "${primary_uri}" == https://git.yoctoproject.org/* ]]; then
+			local fallback_uri="${primary_uri/https:\/\/git.yoctoproject.org/git:\/\/git.yoctoproject.org}"
+			echo "Retrying with ${fallback_uri}"
+			git clone "${fallback_uri}" "${target_path}" && return 0
+		fi
+		if [[ "${primary_uri}" == https://git.openembedded.org/* ]]; then
+			local fallback_uri="${primary_uri/https:\/\/git.openembedded.org/git:\/\/git.openembedded.org}"
+			echo "Retrying with ${fallback_uri}"
+			git clone "${fallback_uri}" "${target_path}" && return 0
+		fi
+
+		return 1
+	}
+
 	# check if we already have it checked out, if so we just want to update
 	if [[ -d ${path} ]]; then
 		pushd ${path} > /dev/null
@@ -52,11 +102,11 @@ update_repo() {
 		git fetch origin || die "unable to fetch ${uri}"
 	else
 		echo "Cloning '${path}'"
-		if [ -d "${GIT_LOCAL_REF_DIR}" ]; then
+		if [[ -n "${GIT_LOCAL_REF_DIR}" && -d "${GIT_LOCAL_REF_DIR}" ]]; then
 			git clone --reference ${GIT_LOCAL_REF_DIR}/`basename ${path}` \
 				${uri} ${path} || die "unable to clone ${uri}"
 		else
-			git clone ${uri} ${path} || die "unable to clone ${uri}"
+			clone_with_fallback "${uri}" "${path}" || die "unable to clone ${uri}"
 		fi
 		pushd ${path} > /dev/null
 	fi
