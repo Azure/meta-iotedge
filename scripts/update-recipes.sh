@@ -7,10 +7,10 @@ Usage:
   update-recipes.sh [options]
 
 Options:
-  --iotedge-rev <sha>           IoT Edge git commit SHA (iotedge repo).
-  --iotedge-version <ver>       IoT Edge version (e.g., 1.5.21).
-  --iis-rev <sha>               IoT Identity Service git commit SHA.
-  --iis-version <ver>           IoT Identity Service version (e.g., 1.5.21).
+    --iotedge-rev <sha>           IoT Edge git commit SHA (iotedge repo).
+    --iotedge-version <ver>       IoT Edge version (e.g., 1.5.21). If omitted, uses latest release tag.
+    --iis-rev <sha>               IoT Identity Service git commit SHA.
+    --iis-version <ver>           IoT Identity Service version (e.g., 1.5.21). If omitted, uses latest release tag.
   --workdir <path>              Work directory (default: mktemp).
   --keep-workdir                Do not delete work directory.
   --overwrite                   Overwrite existing recipe files.
@@ -18,9 +18,11 @@ Options:
   -h, --help                    Show this help.
 
 Examples:
-  ./scripts/update-recipes.sh \
-    --iotedge-rev <sha> --iotedge-version 1.5.21 \
-    --iis-rev <sha> --iis-version 1.5.21
+    ./scripts/update-recipes.sh \
+        --iotedge-rev <sha> --iotedge-version 1.5.21 \
+        --iis-rev <sha> --iis-version 1.5.21
+
+    ./scripts/update-recipes.sh
 EOF
 }
 
@@ -33,6 +35,8 @@ IOTEDGE_REV=""
 IOTEDGE_VERSION=""
 IIS_REV=""
 IIS_VERSION=""
+UPDATE_IOTEDGE="false"
+UPDATE_IIS="false"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -48,6 +52,18 @@ while [[ $# -gt 0 ]]; do
         *) echo "Unknown arg: $1"; usage; exit 1;;
     esac
  done
+
+if [[ -z "${IOTEDGE_REV}" && -z "${IOTEDGE_VERSION}" && -z "${IIS_REV}" && -z "${IIS_VERSION}" ]]; then
+    UPDATE_IOTEDGE="true"
+    UPDATE_IIS="true"
+else
+    if [[ -n "${IOTEDGE_REV}" || -n "${IOTEDGE_VERSION}" ]]; then
+        UPDATE_IOTEDGE="true"
+    fi
+    if [[ -n "${IIS_REV}" || -n "${IIS_VERSION}" ]]; then
+        UPDATE_IIS="true"
+    fi
+fi
 
 if [[ -z "${WORKDIR}" ]]; then
     WORKDIR=$(mktemp -d)
@@ -70,6 +86,126 @@ require() {
 require git
 require cargo
 require python3
+
+resolve_latest_release() {
+    local repo_url="$1"
+    python3 - "${repo_url}" <<'PY'
+import re
+import subprocess
+import sys
+
+repo = sys.argv[1]
+out = subprocess.check_output(["git", "ls-remote", "--tags", repo], text=True)
+
+tags = {}
+for line in out.splitlines():
+    sha, ref = line.split()
+    if not ref.startswith("refs/tags/"):
+        continue
+    tag = ref[len("refs/tags/"):]
+    peeled = False
+    if tag.endswith("^{}"):
+        peeled = True
+        tag = tag[:-3]
+    tag_clean = tag[1:] if tag.startswith("v") else tag
+    if not re.fullmatch(r"\d+\.\d+\.\d+", tag_clean):
+        continue
+    version = tuple(map(int, tag_clean.split(".")))
+    entry = tags.get(tag, {"tag": tag, "version": version})
+    if peeled:
+        entry["peeled"] = sha
+    else:
+        entry["sha"] = sha
+    entry["version"] = version
+    tags[tag] = entry
+
+if not tags:
+    raise SystemExit("No semver tags found")
+
+latest = max(tags.values(), key=lambda x: x["version"])
+sha = latest.get("peeled") or latest.get("sha")
+print(latest["tag"])
+print(sha)
+PY
+}
+
+resolve_tag_sha() {
+    local repo_url="$1"
+    local tag="$2"
+    python3 - "${repo_url}" "${tag}" <<'PY'
+import subprocess
+import sys
+
+repo = sys.argv[1]
+tag = sys.argv[2]
+variants = [tag, f"v{tag}"]
+
+out = subprocess.check_output(["git", "ls-remote", "--tags", repo], text=True)
+refs = {}
+for line in out.splitlines():
+    sha, ref = line.split()
+    refs[ref] = sha
+
+for candidate in variants:
+    ref = f"refs/tags/{candidate}^{{}}"
+    if ref in refs:
+        print(refs[ref])
+        sys.exit(0)
+    ref = f"refs/tags/{candidate}"
+    if ref in refs:
+        print(refs[ref])
+        sys.exit(0)
+
+raise SystemExit(f"Tag not found: {tag}")
+PY
+}
+
+resolve_version_from_rev() {
+    local repo_url="$1"
+    local rev="$2"
+    python3 - "${repo_url}" "${rev}" <<'PY'
+import re
+import subprocess
+import sys
+
+repo = sys.argv[1]
+rev = sys.argv[2]
+out = subprocess.check_output(["git", "ls-remote", "--tags", repo], text=True)
+
+tags = {}
+for line in out.splitlines():
+    sha, ref = line.split()
+    if not ref.startswith("refs/tags/"):
+        continue
+    tag = ref[len("refs/tags/"):]
+    peeled = False
+    if tag.endswith("^{}"):
+        peeled = True
+        tag = tag[:-3]
+    tag_clean = tag[1:] if tag.startswith("v") else tag
+    if not re.fullmatch(r"\d+\.\d+\.\d+", tag_clean):
+        continue
+    version = tuple(map(int, tag_clean.split(".")))
+    entry = tags.get(tag, {"tag": tag, "version": version})
+    if peeled:
+        entry["peeled"] = sha
+    else:
+        entry["sha"] = sha
+    entry["version"] = version
+    tags[tag] = entry
+
+matches = []
+for entry in tags.values():
+    if entry.get("peeled") == rev or entry.get("sha") == rev:
+        matches.append(entry)
+
+if not matches:
+    raise SystemExit("No matching tag found for revision")
+
+best = max(matches, key=lambda x: x["version"])
+print(best["tag"])
+PY
+}
 
 PATCHER="${ROOT_DIR}/scripts/patch-bitbake.py"
 
@@ -249,7 +385,88 @@ if missing_lines:
 PY
 }
 
-if [[ -n "${IOTEDGE_REV}" || -n "${IOTEDGE_VERSION}" ]]; then
+generate_remove_git_patch() {
+    local repo_dir="$1"
+    local dest_patch="$2"
+    local lock_target="$3"
+
+    local workdir
+    workdir=$(mktemp -d)
+
+    mkdir -p "${workdir}/orig/edgelet" "${workdir}/mod/edgelet/${lock_target}"
+    mkdir -p "$(dirname "${dest_patch}")"
+
+    cp "${repo_dir}/edgelet/Cargo.lock" "${workdir}/orig/edgelet/Cargo.lock"
+    cp "${repo_dir}/edgelet/Cargo.toml" "${workdir}/orig/edgelet/Cargo.toml"
+
+    cp "${workdir}/orig/edgelet/Cargo.lock" "${workdir}/mod/edgelet/Cargo.lock"
+    cp "${workdir}/orig/edgelet/Cargo.toml" "${workdir}/mod/edgelet/Cargo.toml"
+
+    python3 - "${workdir}/mod/edgelet/Cargo.lock" "${workdir}/mod/edgelet/Cargo.toml" <<'PY'
+import sys
+
+lock_path = sys.argv[1]
+toml_path = sys.argv[2]
+
+with open(lock_path, "r", encoding="utf-8") as fh:
+    lines = fh.readlines()
+
+with open(lock_path, "w", encoding="utf-8") as fh:
+    for line in lines:
+        if "git+https://github.com/Azure/iot-identity-service" in line:
+            continue
+        fh.write(line)
+
+with open(toml_path, "r", encoding="utf-8") as fh:
+    toml_lines = fh.readlines()
+
+with open(toml_path, "w", encoding="utf-8") as fh:
+    for line in toml_lines:
+        if line.strip() == "panic = 'abort'":
+            continue
+        fh.write(line)
+PY
+
+    cp "${workdir}/mod/edgelet/Cargo.lock" "${workdir}/mod/edgelet/${lock_target}/Cargo.lock"
+
+    git -C "${workdir}" diff --no-index --binary orig mod > "${dest_patch}" || true
+
+    python3 - "${dest_patch}" <<'PY'
+import sys
+
+patch_path = sys.argv[1]
+
+with open(patch_path, "r", encoding="utf-8") as fh:
+    data = fh.read()
+
+replacements = {
+    "a/orig/edgelet/": "a/edgelet/",
+    "a/mod/edgelet/": "a/edgelet/",
+    "b/orig/edgelet/": "b/edgelet/",
+    "b/mod/edgelet/": "b/edgelet/",
+}
+
+for old, new in replacements.items():
+    data = data.replace(old, new)
+
+with open(patch_path, "w", encoding="utf-8") as fh:
+    fh.write(data)
+PY
+    rm -rf "${workdir}"
+}
+
+if [[ "${UPDATE_IOTEDGE}" == "true" ]]; then
+    if [[ -z "${IOTEDGE_REV}" && -z "${IOTEDGE_VERSION}" ]]; then
+        read -r latest_tag latest_sha < <(resolve_latest_release "https://github.com/Azure/iotedge.git")
+        IOTEDGE_VERSION=${latest_tag#v}
+        IOTEDGE_REV=${latest_sha}
+    elif [[ -z "${IOTEDGE_REV}" && -n "${IOTEDGE_VERSION}" ]]; then
+        IOTEDGE_REV=$(resolve_tag_sha "https://github.com/Azure/iotedge.git" "${IOTEDGE_VERSION}")
+    elif [[ -n "${IOTEDGE_REV}" && -z "${IOTEDGE_VERSION}" ]]; then
+        IOTEDGE_VERSION=$(resolve_version_from_rev "https://github.com/Azure/iotedge.git" "${IOTEDGE_REV}")
+        IOTEDGE_VERSION=${IOTEDGE_VERSION#v}
+    fi
+
     if [[ -z "${IOTEDGE_REV}" || -z "${IOTEDGE_VERSION}" ]]; then
         echo "Both --iotedge-rev and --iotedge-version are required when updating IoT Edge recipes."
         exit 1
@@ -274,6 +491,14 @@ if [[ -n "${IOTEDGE_REV}" || -n "${IOTEDGE_VERSION}" ]]; then
     copy_recipe "iotedge" "${IOTEDGE_DIR}/edgelet/iotedge/${IOTEDGE_BB}" \
         "${ROOT_DIR}/recipes-core/iotedge" "${IOTEDGE_VERSION}"
 
+    generate_remove_git_patch "${IOTEDGE_DIR}" \
+        "${ROOT_DIR}/recipes-core/iotedge/files/0001-Remove-git-from-Cargo.patch" \
+        "iotedge"
+
+    generate_remove_git_patch "${IOTEDGE_DIR}" \
+        "${ROOT_DIR}/recipes-core/aziot-edged/files/0001-Remove-git-from-Cargo.patch" \
+        "aziot-edged"
+
     if [[ "${SYNC_CHECKSUMS}" == "true" ]]; then
         add_checksums_from_cargo_lock "aziot-edged" "${IOTEDGE_VERSION}" "${IOTEDGE_DIR}/edgelet/Cargo.lock"
         add_checksums_from_cargo_lock "iotedge" "${IOTEDGE_VERSION}" "${IOTEDGE_DIR}/edgelet/Cargo.lock"
@@ -282,7 +507,18 @@ if [[ -n "${IOTEDGE_REV}" || -n "${IOTEDGE_VERSION}" ]]; then
     fi
 fi
 
-if [[ -n "${IIS_REV}" || -n "${IIS_VERSION}" ]]; then
+if [[ "${UPDATE_IIS}" == "true" ]]; then
+    if [[ -z "${IIS_REV}" && -z "${IIS_VERSION}" ]]; then
+        read -r latest_tag latest_sha < <(resolve_latest_release "https://github.com/Azure/iot-identity-service.git")
+        IIS_VERSION=${latest_tag#v}
+        IIS_REV=${latest_sha}
+    elif [[ -z "${IIS_REV}" && -n "${IIS_VERSION}" ]]; then
+        IIS_REV=$(resolve_tag_sha "https://github.com/Azure/iot-identity-service.git" "${IIS_VERSION}")
+    elif [[ -n "${IIS_REV}" && -z "${IIS_VERSION}" ]]; then
+        IIS_VERSION=$(resolve_version_from_rev "https://github.com/Azure/iot-identity-service.git" "${IIS_REV}")
+        IIS_VERSION=${IIS_VERSION#v}
+    fi
+
     if [[ -z "${IIS_REV}" || -z "${IIS_VERSION}" ]]; then
         echo "Both --iis-rev and --iis-version are required when updating IoT Identity Service recipes."
         exit 1
