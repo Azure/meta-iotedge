@@ -3,662 +3,249 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage:
-  update-recipes.sh [options]
+Usage: update-recipes.sh [options]
 
 Options:
-    --iotedge-rev <sha>           IoT Edge git commit SHA (iotedge repo).
-    --iotedge-version <ver>       IoT Edge version (e.g., 1.5.21). If omitted, uses latest release tag.
-    --iis-rev <sha>               IoT Identity Service git commit SHA.
-    --iis-version <ver>           IoT Identity Service version (e.g., 1.5.21). If omitted, uses latest release tag.
-  --workdir <path>              Work directory (default: mktemp).
-  --keep-workdir                Do not delete work directory.
-  --overwrite                   Overwrite existing recipe files.
-    --no-sync-checksums           Do not copy SRC_URI checksums from previous recipes.
-  -h, --help                    Show this help.
+    --iotedge-rev <sha>       IoT Edge git commit SHA
+    --iotedge-version <ver>   IoT Edge version (e.g., 1.5.21)
+    --iis-rev <sha>           IoT Identity Service git commit SHA
+    --iis-version <ver>       IoT Identity Service version
+    --workdir <path>          Work directory (default: mktemp)
+    --keep-workdir            Do not delete work directory
+    --overwrite               Overwrite existing recipe files
+    --no-sync-checksums       Do not sync SRC_URI checksums
+    -h, --help                Show this help
 
-Examples:
-    ./scripts/update-recipes.sh \
-        --iotedge-rev <sha> --iotedge-version 1.5.21 \
-        --iis-rev <sha> --iis-version 1.5.21
-
-    ./scripts/update-recipes.sh
+If no options given, updates both IoT Edge and IIS to latest releases.
 EOF
 }
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-WORKDIR=""
-KEEP_WORKDIR="false"
-OVERWRITE="false"
-SYNC_CHECKSUMS="true"
-IOTEDGE_REV=""
-IOTEDGE_VERSION=""
-IIS_REV=""
-IIS_VERSION=""
-UPDATE_IOTEDGE="false"
-UPDATE_IIS="false"
+HELPERS="${ROOT_DIR}/scripts/recipe_helpers.py"
+PATCHER="${ROOT_DIR}/scripts/patch-bitbake.py"
+
+# Defaults
+WORKDIR="" KEEP_WORKDIR=false OVERWRITE=false SYNC_CHECKSUMS=true
+IOTEDGE_REV="" IOTEDGE_VERSION="" IIS_REV="" IIS_VERSION=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --iotedge-rev) IOTEDGE_REV="$2"; shift 2;;
+        --iotedge-rev)     IOTEDGE_REV="$2"; shift 2;;
         --iotedge-version) IOTEDGE_VERSION="$2"; shift 2;;
-        --iis-rev) IIS_REV="$2"; shift 2;;
-        --iis-version) IIS_VERSION="$2"; shift 2;;
-        --workdir) WORKDIR="$2"; shift 2;;
-        --keep-workdir) KEEP_WORKDIR="true"; shift;;
-        --overwrite) OVERWRITE="true"; shift;;
-        --no-sync-checksums) SYNC_CHECKSUMS="false"; shift;;
-        -h|--help) usage; exit 0;;
-        *) echo "Unknown arg: $1"; usage; exit 1;;
+        --iis-rev)         IIS_REV="$2"; shift 2;;
+        --iis-version)     IIS_VERSION="$2"; shift 2;;
+        --workdir)         WORKDIR="$2"; shift 2;;
+        --keep-workdir)    KEEP_WORKDIR=true; shift;;
+        --overwrite)       OVERWRITE=true; shift;;
+        --no-sync-checksums) SYNC_CHECKSUMS=false; shift;;
+        -h|--help)         usage; exit 0;;
+        *)                 echo "Unknown arg: $1"; usage; exit 1;;
     esac
- done
+done
 
-if [[ -z "${IOTEDGE_REV}" && -z "${IOTEDGE_VERSION}" && -z "${IIS_REV}" && -z "${IIS_VERSION}" ]]; then
-    UPDATE_IOTEDGE="true"
-    UPDATE_IIS="true"
+# Determine what to update
+UPDATE_IOTEDGE=false UPDATE_IIS=false
+if [[ -z "${IOTEDGE_REV}${IOTEDGE_VERSION}${IIS_REV}${IIS_VERSION}" ]]; then
+    UPDATE_IOTEDGE=true UPDATE_IIS=true
 else
-    if [[ -n "${IOTEDGE_REV}" || -n "${IOTEDGE_VERSION}" ]]; then
-        UPDATE_IOTEDGE="true"
-    fi
-    if [[ -n "${IIS_REV}" || -n "${IIS_VERSION}" ]]; then
-        UPDATE_IIS="true"
-    fi
+    [[ -n "${IOTEDGE_REV}${IOTEDGE_VERSION}" ]] && UPDATE_IOTEDGE=true
+    [[ -n "${IIS_REV}${IIS_VERSION}" ]] && UPDATE_IIS=true
 fi
 
-if [[ -z "${WORKDIR}" ]]; then
-    WORKDIR=$(mktemp -d)
-fi
-
+# Setup directories
+[[ -z "${WORKDIR}" ]] && WORKDIR=$(mktemp -d)
 CARGO_HOME_DIR=$(mktemp -d)
 
 cleanup() {
-    if [[ "${KEEP_WORKDIR}" != "true" ]]; then
-        rm -rf "${WORKDIR}"
-    fi
+    [[ "${KEEP_WORKDIR}" != true ]] && rm -rf "${WORKDIR}"
     rm -rf "${CARGO_HOME_DIR}"
 }
 trap cleanup EXIT
 
-require() {
-    command -v "$1" >/dev/null 2>&1 || { echo "Missing dependency: $1"; exit 1; }
-}
+# Check dependencies
+for cmd in git cargo python3; do
+    command -v "$cmd" >/dev/null || { echo "Missing: $cmd"; exit 1; }
+done
 
-require git
-require cargo
-require python3
-
-# Network retry/backoff for flaky CI and developer networks.
-RETRY_MAX=${RETRY_MAX:-5}
-RETRY_BASE_DELAY=${RETRY_BASE_DELAY:-2}
-
-retry_cmd() {
-    local description="$1"
-    shift
-    local attempt=1
-    local delay=${RETRY_BASE_DELAY}
-
-    while true; do
-        if "$@"; then
-            return 0
-        fi
-
-        if [[ ${attempt} -ge ${RETRY_MAX} ]]; then
-            echo "Failed: ${description} (after ${attempt} attempts)" >&2
-            return 1
-        fi
-
-        echo "Retrying: ${description} (attempt ${attempt}/${RETRY_MAX}) in ${delay}s" >&2
-        sleep "${delay}"
-        attempt=$((attempt + 1))
-        delay=$((delay * 2))
+# Retry helper for flaky networks
+retry() {
+    local desc="$1" attempt=1 delay=2; shift
+    while ! "$@"; do
+        ((attempt >= ${RETRY_MAX:-5})) && { echo "Failed: ${desc}"; return 1; }
+        echo "Retry ${attempt}: ${desc} in ${delay}s" >&2
+        sleep "$delay"; ((attempt++, delay*=2))
     done
 }
 
-resolve_latest_release() {
-    local repo_url="$1"
-    python3 - "${repo_url}" <<'PY'
-import re
-import subprocess
-import sys
+# Git helpers using Python script
+resolve_latest() { python3 "${HELPERS}" latest-release "$1"; }
+resolve_tag_sha() { python3 "${HELPERS}" tag-sha "$1" "$2"; }
+resolve_version() { python3 "${HELPERS}" version-from-rev "$1" "$2"; }
 
-repo = sys.argv[1]
-out = subprocess.check_output(["git", "ls-remote", "--tags", repo], text=True)
-
-tags = {}
-for line in out.splitlines():
-    sha, ref = line.split()
-    if not ref.startswith("refs/tags/"):
-        continue
-    tag = ref[len("refs/tags/"):]
-    peeled = False
-    if tag.endswith("^{}"):
-        peeled = True
-        tag = tag[:-3]
-    tag_clean = tag[1:] if tag.startswith("v") else tag
-    if not re.fullmatch(r"\d+\.\d+\.\d+", tag_clean):
-        continue
-    version = tuple(map(int, tag_clean.split(".")))
-    entry = tags.get(tag, {"tag": tag, "version": version})
-    if peeled:
-        entry["peeled"] = sha
-    else:
-        entry["sha"] = sha
-    entry["version"] = version
-    tags[tag] = entry
-
-if not tags:
-    raise SystemExit("No semver tags found")
-
-latest = max(tags.values(), key=lambda x: x["version"])
-sha = latest.get("peeled") or latest.get("sha")
-print(latest["tag"])
-print(sha)
-PY
-}
-
-resolve_tag_sha() {
-    local repo_url="$1"
-    local tag="$2"
-    python3 - "${repo_url}" "${tag}" <<'PY'
-import subprocess
-import sys
-
-repo = sys.argv[1]
-tag = sys.argv[2]
-variants = [tag, f"v{tag}"]
-
-out = subprocess.check_output(["git", "ls-remote", "--tags", repo], text=True)
-refs = {}
-for line in out.splitlines():
-    sha, ref = line.split()
-    refs[ref] = sha
-
-for candidate in variants:
-    ref = f"refs/tags/{candidate}^{{}}"
-    if ref in refs:
-        print(refs[ref])
-        sys.exit(0)
-    ref = f"refs/tags/{candidate}"
-    if ref in refs:
-        print(refs[ref])
-        sys.exit(0)
-
-raise SystemExit(f"Tag not found: {tag}")
-PY
-}
-
-resolve_version_from_rev() {
-    local repo_url="$1"
-    local rev="$2"
-    python3 - "${repo_url}" "${rev}" <<'PY'
-import re
-import subprocess
-import sys
-
-repo = sys.argv[1]
-rev = sys.argv[2]
-out = subprocess.check_output(["git", "ls-remote", "--tags", repo], text=True)
-
-tags = {}
-for line in out.splitlines():
-    sha, ref = line.split()
-    if not ref.startswith("refs/tags/"):
-        continue
-    tag = ref[len("refs/tags/"):]
-    peeled = False
-    if tag.endswith("^{}"):
-        peeled = True
-        tag = tag[:-3]
-    tag_clean = tag[1:] if tag.startswith("v") else tag
-    if not re.fullmatch(r"\d+\.\d+\.\d+", tag_clean):
-        continue
-    version = tuple(map(int, tag_clean.split(".")))
-    entry = tags.get(tag, {"tag": tag, "version": version})
-    if peeled:
-        entry["peeled"] = sha
-    else:
-        entry["sha"] = sha
-    entry["version"] = version
-    tags[tag] = entry
-
-matches = []
-for entry in tags.values():
-    if entry.get("peeled") == rev or entry.get("sha") == rev:
-        matches.append(entry)
-
-if not matches:
-    raise SystemExit("No matching tag found for revision")
-
-best = max(matches, key=lambda x: x["version"])
-print(best["tag"])
-PY
-}
-
-PATCHER="${ROOT_DIR}/scripts/patch-bitbake.py"
-
+# Prepare a git repo at specific revision
 prepare_repo() {
-    local repo_url="$1"
-    local repo_dir="$2"
-    local repo_rev="$3"
-
-    if [[ -d "${repo_dir}" ]]; then
-        rm -rf "${repo_dir}"
-    fi
-
-    retry_cmd "git clone ${repo_url}" git clone "${repo_url}" "${repo_dir}"
-    retry_cmd "git checkout ${repo_rev}" git -C "${repo_dir}" checkout "${repo_rev}"
+    local url="$1" dir="$2" rev="$3"
+    rm -rf "${dir}"
+    retry "clone ${url}" git clone "${url}" "${dir}"
+    retry "checkout ${rev}" git -C "${dir}" checkout "${rev}"
 }
 
-normalize_iotedge_cargo_config() {
-    local repo_dir="$1"
-    local cargo_dir="${repo_dir}/edgelet/.cargo"
-    if [[ -d "${cargo_dir}" ]]; then
-        if [[ -f "${cargo_dir}/config.toml" ]]; then
-            cp "${cargo_dir}/config.toml" "${cargo_dir}/config.toml.bak"
-        fi
-        if [[ -f "${cargo_dir}/config" ]]; then
-            cp "${cargo_dir}/config" "${cargo_dir}/config.bak"
-        fi
-        rm -f "${cargo_dir}/config.toml" "${cargo_dir}/config"
-        cat > "${cargo_dir}/config.toml" <<'EOF'
+# Normalize .cargo/config.toml to use standard crates.io
+normalize_cargo_config() {
+    local cargo_dir="$1"
+    [[ -d "${cargo_dir}" ]] || return 0
+    rm -f "${cargo_dir}/config.toml" "${cargo_dir}/config"
+    cat > "${cargo_dir}/config.toml" <<'EOF'
 [source.crates-io]
 registry = "https://github.com/rust-lang/crates.io-index"
 
 [net]
 git-fetch-with-cli = true
 EOF
-    fi
 }
 
-normalize_iis_cargo_config() {
-    local repo_dir="$1"
-    local cargo_dir="${repo_dir}/.cargo"
-    if [[ -d "${cargo_dir}" ]]; then
-        if [[ -f "${cargo_dir}/config.toml" ]]; then
-            cp "${cargo_dir}/config.toml" "${cargo_dir}/config.toml.bak"
-        fi
-        if [[ -f "${cargo_dir}/config" ]]; then
-            cp "${cargo_dir}/config" "${cargo_dir}/config.bak"
-        fi
-        rm -f "${cargo_dir}/config.toml" "${cargo_dir}/config"
-        cat > "${cargo_dir}/config.toml" <<'EOF'
-[source.crates-io]
-registry = "https://github.com/rust-lang/crates.io-index"
-
-[net]
-git-fetch-with-cli = true
-EOF
-    fi
-}
-
-fix_iis_cargo_paths() {
-    local iis_repo_dir="$1"
-    local recipe_path="$2"
-
-    python3 - "${iis_repo_dir}" "${recipe_path}" <<'PY'
-import os
-import re
-import sys
-
-iis_repo = sys.argv[1]
-recipe = sys.argv[2]
-
-def find_crate_paths(repo_root: str) -> dict[str, str]:
-    mapping: dict[str, str] = {}
-    for root, _dirs, files in os.walk(repo_root):
-        if "Cargo.toml" not in files:
-            continue
-        cargo_path = os.path.join(root, "Cargo.toml")
-        try:
-            with open(cargo_path, "r", encoding="utf-8") as fh:
-                contents = fh.read().splitlines()
-        except OSError:
-            continue
-        in_package = False
-        name = None
-        for line in contents:
-            if line.strip() == "[package]":
-                in_package = True
-                continue
-            if line.startswith("[") and line.strip() != "[package]":
-                in_package = False
-            if in_package and line.strip().startswith("name = "):
-                name = line.split("=", 1)[1].strip().strip('"')
-                break
-        if name:
-            rel = os.path.relpath(root, repo_root)
-            mapping[name] = rel
-    return mapping
-
-crate_paths = find_crate_paths(iis_repo)
-
-pattern = re.compile(r'^(EXTRA_OECARGO_PATHS \+= "\$\{WORKDIR\}/)([^"/]+)"\s*$')
-updated_lines = []
-with open(recipe, "r", encoding="utf-8") as fh:
-    for line in fh:
-        m = pattern.match(line.rstrip("\n"))
-        if not m:
-            updated_lines.append(line)
-            continue
-        name = m.group(2)
-        rel = crate_paths.get(name)
-        if not rel or rel == ".":
-            updated_lines.append(line)
-            continue
-        updated_lines.append(f'{m.group(1)}{name}/{rel}"\n')
-
-with open(recipe, "w", encoding="utf-8") as fh:
-    fh.writelines(updated_lines)
-PY
-}
-
+# Copy and transform recipe
 copy_recipe() {
-    local component="$1"
-    local src_file="$2"
-    local dest_dir="$3"
-    local version="$4"
-
+    local component="$1" src="$2" dest_dir="$3" version="$4"
     local dest_bb="${dest_dir}/${component}_${version}.bb"
     local dest_inc="${dest_dir}/${component}-${version}.inc"
 
-    if [[ -e "${dest_bb}" || -e "${dest_inc}" ]]; then
-        if [[ "${OVERWRITE}" != "true" ]]; then
-            echo "Refusing to overwrite existing recipe files for ${component} ${version}. Use --overwrite."
-            exit 1
-        fi
+    if [[ -e "${dest_bb}" || -e "${dest_inc}" ]] && [[ "${OVERWRITE}" != true ]]; then
+        echo "Refusing to overwrite ${component} ${version}. Use --overwrite."
+        exit 1
     fi
 
-    python3 "${PATCHER}" --component "${component}" --input "${src_file}" --output "${dest_bb}"
+    python3 "${PATCHER}" --component "${component}" --input "${src}" --output "${dest_bb}"
     printf 'export VERSION = "%s"\n' "${version}" > "${dest_inc}"
 }
 
-sync_checksums_from_previous() {
-    local component="$1"
-    local version="$2"
-    local dest_bb="${ROOT_DIR}/recipes-core/${component}/${component}_${version}.bb"
-    local recipe_dir="${ROOT_DIR}/recipes-core/${component}"
-
-    [[ -f "${dest_bb}" ]] || return 0
-    [[ -d "${recipe_dir}" ]] || return 0
-
-    mapfile -t candidates < <(ls "${recipe_dir}/${component}_"*.bb 2>/dev/null | sort -V)
-    local prev=""
-    for candidate in "${candidates[@]}"; do
-        local base
-        base=$(basename "${candidate}")
-        local ver
-        ver=${base#${component}_}
-        ver=${ver%.bb}
-        if [[ "${ver}" != "${version}" ]]; then
-            prev="${candidate}"
-        fi
-    done
-
-    [[ -n "${prev}" ]] || return 0
-
-    mapfile -t checksum_lines < <(grep -E '^SRC_URI\[.*\.sha256sum\] = ' "${prev}" || true)
-    if [[ ${#checksum_lines[@]} -eq 0 ]]; then
-        return 0
-    fi
-
-    for line in "${checksum_lines[@]}"; do
-        local key
-        key=$(echo "${line}" | cut -d= -f1)
-        if ! grep -qF "${key}" "${dest_bb}"; then
-            echo "${line}" >> "${dest_bb}"
-        fi
-    done
+# Fix SRCREV entries with "main" to actual SHA
+fix_srcrev() {
+    local recipe="$1" sha="$2"
+    [[ -f "${recipe}" && -n "${sha}" ]] || return 0
+    sed -i -E "s/^(SRCREV_[a-zA-Z0-9_-]+) = \"main\"$/\1 = \"${sha}\"/" "${recipe}"
 }
 
-add_checksums_from_cargo_lock() {
-    local component="$1"
-    local version="$2"
-    local lockfile="$3"
-    local dest_bb="${ROOT_DIR}/recipes-core/${component}/${component}_${version}.bb"
-
-    [[ -f "${dest_bb}" ]] || return 0
-    [[ -f "${lockfile}" ]] || return 0
-
-    python3 - "${dest_bb}" "${lockfile}" <<'PY'
-import re
-import sys
-
-recipe = sys.argv[1]
-lockfile = sys.argv[2]
-
-pkgs = {}
-name = version = checksum = None
-with open(lockfile, "r", encoding="utf-8") as fh:
-    for raw in fh:
-        line = raw.strip()
-        if line == "[[package]]":
-            if name and version and checksum:
-                pkgs[(name, version)] = checksum
-            name = version = checksum = None
-            continue
-        if line.startswith("name = "):
-            name = line.split("=", 1)[1].strip().strip('"')
-        elif line.startswith("version = "):
-            version = line.split("=", 1)[1].strip().strip('"')
-        elif line.startswith("checksum = "):
-            checksum = line.split("=", 1)[1].strip().strip('"')
-
-if name and version and checksum:
-    pkgs[(name, version)] = checksum
-
-existing = set()
-with open(recipe, "r", encoding="utf-8") as fh:
-    for raw in fh:
-        m = re.match(r"SRC_URI\[([^\]]+)\.sha256sum\]", raw)
-        if m:
-            existing.add(m.group(1))
-
-crate_re = re.compile(r"crate://crates\.io/([^/]+)/([0-9A-Za-z._-]+)")
-missing_lines = []
-with open(recipe, "r", encoding="utf-8") as fh:
-    for raw in fh:
-        for m in crate_re.finditer(raw):
-            key = f"{m.group(1)}-{m.group(2)}"
-            if key in existing:
-                continue
-            checksum = pkgs.get((m.group(1), m.group(2)))
-            if checksum:
-                missing_lines.append(f"SRC_URI[{key}.sha256sum] = \"{checksum}\"\n")
-                existing.add(key)
-
-if missing_lines:
-    with open(recipe, "a", encoding="utf-8") as fh:
-        fh.write("\n")
-        fh.writelines(missing_lines)
-PY
-}
-
-generate_remove_git_patch() {
-    local repo_dir="$1"
-    local dest_patch="$2"
-    local lock_target="$3"
-
-    local workdir
-    workdir=$(mktemp -d)
-
-    mkdir -p "${workdir}/orig/edgelet" "${workdir}/mod/edgelet/${lock_target}"
+# Generate patch to remove git deps
+generate_patch() {
+    local repo_dir="$1" dest_patch="$2" lock_target="$3"
+    local tmpdir; tmpdir=$(mktemp -d)
+    
+    mkdir -p "${tmpdir}"/{orig,mod}/edgelet "${tmpdir}/mod/edgelet/${lock_target}"
+    cp "${repo_dir}/edgelet/Cargo."{lock,toml} "${tmpdir}/orig/edgelet/"
+    cp "${tmpdir}/orig/edgelet/Cargo."{lock,toml} "${tmpdir}/mod/edgelet/"
+    
+    python3 "${HELPERS}" strip-git-deps "${tmpdir}/mod/edgelet/Cargo.lock" "${tmpdir}/mod/edgelet/Cargo.toml"
+    cp "${tmpdir}/mod/edgelet/Cargo.lock" "${tmpdir}/mod/edgelet/${lock_target}/"
+    
     mkdir -p "$(dirname "${dest_patch}")"
-
-    cp "${repo_dir}/edgelet/Cargo.lock" "${workdir}/orig/edgelet/Cargo.lock"
-    cp "${repo_dir}/edgelet/Cargo.toml" "${workdir}/orig/edgelet/Cargo.toml"
-
-    cp "${workdir}/orig/edgelet/Cargo.lock" "${workdir}/mod/edgelet/Cargo.lock"
-    cp "${workdir}/orig/edgelet/Cargo.toml" "${workdir}/mod/edgelet/Cargo.toml"
-
-    python3 - "${workdir}/mod/edgelet/Cargo.lock" "${workdir}/mod/edgelet/Cargo.toml" <<'PY'
-import sys
-
-lock_path = sys.argv[1]
-toml_path = sys.argv[2]
-
-with open(lock_path, "r", encoding="utf-8") as fh:
-    lines = fh.readlines()
-
-with open(lock_path, "w", encoding="utf-8") as fh:
-    for line in lines:
-        if "git+https://github.com/Azure/iot-identity-service" in line:
-            continue
-        fh.write(line)
-
-with open(toml_path, "r", encoding="utf-8") as fh:
-    toml_lines = fh.readlines()
-
-with open(toml_path, "w", encoding="utf-8") as fh:
-    for line in toml_lines:
-        if line.strip() == "panic = 'abort'":
-            continue
-        fh.write(line)
-PY
-
-    cp "${workdir}/mod/edgelet/Cargo.lock" "${workdir}/mod/edgelet/${lock_target}/Cargo.lock"
-
-    git -C "${workdir}" diff --no-index --binary orig mod > "${dest_patch}" || true
-
-    python3 - "${dest_patch}" <<'PY'
-import sys
-
-patch_path = sys.argv[1]
-
-with open(patch_path, "r", encoding="utf-8") as fh:
-    data = fh.read()
-
-replacements = {
-    "a/orig/edgelet/": "a/edgelet/",
-    "a/mod/edgelet/": "a/edgelet/",
-    "b/orig/edgelet/": "b/edgelet/",
-    "b/mod/edgelet/": "b/edgelet/",
+    git -C "${tmpdir}" diff --no-index --binary orig mod > "${dest_patch}" || true
+    python3 "${HELPERS}" fix-patch-paths "${dest_patch}"
+    rm -rf "${tmpdir}"
 }
 
-for old, new in replacements.items():
-    data = data.replace(old, new)
-
-with open(patch_path, "w", encoding="utf-8") as fh:
-    fh.write(data)
-PY
-    rm -rf "${workdir}"
+# Sync checksums from Cargo.lock and previous recipes
+sync_checksums() {
+    local component="$1" version="$2" lockfile="$3"
+    local recipe="${ROOT_DIR}/recipes-core/${component}/${component}_${version}.bb"
+    local recipe_dir="${ROOT_DIR}/recipes-core/${component}"
+    
+    [[ -f "${recipe}" ]] || return 0
+    [[ -f "${lockfile}" ]] && python3 "${HELPERS}" add-checksums "${recipe}" "${lockfile}"
+    
+    # Copy checksums from previous version
+    local prev; prev=$(ls "${recipe_dir}/${component}_"*.bb 2>/dev/null | sort -V | grep -v "_${version}.bb$" | tail -1 || true)
+    [[ -n "${prev}" ]] || return 0
+    
+    while IFS= read -r line; do
+        local key; key=$(echo "${line}" | cut -d= -f1)
+        grep -qF "${key}" "${recipe}" || echo "${line}" >> "${recipe}"
+    done < <(grep -E '^SRC_URI\[.*\.sha256sum\] = ' "${prev}" 2>/dev/null || true)
 }
 
-if [[ "${UPDATE_IOTEDGE}" == "true" ]]; then
+# --- Main ---
+
+IOTEDGE_REPO="https://github.com/Azure/iotedge.git"
+IIS_REPO="https://github.com/Azure/iot-identity-service.git"
+
+if [[ "${UPDATE_IOTEDGE}" == true ]]; then
+    # Resolve version/rev
     if [[ -z "${IOTEDGE_REV}" && -z "${IOTEDGE_VERSION}" ]]; then
-        mapfile -t latest_lines < <(resolve_latest_release "https://github.com/Azure/iotedge.git")
-        IOTEDGE_VERSION=${latest_lines[0]#v}
-        IOTEDGE_REV=${latest_lines[1]}
-    elif [[ -z "${IOTEDGE_REV}" && -n "${IOTEDGE_VERSION}" ]]; then
-        IOTEDGE_REV=$(resolve_tag_sha "https://github.com/Azure/iotedge.git" "${IOTEDGE_VERSION}")
-    elif [[ -n "${IOTEDGE_REV}" && -z "${IOTEDGE_VERSION}" ]]; then
-        IOTEDGE_VERSION=$(resolve_version_from_rev "https://github.com/Azure/iotedge.git" "${IOTEDGE_REV}")
+        mapfile -t latest < <(resolve_latest "${IOTEDGE_REPO}")
+        IOTEDGE_VERSION=${latest[0]#v}; IOTEDGE_REV=${latest[1]}
+    elif [[ -z "${IOTEDGE_REV}" ]]; then
+        IOTEDGE_REV=$(resolve_tag_sha "${IOTEDGE_REPO}" "${IOTEDGE_VERSION}")
+    elif [[ -z "${IOTEDGE_VERSION}" ]]; then
+        IOTEDGE_VERSION=$(resolve_version "${IOTEDGE_REPO}" "${IOTEDGE_REV}")
         IOTEDGE_VERSION=${IOTEDGE_VERSION#v}
     fi
-
-    if [[ -z "${IOTEDGE_REV}" || -z "${IOTEDGE_VERSION}" ]]; then
-        echo "Both --iotedge-rev and --iotedge-version are required when updating IoT Edge recipes."
-        exit 1
-    fi
-
+    
+    [[ -n "${IOTEDGE_REV}" && -n "${IOTEDGE_VERSION}" ]] || { echo "Need both rev and version for IoT Edge"; exit 1; }
+    
     IOTEDGE_DIR="${WORKDIR}/iotedge"
-    prepare_repo "https://github.com/Azure/iotedge.git" "${IOTEDGE_DIR}" "${IOTEDGE_REV}"
-    normalize_iotedge_cargo_config "${IOTEDGE_DIR}"
-
-    pushd "${IOTEDGE_DIR}/edgelet/aziot-edged" >/dev/null
-    retry_cmd "cargo bitbake (aziot-edged)" env CARGO_HOME="${CARGO_HOME_DIR}" cargo bitbake
-    AZIOT_EDGED_BB=$(ls aziot-edged_*.bb | head -n 1)
-    popd >/dev/null
-
-    pushd "${IOTEDGE_DIR}/edgelet/iotedge" >/dev/null
-    retry_cmd "cargo bitbake (iotedge)" env CARGO_HOME="${CARGO_HOME_DIR}" cargo bitbake
-    IOTEDGE_BB=$(ls iotedge_*.bb | head -n 1)
-    popd >/dev/null
-
-    copy_recipe "aziot-edged" "${IOTEDGE_DIR}/edgelet/aziot-edged/${AZIOT_EDGED_BB}" \
-        "${ROOT_DIR}/recipes-core/aziot-edged" "${IOTEDGE_VERSION}"
-    copy_recipe "iotedge" "${IOTEDGE_DIR}/edgelet/iotedge/${IOTEDGE_BB}" \
-        "${ROOT_DIR}/recipes-core/iotedge" "${IOTEDGE_VERSION}"
-
-    IIS_PATH_FOR_IOTEDGE=""
-    if [[ -n "${IIS_REV}" && -n "${IIS_VERSION}" ]]; then
-        IIS_PATH_FOR_IOTEDGE="${WORKDIR}/iot-identity-service"
+    prepare_repo "${IOTEDGE_REPO}" "${IOTEDGE_DIR}" "${IOTEDGE_REV}"
+    normalize_cargo_config "${IOTEDGE_DIR}/edgelet/.cargo"
+    
+    # Generate recipes
+    for pkg in aziot-edged iotedge; do
+        pushd "${IOTEDGE_DIR}/edgelet/${pkg}" >/dev/null
+        retry "cargo bitbake (${pkg})" env CARGO_HOME="${CARGO_HOME_DIR}" cargo bitbake
+        bb_file=$(ls "${pkg}_"*.bb | head -1)
+        popd >/dev/null
+        copy_recipe "${pkg}" "${IOTEDGE_DIR}/edgelet/${pkg}/${bb_file}" \
+            "${ROOT_DIR}/recipes-core/${pkg}" "${IOTEDGE_VERSION}"
+    done
+    
+    # Get IIS SHA for fixing SRCREV
+    if [[ -n "${IIS_REV}" ]]; then
+        IIS_SHA="${IIS_REV}"
+        IIS_PATH="${WORKDIR}/iot-identity-service"
     else
-        IIS_PATH_FOR_IOTEDGE="${WORKDIR}/iot-identity-service-for-iotedge"
-        prepare_repo "https://github.com/Azure/iot-identity-service.git" "${IIS_PATH_FOR_IOTEDGE}" "main"
+        mapfile -t iis_latest < <(resolve_latest "${IIS_REPO}")
+        IIS_SHA="${iis_latest[1]}"
+        IIS_PATH="${WORKDIR}/iot-identity-service-for-iotedge"
+        prepare_repo "${IIS_REPO}" "${IIS_PATH}" "${IIS_SHA}"
     fi
-
-    fix_iis_cargo_paths "${IIS_PATH_FOR_IOTEDGE}" \
-        "${ROOT_DIR}/recipes-core/iotedge/iotedge_${IOTEDGE_VERSION}.bb"
-    fix_iis_cargo_paths "${IIS_PATH_FOR_IOTEDGE}" \
-        "${ROOT_DIR}/recipes-core/aziot-edged/aziot-edged_${IOTEDGE_VERSION}.bb"
-
-    generate_remove_git_patch "${IOTEDGE_DIR}" \
-        "${ROOT_DIR}/recipes-core/iotedge/files/0001-Remove-git-from-Cargo.patch" \
-        "iotedge"
-
-    generate_remove_git_patch "${IOTEDGE_DIR}" \
-        "${ROOT_DIR}/recipes-core/aziot-edged/files/0001-Remove-git-from-Cargo.patch" \
-        "aziot-edged"
-
-    if [[ "${SYNC_CHECKSUMS}" == "true" ]]; then
-        add_checksums_from_cargo_lock "aziot-edged" "${IOTEDGE_VERSION}" "${IOTEDGE_DIR}/edgelet/Cargo.lock"
-        add_checksums_from_cargo_lock "iotedge" "${IOTEDGE_VERSION}" "${IOTEDGE_DIR}/edgelet/Cargo.lock"
-        sync_checksums_from_previous "aziot-edged" "${IOTEDGE_VERSION}"
-        sync_checksums_from_previous "iotedge" "${IOTEDGE_VERSION}"
-    fi
+    
+    # Fix recipes
+    for pkg in aziot-edged iotedge; do
+        recipe="${ROOT_DIR}/recipes-core/${pkg}/${pkg}_${IOTEDGE_VERSION}.bb"
+        python3 "${HELPERS}" fix-cargo-paths "${IIS_PATH}" "${recipe}"
+        fix_srcrev "${recipe}" "${IIS_SHA}"
+        generate_patch "${IOTEDGE_DIR}" "${ROOT_DIR}/recipes-core/${pkg}/files/0001-Remove-git-from-Cargo.patch" "${pkg}"
+        [[ "${SYNC_CHECKSUMS}" == true ]] && sync_checksums "${pkg}" "${IOTEDGE_VERSION}" "${IOTEDGE_DIR}/edgelet/Cargo.lock"
+    done
 fi
 
-if [[ "${UPDATE_IIS}" == "true" ]]; then
+if [[ "${UPDATE_IIS}" == true ]]; then
+    # Resolve version/rev
     if [[ -z "${IIS_REV}" && -z "${IIS_VERSION}" ]]; then
-        mapfile -t latest_lines < <(resolve_latest_release "https://github.com/Azure/iot-identity-service.git")
-        IIS_VERSION=${latest_lines[0]#v}
-        IIS_REV=${latest_lines[1]}
-    elif [[ -z "${IIS_REV}" && -n "${IIS_VERSION}" ]]; then
-        IIS_REV=$(resolve_tag_sha "https://github.com/Azure/iot-identity-service.git" "${IIS_VERSION}")
-    elif [[ -n "${IIS_REV}" && -z "${IIS_VERSION}" ]]; then
-        IIS_VERSION=$(resolve_version_from_rev "https://github.com/Azure/iot-identity-service.git" "${IIS_REV}")
+        mapfile -t latest < <(resolve_latest "${IIS_REPO}")
+        IIS_VERSION=${latest[0]#v}; IIS_REV=${latest[1]}
+    elif [[ -z "${IIS_REV}" ]]; then
+        IIS_REV=$(resolve_tag_sha "${IIS_REPO}" "${IIS_VERSION}")
+    elif [[ -z "${IIS_VERSION}" ]]; then
+        IIS_VERSION=$(resolve_version "${IIS_REPO}" "${IIS_REV}")
         IIS_VERSION=${IIS_VERSION#v}
     fi
-
-    if [[ -z "${IIS_REV}" || -z "${IIS_VERSION}" ]]; then
-        echo "Both --iis-rev and --iis-version are required when updating IoT Identity Service recipes."
-        exit 1
-    fi
-
+    
+    [[ -n "${IIS_REV}" && -n "${IIS_VERSION}" ]] || { echo "Need both rev and version for IIS"; exit 1; }
+    
     IIS_DIR="${WORKDIR}/iot-identity-service"
-    prepare_repo "https://github.com/Azure/iot-identity-service.git" "${IIS_DIR}" "${IIS_REV}"
-    normalize_iis_cargo_config "${IIS_DIR}"
-
-    pushd "${IIS_DIR}/key/aziot-keys" >/dev/null
-    retry_cmd "cargo bitbake (aziot-keys)" env CARGO_HOME="${CARGO_HOME_DIR}" cargo bitbake
-    AZIOT_KEYS_BB=$(ls aziot-keys_*.bb | head -n 1)
-    popd >/dev/null
-
-    pushd "${IIS_DIR}/aziotd" >/dev/null
-    retry_cmd "cargo bitbake (aziotd)" env CARGO_HOME="${CARGO_HOME_DIR}" cargo bitbake
-    AZIOTD_BB=$(ls aziotd_*.bb | head -n 1)
-    popd >/dev/null
-
-    pushd "${IIS_DIR}/aziotctl" >/dev/null
-    retry_cmd "cargo bitbake (aziotctl)" env CARGO_HOME="${CARGO_HOME_DIR}" cargo bitbake
-    AZIOTCTL_BB=$(ls aziotctl_*.bb | head -n 1)
-    popd >/dev/null
-
-    copy_recipe "aziot-keys" "${IIS_DIR}/key/aziot-keys/${AZIOT_KEYS_BB}" \
-        "${ROOT_DIR}/recipes-core/aziot-keys" "${IIS_VERSION}"
-    copy_recipe "aziotd" "${IIS_DIR}/aziotd/${AZIOTD_BB}" \
-        "${ROOT_DIR}/recipes-core/aziotd" "${IIS_VERSION}"
-    copy_recipe "aziotctl" "${IIS_DIR}/aziotctl/${AZIOTCTL_BB}" \
-        "${ROOT_DIR}/recipes-core/aziotctl" "${IIS_VERSION}"
-
-    if [[ "${SYNC_CHECKSUMS}" == "true" ]]; then
-        add_checksums_from_cargo_lock "aziot-keys" "${IIS_VERSION}" "${IIS_DIR}/Cargo.lock"
-        add_checksums_from_cargo_lock "aziotd" "${IIS_VERSION}" "${IIS_DIR}/Cargo.lock"
-        add_checksums_from_cargo_lock "aziotctl" "${IIS_VERSION}" "${IIS_DIR}/Cargo.lock"
-        sync_checksums_from_previous "aziot-keys" "${IIS_VERSION}"
-        sync_checksums_from_previous "aziotd" "${IIS_VERSION}"
-        sync_checksums_from_previous "aziotctl" "${IIS_VERSION}"
-    fi
+    prepare_repo "${IIS_REPO}" "${IIS_DIR}" "${IIS_REV}"
+    normalize_cargo_config "${IIS_DIR}/.cargo"
+    
+    # Generate recipes
+    declare -A IIS_PATHS=([aziot-keys]="key/aziot-keys" [aziotd]="aziotd" [aziotctl]="aziotctl")
+    for pkg in aziot-keys aziotd aziotctl; do
+        pushd "${IIS_DIR}/${IIS_PATHS[$pkg]}" >/dev/null
+        retry "cargo bitbake (${pkg})" env CARGO_HOME="${CARGO_HOME_DIR}" cargo bitbake
+        bb_file=$(ls "${pkg}_"*.bb | head -1)
+        popd >/dev/null
+        copy_recipe "${pkg}" "${IIS_DIR}/${IIS_PATHS[$pkg]}/${bb_file}" \
+            "${ROOT_DIR}/recipes-core/${pkg}" "${IIS_VERSION}"
+        [[ "${SYNC_CHECKSUMS}" == true ]] && sync_checksums "${pkg}" "${IIS_VERSION}" "${IIS_DIR}/Cargo.lock"
+    done
 fi
 
 echo "Recipe update complete. Review and commit changes."
