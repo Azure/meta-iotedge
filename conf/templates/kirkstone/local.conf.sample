@@ -80,6 +80,10 @@ SSTATE_DIR ?= "/workspaces/yocto-cache/sstate-cache"
 #
 #TMPDIR = "${TOPDIR}/tmp"
 
+# Scale parallelism to available CPU (override as needed)
+BB_NUMBER_THREADS ?= "${@oe.utils.cpu_count()}"
+PARALLEL_MAKE ?= "-j ${@oe.utils.cpu_count()}"
+
 #
 # Default policy config
 #
