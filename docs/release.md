@@ -62,6 +62,11 @@ Script explanations:
 - `scripts/containerize.sh`: wraps Docker to run builds consistently and passes timeouts/UID/GID through.
 - `scripts/bitbake.sh`: sets up the OE environment and starts BitBake with longer server/client timeouts.
 
+Devcontainer note:
+
+- If you reopen the repo in the devcontainer (public Yocto image), `scripts/build.sh` will run
+  `scripts/bitbake.sh` directly and skip Docker nesting.
+
 Notes:
 
 - Full Yocto builds can exceed GitHub-hosted runner limits (time/disk). For CI reliability, prefer a **self-hosted runner** with sstate caches.

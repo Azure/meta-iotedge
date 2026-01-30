@@ -1,0 +1,20 @@
+{
+  "name": "meta-iotedge (Yocto public image)",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "remoteUser": "vscode",
+  "updateRemoteUserUID": true,
+  "overrideCommand": true,
+  "containerEnv": {
+    "BB_SERVER_TIMEOUT": "600",
+    "BB_COMMAND_TIMEOUT": "300"
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  }
+}

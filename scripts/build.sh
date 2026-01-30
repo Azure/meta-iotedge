@@ -19,5 +19,9 @@ die() {
 rm -f build/conf/bblayers.conf || die "failed to nuke bblayers.conf"
 rm -f build/conf/local.conf || die "failed to nuke local.conf"
 
-./scripts/containerize.sh ${TEMPLATE} ./scripts/bitbake.sh ${BUILD_TARGETS} || die "failed to build"
+if [[ -n "${DEVCONTAINER}" || -n "${CODESPACES}" || -f "/.devcontainer" ]]; then
+    ./scripts/bitbake.sh ${BUILD_TARGETS} || die "failed to build"
+else
+    ./scripts/containerize.sh ${TEMPLATE} ./scripts/bitbake.sh ${BUILD_TARGETS} || die "failed to build"
+fi
 
