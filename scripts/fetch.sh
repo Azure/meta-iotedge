@@ -48,10 +48,10 @@ verify_github_mirror() {
 	local mirror_uri="$2"
 	local fallback_uri="$3"
 	if git ls-remote --heads "${mirror_uri}" >/dev/null 2>&1; then
-		echo "Using GitHub mirror for ${name}: ${mirror_uri}"
+		echo "Using GitHub mirror for ${name}: ${mirror_uri}" >&2
 		echo "${mirror_uri}"
 	else
-		echo "GitHub mirror not found for ${name}, using upstream: ${fallback_uri}"
+		echo "GitHub mirror not found for ${name}, using upstream: ${fallback_uri}" >&2
 		echo "${fallback_uri}"
 	fi
 }

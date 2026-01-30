@@ -6,6 +6,9 @@
   "remoteUser": "vscode",
   "updateRemoteUserUID": true,
   "overrideCommand": true,
+  "mounts": [
+    "source=yocto-cache,target=/workspaces/yocto-cache,type=volume"
+  ],
   "containerEnv": {
     "BB_SERVER_TIMEOUT": "600",
     "BB_COMMAND_TIMEOUT": "300"
