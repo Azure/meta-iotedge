@@ -39,44 +39,87 @@ What it does:
 - Normalizes cargo sources and registry configuration to crates.io.
 - Sets `CARGO_SRC_DIR` for monorepo subpaths where needed.
 - Fixes license checksums and applies known recipe patches (e.g., `pkgconfig` inherits).
+- Resolves IIS SRCREV entries to actual git SHAs (not branch names).
 
 Notes:
 
-- If **only** IoT Edge changes, omit the `--iis-*` flags.
+- If **only** IoT Edge changes, omit the `--iis-*` flags. The script will automatically
+  resolve the latest IIS release tag for SRCREV entries.
 - If **only** IoT Identity Service changes, omit the `--iotedge-*` flags.
 - The script creates new `*.bb` and `*.inc` files alongside existing versions; it does **not** delete older versions.
+- Use `--keep-workdir` to inspect generated files for debugging.
 
-## Validate (local or CI)
+## Validate recipes
 
-For a full build:
+After updating recipes, validate that they parse correctly before running a full build:
 
+```bash
+# Fetch Yocto layers for the target release
+./scripts/fetch.sh scarthgap
+
+# Parse recipes to check for errors (quick validation)
+cd poky && source oe-init-build-env && bitbake -p iotedge aziot-edged
 ```
-./scripts/fetch.sh <template>
-./scripts/build.sh <template>
+
+This validates:
+- Recipe syntax is correct
+- All SRCREV entries are valid git SHAs (not branch names like "main")
+- Dependencies resolve correctly
+
+## Validate build (local or CI)
+
+For a full build validation:
+
+```bash
+# Fetch Yocto layers (use Yocto branch name: scarthgap, kirkstone, etc.)
+./scripts/fetch.sh scarthgap
+
+# Build recipes (use template name: default, kirkstone, etc.)
+./scripts/build.sh default
 ```
 
 To validate IoT Edge in QEMU:
 
-```
-./scripts/validate-qemu.sh <template>
+```bash
+./scripts/validate-qemu.sh default
 ```
 
-Script explanations:
+### Script parameters
 
-- `scripts/fetch.sh`: clones required Yocto layers (poky, meta-openembedded, etc.) and supports optional GitHub mirrors/fallbacks.
-- `scripts/build.sh`: runs the containerized build and invokes BitBake for the main IoT Edge targets.
+| Script | Parameter | Description | Examples |
+|--------|-----------|-------------|----------|
+| `fetch.sh` | `<yocto-branch>` | Yocto release branch to fetch | `scarthgap`, `kirkstone` |
+| `build.sh` | `<template>` | Build template from `conf/templates/` | `default`, `kirkstone` |
+| `validate-qemu.sh` | `<template>` | Template for QEMU validation | `default`, `kirkstone` |
+
+### Branch to template mapping
+
+| Branch | Yocto Release | fetch.sh | build.sh |
+|--------|---------------|----------|----------|
+| main | Scarthgap | `scarthgap` | `default` |
+| kirkstone | Kirkstone | `kirkstone` | `kirkstone` |
+
+### Script explanations
+
+- `scripts/fetch.sh`: clones required Yocto layers (poky, meta-openembedded, etc.) at the specified Yocto branch. Supports optional GitHub mirrors/fallbacks.
+- `scripts/build.sh`: runs the containerized build and invokes BitBake for the main IoT Edge targets using the specified template.
 - `scripts/containerize.sh`: wraps Docker to run builds consistently and passes timeouts/UID/GID through.
 - `scripts/bitbake.sh`: sets up the OE environment and starts BitBake with longer server/client timeouts.
 
-Devcontainer note:
+### Devcontainer note
 
-- If you reopen the repo in the devcontainer (public Yocto image), `scripts/build.sh` will run
-  `scripts/bitbake.sh` directly and skip Docker nesting.
+If you reopen the repo in the devcontainer (public Yocto image), `scripts/build.sh` will run
+`scripts/bitbake.sh` directly and skip Docker nesting. You can also run bitbake directly:
 
-Notes:
+```bash
+export DEVCONTAINER=1
+export TEMPLATECONF="meta-iotedge/conf/templates/default"
+./scripts/bitbake.sh iotedge aziot-edged
+```
+
+### Build notes
 
 - Full Yocto builds can exceed GitHub-hosted runner limits (time/disk). For CI reliability, prefer a **self-hosted runner** with sstate caches.
-- Use the same `<template>` value for fetch and build (for example: `default`).
 - Templates set `BB_FETCH_RETRIES` and `BB_FETCH_TIMEOUT` for network robustness, and keep `BB_HASHSERVE = ""` to avoid hashserv socket issues in Codespaces.
 
 ## Update meta-rust (if needed)
@@ -103,7 +146,7 @@ with the desired SHAs and versions.
 The workflow in [.github/workflows/ci-build.yml](.github/workflows/ci-build.yml)
 mimics the Azure DevOps pipeline by running:
 
-```
+```bash
 ./scripts/fetch.sh scarthgap
 ./scripts/build.sh default
 ```
@@ -111,7 +154,52 @@ mimics the Azure DevOps pipeline by running:
 This requires Docker, large disk, and enough runtime for full Yocto builds. It is
 intended to be used as a PR status check. GitHub-hosted runners may time out.
 
-## When manual fixes are still needed
+## End-to-end release checklist
+
+1. **Update recipes**
+   ```bash
+   ./scripts/update-recipes.sh \
+     --iotedge-rev <sha> --iotedge-version <ver> \
+     --iis-rev <sha> --iis-version <ver>
+   ```
+
+2. **Validate recipe parsing** (quick, ~1 min)
+   ```bash
+   ./scripts/fetch.sh scarthgap
+   cd poky && source oe-init-build-env && bitbake -p iotedge aziot-edged
+   ```
+
+3. **Full build validation** (slow, hours)
+   ```bash
+   ./scripts/build.sh default
+   ```
+
+4. **Create PR** targeting the appropriate branch (main for Scarthgap, kirkstone for Kirkstone)
+
+## Troubleshooting
+
+### SRCREV = "main" errors
+
+If BitBake fails with errors about unable to fetch a git revision like "main":
+
+```
+ERROR: iotedge: Fetcher failure: Unable to find revision main in branch main
+```
+
+This means the recipe has SRCREV entries pointing to branch names instead of commit SHAs.
+The `update-recipes.sh` script should automatically fix these, but if updating manually,
+ensure all `SRCREV_*` entries are valid 40-character git commit SHAs.
+
+### Recipe parsing errors
+
+Run `bitbake -p <recipe>` to validate recipe syntax without building:
+
+```bash
+cd poky && source oe-init-build-env
+bitbake -p iotedge aziot-edged
+```
+
+### When manual fixes are still needed
 
 Most release steps are automated. Manual intervention may still be required if
 upstream changes introduce new build or recipe issues, for example:

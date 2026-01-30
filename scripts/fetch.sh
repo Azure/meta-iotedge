@@ -1,11 +1,21 @@
 #!/bin/bash -x
 
-# default repo
+# Fetch Yocto layers at a specified branch
+# Usage: ./scripts/fetch.sh <yocto-branch>
+# Examples:
+#   ./scripts/fetch.sh scarthgap    # For Scarthgap release (main branch)
+#   ./scripts/fetch.sh kirkstone    # For Kirkstone release (kirkstone branch)
+
 if [[ $# -lt 1 ]]; then
-    echo "No Yocto branch specified, defaulting to master"
-    echo "To change this pass a Yocto branch name as an argument to this script"
+    echo "Usage: $0 <yocto-branch>"
+    echo "  yocto-branch: Yocto release branch (e.g., scarthgap, kirkstone)"
+    echo ""
+    echo "Examples:"
+    echo "  $0 scarthgap    # Fetch layers for Scarthgap release"
+    echo "  $0 kirkstone    # Fetch layers for Kirkstone release"
+    exit 1
 fi
-branch=${1-master}
+branch=${1}
 
 # the repos we want to check out, must setup variables below
 # NOTE: poky must remain first.
