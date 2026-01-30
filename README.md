@@ -44,6 +44,16 @@ Release process
 
 See the step-by-step guide in [docs/release.md](docs/release.md).
 
+Reliability defaults
+====================
+
+The default and kirkstone templates include conservative settings to improve build reliability
+across varying machines and networks:
+
+- `BB_FETCH_RETRIES` and `BB_FETCH_TIMEOUT` to retry network fetches.
+- `BB_HASHSERVE = ""` to disable hashserv (avoids socket/connect failures in Codespaces).
+- `DL_DIR`/`SSTATE_DIR` set to `/workspaces/yocto-cache` (override for non-container hosts).
+
 
 Contributing
 ============

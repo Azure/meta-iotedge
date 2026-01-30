@@ -54,6 +54,10 @@ BB_SERVER_TIMEOUT = "600"
 #DL_DIR ?= "${TOPDIR}/downloads"
 DL_DIR ?= "/workspaces/yocto-cache/downloads"
 
+# Fetch robustness (retries + per-try timeout). Increase if your network is flaky.
+BB_FETCH_RETRIES ?= "5"
+BB_FETCH_TIMEOUT ?= "60"
+
 #
 # Where to place shared-state files
 #

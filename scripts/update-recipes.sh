@@ -87,6 +87,33 @@ require git
 require cargo
 require python3
 
+# Network retry/backoff for flaky CI and developer networks.
+RETRY_MAX=${RETRY_MAX:-5}
+RETRY_BASE_DELAY=${RETRY_BASE_DELAY:-2}
+
+retry_cmd() {
+    local description="$1"
+    shift
+    local attempt=1
+    local delay=${RETRY_BASE_DELAY}
+
+    while true; do
+        if "$@"; then
+            return 0
+        fi
+
+        if [[ ${attempt} -ge ${RETRY_MAX} ]]; then
+            echo "Failed: ${description} (after ${attempt} attempts)" >&2
+            return 1
+        fi
+
+        echo "Retrying: ${description} (attempt ${attempt}/${RETRY_MAX}) in ${delay}s" >&2
+        sleep "${delay}"
+        attempt=$((attempt + 1))
+        delay=$((delay * 2))
+    done
+}
+
 resolve_latest_release() {
     local repo_url="$1"
     python3 - "${repo_url}" <<'PY'
@@ -218,8 +245,8 @@ prepare_repo() {
         rm -rf "${repo_dir}"
     fi
 
-    git clone "${repo_url}" "${repo_dir}"
-    git -C "${repo_dir}" checkout "${repo_rev}"
+    retry_cmd "git clone ${repo_url}" git clone "${repo_url}" "${repo_dir}"
+    retry_cmd "git checkout ${repo_rev}" git -C "${repo_dir}" checkout "${repo_rev}"
 }
 
 normalize_iotedge_cargo_config() {
@@ -477,12 +504,12 @@ if [[ "${UPDATE_IOTEDGE}" == "true" ]]; then
     normalize_iotedge_cargo_config "${IOTEDGE_DIR}"
 
     pushd "${IOTEDGE_DIR}/edgelet/aziot-edged" >/dev/null
-    CARGO_HOME="${CARGO_HOME_DIR}" cargo bitbake
+    retry_cmd "cargo bitbake (aziot-edged)" env CARGO_HOME="${CARGO_HOME_DIR}" cargo bitbake
     AZIOT_EDGED_BB=$(ls aziot-edged_*.bb | head -n 1)
     popd >/dev/null
 
     pushd "${IOTEDGE_DIR}/edgelet/iotedge" >/dev/null
-    CARGO_HOME="${CARGO_HOME_DIR}" cargo bitbake
+    retry_cmd "cargo bitbake (iotedge)" env CARGO_HOME="${CARGO_HOME_DIR}" cargo bitbake
     IOTEDGE_BB=$(ls iotedge_*.bb | head -n 1)
     popd >/dev/null
 
@@ -529,17 +556,17 @@ if [[ "${UPDATE_IIS}" == "true" ]]; then
     normalize_iis_cargo_config "${IIS_DIR}"
 
     pushd "${IIS_DIR}/key/aziot-keys" >/dev/null
-    CARGO_HOME="${CARGO_HOME_DIR}" cargo bitbake
+    retry_cmd "cargo bitbake (aziot-keys)" env CARGO_HOME="${CARGO_HOME_DIR}" cargo bitbake
     AZIOT_KEYS_BB=$(ls aziot-keys_*.bb | head -n 1)
     popd >/dev/null
 
     pushd "${IIS_DIR}/aziotd" >/dev/null
-    CARGO_HOME="${CARGO_HOME_DIR}" cargo bitbake
+    retry_cmd "cargo bitbake (aziotd)" env CARGO_HOME="${CARGO_HOME_DIR}" cargo bitbake
     AZIOTD_BB=$(ls aziotd_*.bb | head -n 1)
     popd >/dev/null
 
     pushd "${IIS_DIR}/aziotctl" >/dev/null
-    CARGO_HOME="${CARGO_HOME_DIR}" cargo bitbake
+    retry_cmd "cargo bitbake (aziotctl)" env CARGO_HOME="${CARGO_HOME_DIR}" cargo bitbake
     AZIOTCTL_BB=$(ls aziotctl_*.bb | head -n 1)
     popd >/dev/null
 

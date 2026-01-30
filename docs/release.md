@@ -71,6 +71,7 @@ Notes:
 
 - Full Yocto builds can exceed GitHub-hosted runner limits (time/disk). For CI reliability, prefer a **self-hosted runner** with sstate caches.
 - Use the same `<template>` value for fetch and build (for example: `default`).
+- Templates set `BB_FETCH_RETRIES` and `BB_FETCH_TIMEOUT` for network robustness, and keep `BB_HASHSERVE = ""` to avoid hashserv socket issues in Codespaces.
 
 ## Update meta-rust (if needed)
 
