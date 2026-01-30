@@ -457,9 +457,9 @@ PY
 
 if [[ "${UPDATE_IOTEDGE}" == "true" ]]; then
     if [[ -z "${IOTEDGE_REV}" && -z "${IOTEDGE_VERSION}" ]]; then
-        read -r latest_tag latest_sha < <(resolve_latest_release "https://github.com/Azure/iotedge.git")
-        IOTEDGE_VERSION=${latest_tag#v}
-        IOTEDGE_REV=${latest_sha}
+        mapfile -t latest_lines < <(resolve_latest_release "https://github.com/Azure/iotedge.git")
+        IOTEDGE_VERSION=${latest_lines[0]#v}
+        IOTEDGE_REV=${latest_lines[1]}
     elif [[ -z "${IOTEDGE_REV}" && -n "${IOTEDGE_VERSION}" ]]; then
         IOTEDGE_REV=$(resolve_tag_sha "https://github.com/Azure/iotedge.git" "${IOTEDGE_VERSION}")
     elif [[ -n "${IOTEDGE_REV}" && -z "${IOTEDGE_VERSION}" ]]; then
@@ -509,9 +509,9 @@ fi
 
 if [[ "${UPDATE_IIS}" == "true" ]]; then
     if [[ -z "${IIS_REV}" && -z "${IIS_VERSION}" ]]; then
-        read -r latest_tag latest_sha < <(resolve_latest_release "https://github.com/Azure/iot-identity-service.git")
-        IIS_VERSION=${latest_tag#v}
-        IIS_REV=${latest_sha}
+        mapfile -t latest_lines < <(resolve_latest_release "https://github.com/Azure/iot-identity-service.git")
+        IIS_VERSION=${latest_lines[0]#v}
+        IIS_REV=${latest_lines[1]}
     elif [[ -z "${IIS_REV}" && -n "${IIS_VERSION}" ]]; then
         IIS_REV=$(resolve_tag_sha "https://github.com/Azure/iot-identity-service.git" "${IIS_VERSION}")
     elif [[ -n "${IIS_REV}" && -z "${IIS_VERSION}" ]]; then
