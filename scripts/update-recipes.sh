@@ -291,6 +291,67 @@ EOF
     fi
 }
 
+fix_iis_cargo_paths() {
+    local iis_repo_dir="$1"
+    local recipe_path="$2"
+
+    python3 - "${iis_repo_dir}" "${recipe_path}" <<'PY'
+import os
+import re
+import sys
+
+iis_repo = sys.argv[1]
+recipe = sys.argv[2]
+
+def find_crate_paths(repo_root: str) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for root, _dirs, files in os.walk(repo_root):
+        if "Cargo.toml" not in files:
+            continue
+        cargo_path = os.path.join(root, "Cargo.toml")
+        try:
+            with open(cargo_path, "r", encoding="utf-8") as fh:
+                contents = fh.read().splitlines()
+        except OSError:
+            continue
+        in_package = False
+        name = None
+        for line in contents:
+            if line.strip() == "[package]":
+                in_package = True
+                continue
+            if line.startswith("[") and line.strip() != "[package]":
+                in_package = False
+            if in_package and line.strip().startswith("name = "):
+                name = line.split("=", 1)[1].strip().strip('"')
+                break
+        if name:
+            rel = os.path.relpath(root, repo_root)
+            mapping[name] = rel
+    return mapping
+
+crate_paths = find_crate_paths(iis_repo)
+
+pattern = re.compile(r'^(EXTRA_OECARGO_PATHS \+= "\$\{WORKDIR\}/)([^"/]+)"\s*$')
+updated_lines = []
+with open(recipe, "r", encoding="utf-8") as fh:
+    for line in fh:
+        m = pattern.match(line.rstrip("\n"))
+        if not m:
+            updated_lines.append(line)
+            continue
+        name = m.group(2)
+        rel = crate_paths.get(name)
+        if not rel or rel == ".":
+            updated_lines.append(line)
+            continue
+        updated_lines.append(f'{m.group(1)}{name}/{rel}"\n')
+
+with open(recipe, "w", encoding="utf-8") as fh:
+    fh.writelines(updated_lines)
+PY
+}
+
 copy_recipe() {
     local component="$1"
     local src_file="$2"
@@ -517,6 +578,19 @@ if [[ "${UPDATE_IOTEDGE}" == "true" ]]; then
         "${ROOT_DIR}/recipes-core/aziot-edged" "${IOTEDGE_VERSION}"
     copy_recipe "iotedge" "${IOTEDGE_DIR}/edgelet/iotedge/${IOTEDGE_BB}" \
         "${ROOT_DIR}/recipes-core/iotedge" "${IOTEDGE_VERSION}"
+
+    IIS_PATH_FOR_IOTEDGE=""
+    if [[ -n "${IIS_REV}" && -n "${IIS_VERSION}" ]]; then
+        IIS_PATH_FOR_IOTEDGE="${WORKDIR}/iot-identity-service"
+    else
+        IIS_PATH_FOR_IOTEDGE="${WORKDIR}/iot-identity-service-for-iotedge"
+        prepare_repo "https://github.com/Azure/iot-identity-service.git" "${IIS_PATH_FOR_IOTEDGE}" "main"
+    fi
+
+    fix_iis_cargo_paths "${IIS_PATH_FOR_IOTEDGE}" \
+        "${ROOT_DIR}/recipes-core/iotedge/iotedge_${IOTEDGE_VERSION}.bb"
+    fix_iis_cargo_paths "${IIS_PATH_FOR_IOTEDGE}" \
+        "${ROOT_DIR}/recipes-core/aziot-edged/aziot-edged_${IOTEDGE_VERSION}.bb"
 
     generate_remove_git_patch "${IOTEDGE_DIR}" \
         "${ROOT_DIR}/recipes-core/iotedge/files/0001-Remove-git-from-Cargo.patch" \

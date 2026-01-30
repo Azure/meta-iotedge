@@ -55,6 +55,12 @@ For a full build:
 ./scripts/build.sh <template>
 ```
 
+To validate IoT Edge in QEMU:
+
+```
+./scripts/validate-qemu.sh <template>
+```
+
 Script explanations:
 
 - `scripts/fetch.sh`: clones required Yocto layers (poky, meta-openembedded, etc.) and supports optional GitHub mirrors/fallbacks.

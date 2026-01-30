@@ -10,11 +10,14 @@ RUN apt-get update \
         ca-certificates \
         curl \
         git \
+        openssh-client \
         python3 \
         python3-pip \
         build-essential \
         pkg-config \
         libssl-dev \
+        qemu-system-x86 \
+        qemu-utils \
     && rm -rf /var/lib/apt/lists/* \
     && if ! getent group "${USER_GID}" >/dev/null; then groupadd --gid "${USER_GID}" "${USERNAME}"; fi \
     && if ! id -u "${USERNAME}" >/dev/null 2>&1; then useradd -m -s /bin/bash --uid "${USER_UID}" --gid "${USER_GID}" "${USERNAME}"; fi \

@@ -54,6 +54,11 @@ across varying machines and networks:
 - `BB_HASHSERVE = ""` to disable hashserv (avoids socket/connect failures in Codespaces).
 - `DL_DIR`/`SSTATE_DIR` set to `/workspaces/yocto-cache` (override for non-container hosts).
 
+Validation helpers
+==================
+
+- `scripts/validate-qemu.sh` builds a minimal QEMU image and runs `iotedge --version` over SSH.
+
 
 Contributing
 ============

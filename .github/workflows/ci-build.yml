@@ -19,6 +19,10 @@ on:
         description: "Optional bitbake targets (space-separated). Leave empty for script defaults."
         required: false
         default: ""
+      run_qemu:
+        description: "Run QEMU validation (iotedge --version) after build"
+        required: false
+        default: "false"
 
 permissions:
   contents: read
@@ -37,23 +41,45 @@ jobs:
       # Note: BB_COMMAND_TIMEOUT must also be whitelisted in BitBake env passthrough.
       BB_SERVER_TIMEOUT: "600"
       BB_COMMAND_TIMEOUT: "300"
+      DEVCONTAINER_IMAGE: ghcr.io/${{ github.repository_owner }}/meta-iotedge-devcontainer:scarthgap
+      YOCTO_CACHE_DIR: ${{ github.workspace }}/.yocto-cache
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Prepare cache directories
+        run: |
+          mkdir -p "${YOCTO_CACHE_DIR}/downloads" "${YOCTO_CACHE_DIR}/sstate-cache"
+
       - name: Validate Docker
         run: docker --version
 
-      - name: Fetch
-        run: ./scripts/fetch.sh "${{ inputs.template || 'default' }}"
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-      - name: Build
+      - name: Build devcontainer image (with GHCR cache)
+        run: |
+          set -euo pipefail
+          docker pull "${DEVCONTAINER_IMAGE}" || true
+          docker build \
+            --cache-from "${DEVCONTAINER_IMAGE}" \
+            -t "${DEVCONTAINER_IMAGE}" \
+            -f .devcontainer/Dockerfile \
+            .devcontainer
+
+      - name: Fetch + Build + (Optional) QEMU validation
+        env:
+          RUN_QEMU: ${{ inputs.run_qemu || 'false' }}
         run: |
           set -euo pipefail
           template="${{ inputs.template || 'default' }}"
-          targets="${{ inputs.build_targets }}"
-          if [[ -n "${targets}" ]]; then
-            ./scripts/build.sh "${template}" ${targets}
-          else
-            ./scripts/build.sh "${template}"
-          fi
+          docker run --rm \
+            -e DEVCONTAINER=1 \
+            -e BB_SERVER_TIMEOUT="${BB_SERVER_TIMEOUT}" \
+            -e BB_COMMAND_TIMEOUT="${BB_COMMAND_TIMEOUT}" \
+            -e RUN_QEMU="${RUN_QEMU}" \
+            -v "${{ github.workspace }}:/workspaces/meta-iotedge" \
+            -v "${YOCTO_CACHE_DIR}:/workspaces/yocto-cache" \
+            -w /workspaces/meta-iotedge \
+            "${DEVCONTAINER_IMAGE}" \
+            bash -lc "./scripts/fetch.sh \"${template}\" && ./scripts/build.sh \"${template}\" && if [[ \"${RUN_QEMU}\" == \"true\" ]]; then ./scripts/validate-qemu.sh \"${template}\"; fi"
