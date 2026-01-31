@@ -18,6 +18,7 @@ jobs:
       release_version: ${{ steps.check.outputs.release_version }}  # Latest overall release (e.g., 1.5.35)
       daemon_version: ${{ steps.check.outputs.daemon_version }}    # Daemon binary version (e.g., 1.5.21)
       current_iotedge: ${{ steps.check.outputs.current_iotedge }}  # Current recipe version
+      current_iis: ${{ steps.check.outputs.current_iis }}          # Current IIS recipe version
       iotedge_update: ${{ steps.check.outputs.iotedge_update }}
       iotedge_version: ${{ steps.check.outputs.iotedge_version }}  # Version to update to
       iotedge_sha: ${{ steps.check.outputs.iotedge_sha }}
@@ -180,6 +181,7 @@ jobs:
             core.setOutput('needs_update', needsUpdate);
             core.setOutput('is_significant', isSignificant);
             core.setOutput('current_iotedge', currentIotedge);
+            core.setOutput('current_iis', currentIis);
             
             if (!needsUpdate && currentIotedge === releaseVersion) {
               console.log('✅ Already at latest versions');
@@ -271,8 +273,8 @@ jobs:
             ### Versions
             | Component | Current | New |
             |-----------|---------|-----|
-            | IoT Edge | ${{ env.CURRENT_IOTEDGE }} | ${{ needs.check-upstream.outputs.iotedge_version }} |
-            | IoT Identity Service | ${{ env.CURRENT_IIS }} | ${{ needs.check-upstream.outputs.iis_version || env.CURRENT_IIS }} |
+            | IoT Edge | ${{ needs.check-upstream.outputs.current_iotedge }} | ${{ needs.check-upstream.outputs.iotedge_version }} |
+            | IoT Identity Service | ${{ needs.check-upstream.outputs.current_iis }} | ${{ needs.check-upstream.outputs.iis_version || needs.check-upstream.outputs.current_iis }} |
             
             ### Validation Checklist
             - [ ] CI build passes
