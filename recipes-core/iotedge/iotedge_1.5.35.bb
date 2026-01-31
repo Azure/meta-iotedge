@@ -8,13 +8,12 @@ inherit cargo
 # how to get iotedge could be as easy as but default to a git checkout:
 # SRC_URI += "crate://crates.io/iotedge/0.1.0"
 SRC_URI += "git://github.com/Azure/iotedge.git;protocol=https;nobranch=1"
-SRCREV = "3ed5c71ac3da53c80e52d8ae097d141f54071906"
+SRCREV = "2dfe54c62398403cf4d7c908625196b4a1834385"
 S = "${WORKDIR}/git"
 CARGO_SRC_DIR = "edgelet/iotedge"
-
-
-# Allow do_compile to perform git fetch commands
 do_compile[network] = "1"
+CARGO_LOCK_PATH = "${S}/edgelet/Cargo.lock"
+
 
 # please note if you have entries that do not begin with crate://
 # you must change them to how that package can be fetched
@@ -245,33 +244,128 @@ SRC_URI += " \
     crate://crates.io/winnow/0.5.12 \
     crate://crates.io/yaml-rust/0.4.5 \
     crate://crates.io/zip/0.6.6 \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-cert-client-async;destsuffix=cert/aziot-cert-client-async;subpath=cert/aziot-cert-client-async \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-cert-common-http;destsuffix=cert/aziot-cert-common-http;subpath=cert/aziot-cert-common-http \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-certd-config;destsuffix=cert/aziot-certd-config;subpath=cert/aziot-certd-config \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-identity-client-async;destsuffix=identity/aziot-identity-client-async;subpath=identity/aziot-identity-client-async \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-identity-common-http;destsuffix=identity/aziot-identity-common-http;subpath=identity/aziot-identity-common-http \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-identity-common;destsuffix=identity/aziot-identity-common;subpath=identity/aziot-identity-common \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-identityd-config;destsuffix=identity/aziot-identityd-config;subpath=identity/aziot-identityd-config \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-key-client-async;destsuffix=key/aziot-key-client-async;subpath=key/aziot-key-client-async \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-key-client;destsuffix=key/aziot-key-client;subpath=key/aziot-key-client \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-key-common-http;destsuffix=key/aziot-key-common-http;subpath=key/aziot-key-common-http \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-key-common;destsuffix=key/aziot-key-common;subpath=key/aziot-key-common \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-key-openssl-engine;destsuffix=key/aziot-key-openssl-engine;subpath=key/aziot-key-openssl-engine \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-keyd-config;destsuffix=key/aziot-keyd-config;subpath=key/aziot-keyd-config \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-keys-common;destsuffix=key/aziot-keys-common;subpath=key/aziot-keys-common \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-tpmd-config;destsuffix=tpm/aziot-tpmd-config;subpath=tpm/aziot-tpmd-config \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziotctl-common;destsuffix=aziotctl/aziotctl-common;subpath=aziotctl/aziotctl-common \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=cert-renewal;destsuffix=cert/cert-renewal;subpath=cert/cert-renewal \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=config-common;destsuffix=config-common;subpath=config-common \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=http-common;destsuffix=http-common;subpath=http-common \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=logger;destsuffix=logger;subpath=logger \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=openssl-build;destsuffix=openssl-build;subpath=openssl-build \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=openssl-sys2;destsuffix=openssl-sys2;subpath=openssl-sys2 \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=openssl2;destsuffix=openssl2;subpath=openssl2 \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=pkcs11-sys;destsuffix=pkcs11/pkcs11-sys;subpath=pkcs11/pkcs11-sys \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=pkcs11;destsuffix=pkcs11/pkcs11;subpath=pkcs11/pkcs11 \
-    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=test-common;destsuffix=test-common;subpath=test-common;subpath=test-common \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-cert-client-async;destsuffix=aziot-cert-client-async \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-cert-common-http;destsuffix=aziot-cert-common-http \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-certd-config;destsuffix=aziot-certd-config \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-identity-client-async;destsuffix=aziot-identity-client-async \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-identity-common-http;destsuffix=aziot-identity-common-http \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-identity-common;destsuffix=aziot-identity-common \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-identityd-config;destsuffix=aziot-identityd-config \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-key-client-async;destsuffix=aziot-key-client-async \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-key-client;destsuffix=aziot-key-client \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-key-common-http;destsuffix=aziot-key-common-http \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-key-common;destsuffix=aziot-key-common \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-key-openssl-engine;destsuffix=aziot-key-openssl-engine \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-keyd-config;destsuffix=aziot-keyd-config \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-keys-common;destsuffix=aziot-keys-common \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziot-tpmd-config;destsuffix=aziot-tpmd-config \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=aziotctl-common;destsuffix=aziotctl-common \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=cert-renewal;destsuffix=cert-renewal \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=config-common;destsuffix=config-common \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=http-common;destsuffix=http-common \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=logger;destsuffix=logger \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=openssl-build;destsuffix=openssl-build \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=openssl-sys2;destsuffix=openssl-sys2 \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=openssl2;destsuffix=openssl2 \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=pkcs11-sys;destsuffix=pkcs11-sys \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=pkcs11;destsuffix=pkcs11 \
+    git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;name=test-common;destsuffix=test-common \
 "
+
+SRCREV_FORMAT .= "_aziot-cert-client-async"
+SRCREV_aziot-cert-client-async = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-cert-client-async"
+SRCREV_FORMAT .= "_aziot-cert-common-http"
+SRCREV_aziot-cert-common-http = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-cert-common-http"
+SRCREV_FORMAT .= "_aziot-certd-config"
+SRCREV_aziot-certd-config = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-certd-config"
+SRCREV_FORMAT .= "_aziot-identity-client-async"
+SRCREV_aziot-identity-client-async = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-identity-client-async"
+SRCREV_FORMAT .= "_aziot-identity-common"
+SRCREV_aziot-identity-common = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-identity-common"
+SRCREV_FORMAT .= "_aziot-identity-common-http"
+SRCREV_aziot-identity-common-http = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-identity-common-http"
+SRCREV_FORMAT .= "_aziot-identityd-config"
+SRCREV_aziot-identityd-config = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-identityd-config"
+SRCREV_FORMAT .= "_aziot-key-client"
+SRCREV_aziot-key-client = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-key-client"
+SRCREV_FORMAT .= "_aziot-key-client-async"
+SRCREV_aziot-key-client-async = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-key-client-async"
+SRCREV_FORMAT .= "_aziot-key-common"
+SRCREV_aziot-key-common = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-key-common"
+SRCREV_FORMAT .= "_aziot-key-common-http"
+SRCREV_aziot-key-common-http = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-key-common-http"
+SRCREV_FORMAT .= "_aziot-key-openssl-engine"
+SRCREV_aziot-key-openssl-engine = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-key-openssl-engine"
+SRCREV_FORMAT .= "_aziot-keyd-config"
+SRCREV_aziot-keyd-config = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-keyd-config"
+SRCREV_FORMAT .= "_aziot-keys-common"
+SRCREV_aziot-keys-common = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-keys-common"
+SRCREV_FORMAT .= "_aziot-tpmd-config"
+SRCREV_aziot-tpmd-config = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/aziot-tpmd-config"
+SRCREV_FORMAT .= "_aziotctl-common"
+SRCREV_aziotctl-common = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/aziotctl-common"
+SRCREV_FORMAT .= "_cert-renewal"
+SRCREV_cert-renewal = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/cert-renewal"
+SRCREV_FORMAT .= "_config-common"
+SRCREV_config-common = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/config-common"
+SRCREV_FORMAT .= "_http-common"
+SRCREV_http-common = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/http-common"
+SRCREV_FORMAT .= "_logger"
+SRCREV_logger = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/logger"
+SRCREV_FORMAT .= "_openssl-build"
+SRCREV_openssl-build = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/openssl-build"
+SRCREV_FORMAT .= "_openssl-sys2"
+SRCREV_openssl-sys2 = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/openssl-sys2"
+SRCREV_FORMAT .= "_openssl2"
+SRCREV_openssl2 = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/openssl2"
+SRCREV_FORMAT .= "_pkcs11"
+SRCREV_pkcs11 = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/pkcs11"
+SRCREV_FORMAT .= "_pkcs11-sys"
+SRCREV_pkcs11-sys = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/pkcs11-sys"
+SRCREV_FORMAT .= "_test-common"
+SRCREV_test-common = "833381accec8d53436cac20fc3fb85303e4504eb"
+EXTRA_OECARGO_PATHS += "${WORKDIR}/test-common"
+
+# FIXME: update generateme with the real MD5 of the license file
+LIC_FILES_CHKSUM = " \
+    file://LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \
+    file://THIRDPARTYNOTICES;md5=11604c6170b98c376be25d0ca6989d9b \
+"
+
+SUMMARY = "The iotedge tool is used to manage the IoT Edge runtime."
+HOMEPAGE = "https://aka.ms/iotedge"
+LICENSE = "MIT"
+
+# includes this file if it exists but does not fail
+# this is useful for anything you may want to override from
+# what cargo-bitbake generates.
+include iotedge-${PV}.inc
+include iotedge.inc
 
 SRC_URI[addr2line-0.20.0.sha256sum] = "f4fa78e18c64fce05e902adecd7a5eed15a5e0a3439f7b0e169f0252214865e3"
 SRC_URI[adler-1.0.2.sha256sum] = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
@@ -475,8 +569,6 @@ SRC_URI[utf8parse-0.2.1.sha256sum] = "711b9620af191e0cdc7468a8d14e709c3dcdb115b3
 SRC_URI[vcpkg-0.2.15.sha256sum] = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 SRC_URI[version_check-0.9.4.sha256sum] = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 SRC_URI[want-0.3.1.sha256sum] = "bfa7760aed19e106de2c7c0b581b509f2f25d3dacaf737cb82ac61bc6d760b0e"
-SRC_URI[wasi-0.10.0+wasi-snapshot-preview1.sha256sum] = "1a143597ca7c7793eff794def352d41792a93c481eb1042423ff7ff72ba2c31f"
-SRC_URI[wasi-0.11.0+wasi-snapshot-preview1.sha256sum] = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
 SRC_URI[wasm-bindgen-backend-0.2.87.sha256sum] = "5ef2b6d3c510e9625e5fe6f509ab07d66a760f0885d858736483c32ed7809abd"
 SRC_URI[wasm-bindgen-macro-support-0.2.87.sha256sum] = "54681b18a46765f095758388f2d0cf16eb8d4169b639ab575a8f5693af210c7b"
 SRC_URI[wasm-bindgen-macro-0.2.87.sha256sum] = "dee495e55982a3bd48105a7b947fd2a9b4a8ae3010041b9e0faab3f9cd028f1d"
@@ -500,96 +592,6 @@ SRC_URI[winnow-0.5.12.sha256sum] = "83817bbecf72c73bad717ee86820ebf286203d2e04c3
 SRC_URI[yaml-rust-0.4.5.sha256sum] = "56c1936c4cc7a1c9ab21a1ebb602eb942ba868cbd44a99cb7cdc5892335e1c85"
 SRC_URI[zip-0.6.6.sha256sum] = "760394e246e4c28189f19d488c058bf16f564016aefac5d32bb1f3b51d5e9261"
 
-SRCREV_FORMAT .= "_aziot-cert-client-async"
-SRCREV_aziot-cert-client-async = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/cert/aziot-cert-client-async"
-SRCREV_FORMAT .= "_aziot-cert-common-http"
-SRCREV_aziot-cert-common-http = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/cert/aziot-cert-common-http"
-SRCREV_FORMAT .= "_aziot-certd-config"
-SRCREV_aziot-certd-config = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/cert/aziot-certd-config"
-SRCREV_FORMAT .= "_aziot-identity-client-async"
-SRCREV_aziot-identity-client-async = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/identity/aziot-identity-client-async"
-SRCREV_FORMAT .= "_aziot-identity-common"
-SRCREV_aziot-identity-common = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/identity/aziot-identity-common"
-SRCREV_FORMAT .= "_aziot-identity-common-http"
-SRCREV_aziot-identity-common-http = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/identity/aziot-identity-common-http"
-SRCREV_FORMAT .= "_aziot-identityd-config"
-SRCREV_aziot-identityd-config = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/identity/aziot-identityd-config"
-SRCREV_FORMAT .= "_aziot-key-client"
-SRCREV_aziot-key-client = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/key/aziot-key-client"
-SRCREV_FORMAT .= "_aziot-key-client-async"
-SRCREV_aziot-key-client-async = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/key/aziot-key-client-async"
-SRCREV_FORMAT .= "_aziot-key-common"
-SRCREV_aziot-key-common = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/key/aziot-key-common"
-SRCREV_FORMAT .= "_aziot-key-common-http"
-SRCREV_aziot-key-common-http = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/key/aziot-key-common-http"
-SRCREV_FORMAT .= "_aziot-key-openssl-engine"
-SRCREV_aziot-key-openssl-engine = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/key/aziot-key-openssl-engine"
-SRCREV_FORMAT .= "_aziot-keyd-config"
-SRCREV_aziot-keyd-config = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/key/aziot-keyd-config"
-SRCREV_FORMAT .= "_aziot-keys-common"
-SRCREV_aziot-keys-common = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/key/aziot-keys-common"
-SRCREV_FORMAT .= "_aziot-tpmd-config"
-SRCREV_aziot-tpmd-config = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/tpm/aziot-tpmd-config"
-SRCREV_FORMAT .= "_aziotctl-common"
-SRCREV_aziotctl-common = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/aziotctl/aziotctl-common"
-SRCREV_FORMAT .= "_cert-renewal"
-SRCREV_cert-renewal = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/cert/cert-renewal"
-SRCREV_FORMAT .= "_config-common"
-SRCREV_config-common = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/config-common"
-SRCREV_FORMAT .= "_http-common"
-SRCREV_http-common = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/http-common"
-SRCREV_FORMAT .= "_logger"
-SRCREV_logger = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/logger"
-SRCREV_FORMAT .= "_openssl-build"
-SRCREV_openssl-build = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/openssl-build"
-SRCREV_FORMAT .= "_openssl-sys2"
-SRCREV_openssl-sys2 = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/openssl-sys2"
-SRCREV_FORMAT .= "_openssl2"
-SRCREV_openssl2 = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/openssl2"
-SRCREV_FORMAT .= "_pkcs11"
-SRCREV_pkcs11 = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/pkcs11/pkcs11"
-SRCREV_FORMAT .= "_pkcs11-sys"
-SRCREV_pkcs11-sys = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/pkcs11/pkcs11-sys"
-SRCREV_FORMAT .= "_test-common"
-SRCREV_test-common = "b9fff6b2fdf9c1593a5a0b7e856a5f01c2c5ad5b"
-EXTRA_OECARGO_PATHS += "${WORKDIR}/test-common"
-
-LIC_FILES_CHKSUM = " \
-    file://LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \
-    file://THIRDPARTYNOTICES;md5=11604c6170b98c376be25d0ca6989d9b \
-"
-
-SUMMARY = "The iotedge tool is used to manage the IoT Edge runtime."
-HOMEPAGE = "https://aka.ms/iotedge"
-LICENSE = "MIT"
-
-# includes this file if it exists but does not fail
-# this is useful for anything you may want to override from
-# what cargo-bitbake generates.
-include iotedge-${PV}.inc
-include iotedge.inc
+# Checksums fetched from crates.io
+SRC_URI[wasi-0.10.0+wasi-snapshot-preview1.sha256sum] = "1a143597ca7c7793eff794def352d41792a93c481eb1042423ff7ff72ba2c31f"
+SRC_URI[wasi-0.11.0+wasi-snapshot-preview1.sha256sum] = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
