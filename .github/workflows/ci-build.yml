@@ -58,7 +58,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Fix permissions for build user
-        run: chown -R builder:builder "${GITHUB_WORKSPACE}"
+        run: |
+          chown -R builder:builder "${GITHUB_WORKSPACE}"
+          # Mark workspace as safe for git operations by any user
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Prepare cache directories
         run: |
