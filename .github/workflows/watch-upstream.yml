@@ -198,7 +198,7 @@ jobs:
       - name: Update recipes
         env:
           IOTEDGE_UPDATE: ${{ needs.check-upstream.outputs.iotedge_update }}
-          IOTEDGE_VERSION: ${{ needs.check-upstream.outputs.iotedge_version }}
+          RELEASE_VERSION: ${{ needs.check-upstream.outputs.release_version }}
           IOTEDGE_SHA: ${{ needs.check-upstream.outputs.iotedge_sha }}
           IIS_UPDATE: ${{ needs.check-upstream.outputs.iis_update }}
           IIS_VERSION: ${{ needs.check-upstream.outputs.iis_version }}
@@ -215,8 +215,9 @@ jobs:
               find "recipes-core/${dir}" -name "*_*.bb" -type f -delete 2>/dev/null || true
               find "recipes-core/${dir}" -name "*-[0-9]*.inc" -type f -delete 2>/dev/null || true
             done
-            echo "Updating IoT Edge to ${IOTEDGE_VERSION} (${IOTEDGE_SHA})"
-            args+=(--iotedge-rev "${IOTEDGE_SHA}" --iotedge-version "${IOTEDGE_VERSION}")
+            # Use release version for package name, but daemon SHA for source code
+            echo "Updating IoT Edge to ${RELEASE_VERSION} (source from ${IOTEDGE_SHA})"
+            args+=(--iotedge-rev "${IOTEDGE_SHA}" --iotedge-version "${RELEASE_VERSION}")
           fi
           
           if [[ "${IIS_UPDATE}" == "true" ]]; then
@@ -260,13 +261,13 @@ jobs:
             This PR was automatically created by the upstream release watcher.
             
             ### Versions
-            | Component | Current | Target |
-            |-----------|---------|--------|
-            | **Release** | - | **${{ needs.check-upstream.outputs.release_version }}** |
-            | IoT Edge daemon | see deleted files | ${{ needs.check-upstream.outputs.iotedge_version || 'unchanged' }} |
-            | IoT Identity Service | see deleted files | ${{ needs.check-upstream.outputs.iis_version || 'unchanged' }} |
+            | Component | Target | Source Code From |
+            |-----------|--------|------------------|
+            | **Package Version** | **${{ needs.check-upstream.outputs.release_version }}** | - |
+            | IoT Edge daemon | ${{ needs.check-upstream.outputs.release_version }} | ${{ needs.check-upstream.outputs.iotedge_version }} |
+            | IoT Identity Service | ${{ needs.check-upstream.outputs.iis_version }} | ${{ needs.check-upstream.outputs.iis_version }} |
             
-            > **Note:** The release version (${{ needs.check-upstream.outputs.release_version }}) may be newer than the daemon version (${{ needs.check-upstream.outputs.iotedge_version }}) if recent releases only updated Docker images.
+            > **Note:** Package version matches Azure's latest release (${{ needs.check-upstream.outputs.release_version }}). The daemon source code comes from ${{ needs.check-upstream.outputs.iotedge_version }} (last significant update with daemon changes).
             
             ### Validation Checklist
             - [ ] CI build passes
