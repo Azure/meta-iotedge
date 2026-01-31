@@ -15,104 +15,54 @@ permissions:
   packages: read
 
 jobs:
-  build-and-release:
-    name: Build and release
+  # Call the CI workflow to build and validate
+  build:
+    name: Build and validate
+    uses: ./.github/workflows/ci-build.yml
+    with:
+      ref: ${{ inputs.tag || github.ref }}
+      skip_qemu: false
+    secrets: inherit
+
+  # Create release after successful build and validation
+  release:
+    name: Create release
+    needs: build
     runs-on: ubuntu-22.04
-    timeout-minutes: 360
-    container:
-      image: ghcr.io/${{ github.repository_owner }}/meta-iotedge-devcontainer:scarthgap
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-      options: --user root
-    env:
-      BB_SERVER_TIMEOUT: "600"
-      BB_COMMAND_TIMEOUT: "300"
-      DEVCONTAINER: "1"
-      YOCTO_CACHE_DIR: /workspaces/yocto-cache
-      TEMPLATE: scarthgap
     steps:
-      - name: Create build user
-        run: useradd -m builder
-
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Download RPM packages
+        uses: actions/download-artifact@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          name: rpm-packages-scarthgap
+          path: release-artifacts/rpm
 
-      - name: Fix permissions
-        run: |
-          chown -R builder:builder "${GITHUB_WORKSPACE}"
-          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
-
-      - name: Prepare cache directories
-        run: |
-          mkdir -p "${YOCTO_CACHE_DIR}/downloads" "${YOCTO_CACHE_DIR}/sstate-cache"
-          chown -R builder:builder "${YOCTO_CACHE_DIR}"
-
-      - name: Restore sstate cache
-        uses: actions/cache/restore@v4
+      - name: Download QEMU image
+        uses: actions/download-artifact@v4
         with:
-          path: sstate-cache.tar.zst
-          key: yocto-sstate-${{ env.TEMPLATE }}-
-          restore-keys: |
-            yocto-sstate-${{ env.TEMPLATE }}-
+          name: iotedge-qemu-image-scarthgap
+          path: release-artifacts/qemu
 
-      - name: Restore downloads cache
-        uses: actions/cache/restore@v4
-        with:
-          path: downloads.tar.zst
-          key: yocto-downloads-
-          restore-keys: |
-            yocto-downloads-
-
-      - name: Decompress caches
-        run: |
-          if [[ -f sstate-cache.tar.zst ]]; then
-            tar -I 'zstd -T0 -d' -xf sstate-cache.tar.zst -C "${YOCTO_CACHE_DIR}/"
-            rm sstate-cache.tar.zst
-          fi
-          if [[ -f downloads.tar.zst ]]; then
-            tar -I 'zstd -T0 -d' -xf downloads.tar.zst -C "${YOCTO_CACHE_DIR}/"
-            rm downloads.tar.zst
-          fi
-
-      - name: Fix cache permissions
-        run: chown -R builder:builder "${YOCTO_CACHE_DIR}"
-
-      - name: Fetch layers
-        run: sudo -E -u builder ./scripts/fetch.sh "${TEMPLATE}"
-
-      - name: Build packages
-        run: sudo -E -u builder ./scripts/build.sh "${TEMPLATE}"
-
-      - name: Build QEMU image
-        run: sudo -E -u builder ./scripts/bitbake.sh iotedge-qemu-image
-
-      - name: Collect release artifacts
+      - name: Prepare release artifacts
         id: artifacts
         run: |
-          mkdir -p release-artifacts
+          mkdir -p final-artifacts
           
-          # Find and copy RPM packages
-          find build/tmp/deploy/rpm -name "*.rpm" -exec cp {} release-artifacts/ \; 2>/dev/null || true
+          # Flatten RPM packages
+          find release-artifacts/rpm -name "*.rpm" -exec cp {} final-artifacts/ \;
           
-          # Copy QEMU image files
-          DEPLOY_DIR="build/tmp/deploy/images/qemux86-64"
-          if [[ -d "${DEPLOY_DIR}" ]]; then
-            # Compress the rootfs
-            if [[ -f "${DEPLOY_DIR}/iotedge-qemu-image-qemux86-64.rootfs.ext4" ]]; then
-              zstd -T0 -19 "${DEPLOY_DIR}/iotedge-qemu-image-qemux86-64.rootfs.ext4" -o release-artifacts/iotedge-qemu-image-qemux86-64.rootfs.ext4.zst
-            fi
-            # Copy kernel
-            cp "${DEPLOY_DIR}/bzImage" release-artifacts/ 2>/dev/null || true
+          # Compress QEMU rootfs
+          if [[ -f release-artifacts/qemu/iotedge-qemu-image-qemux86-64.rootfs.ext4 ]]; then
+            zstd -T0 -19 release-artifacts/qemu/iotedge-qemu-image-qemux86-64.rootfs.ext4 \
+              -o final-artifacts/iotedge-qemu-image-qemux86-64.rootfs.ext4.zst
           fi
           
-          # List artifacts
-          echo "Release artifacts:"
-          ls -la release-artifacts/
+          # Copy kernel
+          cp release-artifacts/qemu/bzImage final-artifacts/ 2>/dev/null || true
           
-          # Get version from tag (no 'v' prefix, matches upstream)
+          echo "Release artifacts:"
+          ls -la final-artifacts/
+          
+          # Get version from tag
           VERSION="${{ inputs.tag || github.ref_name }}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
@@ -124,8 +74,7 @@ jobs:
           draft: false
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') }}
           generate_release_notes: true
-          files: |
-            release-artifacts/*
+          files: final-artifacts/*
           body: |
             ## Azure IoT Edge Yocto Layer Release
             
@@ -153,4 +102,4 @@ jobs:
             ```
             
             ### Building from Source
-            See [README.md](https://github.com/Azure/meta-iotedge#readme) for build instructions.
+            See the repository [README](https://github.com/${{ github.repository }}#readme) for build instructions.

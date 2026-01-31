@@ -15,6 +15,20 @@ on:
         description: "Skip QEMU validation (faster, packages only)"
         type: boolean
         default: false
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to checkout (tag or branch)"
+        type: string
+        required: false
+      skip_qemu:
+        description: "Skip QEMU validation"
+        type: boolean
+        default: false
+    outputs:
+      template:
+        description: "Template used for build"
+        value: ${{ jobs.setup.outputs.template }}
 
 permissions:
   contents: read
@@ -70,6 +84,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || '' }}
 
       - name: Fix permissions
         run: |
@@ -126,6 +142,14 @@ jobs:
         id: build
         run: sudo -E -u builder ./scripts/build.sh "${TEMPLATE}"
 
+      - name: Upload RPM packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm-packages-${{ env.TEMPLATE }}
+          path: build/tmp/deploy/rpm/**/*.rpm
+          retention-days: 7
+          if-no-files-found: warn
+
       # Compress and save caches (only on push to main/kirkstone)
       - name: Compress caches
         if: always() && github.event_name == 'push'
@@ -181,6 +205,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || '' }}
 
       - name: Fix permissions
         run: |
