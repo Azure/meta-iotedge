@@ -104,7 +104,6 @@ jobs:
                                           releaseBody.toLowerCase().includes('iotedge daemon');
                 const hasOnlyDockerChanges = releaseBody.toLowerCase().includes('docker') &&
                                              !hasEdgeletChanges;
-                                             !hasEdgeletChanges;
                 
                 if (hasOnlyDockerChanges) {
                   console.log('Release appears to only contain Docker image updates - marking as not significant');
@@ -181,15 +180,6 @@ jobs:
       - name: Fix git permissions
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
-      - name: Clean up old recipe versions
-        run: |
-          echo "Removing old version-specific recipe files..."
-          # Remove version-specific .bb and .inc files (keep base .inc and files/)
-          find recipes-core -name "*_*.bb" -type f -delete
-          find recipes-core -name "*-[0-9]*.inc" -type f -delete
-          echo "Remaining files:"
-          find recipes-core -type f | grep -v files/ | sort
-
       - name: Update recipes
         env:
           IOTEDGE_UPDATE: ${{ needs.check-upstream.outputs.iotedge_update }}
@@ -202,19 +192,38 @@ jobs:
           set -euo pipefail
           args=()
           
+          # Only clean up recipes for components being updated
           if [[ "${IOTEDGE_UPDATE}" == "true" ]]; then
+            echo "Cleaning up old IoT Edge recipes..."
+            # iotedge and aziot-edged are both IoT Edge components
+            for dir in iotedge aziot-edged; do
+              find "recipes-core/${dir}" -name "*_*.bb" -type f -delete 2>/dev/null || true
+              find "recipes-core/${dir}" -name "*-[0-9]*.inc" -type f -delete 2>/dev/null || true
+            done
             echo "Updating IoT Edge to ${IOTEDGE_VERSION} (${IOTEDGE_SHA})"
             args+=(--iotedge-rev "${IOTEDGE_SHA}" --iotedge-version "${IOTEDGE_VERSION}")
           fi
           
           if [[ "${IIS_UPDATE}" == "true" ]]; then
+            echo "Cleaning up old IIS recipes..."
+            # aziotd, aziotctl, aziot-keys are IIS components
+            for dir in aziotd aziotctl aziot-keys; do
+              find "recipes-core/${dir}" -name "*_*.bb" -type f -delete 2>/dev/null || true
+              find "recipes-core/${dir}" -name "*-[0-9]*.inc" -type f -delete 2>/dev/null || true
+            done
             echo "Updating IIS to ${IIS_VERSION} (${IIS_SHA})"
             args+=(--iis-rev "${IIS_SHA}" --iis-version "${IIS_VERSION}")
           fi
           
+          echo "Remaining recipe files before update:"
+          find recipes-core -name "*.bb" -o -name "*.inc" | grep -v files/ | sort || true
+          
           if [[ ${#args[@]} -gt 0 ]]; then
             ./scripts/update-recipes.sh "${args[@]}"
           fi
+          
+          echo "Recipe files after update:"
+          find recipes-core -name "*.bb" -o -name "*.inc" | grep -v files/ | sort
 
       - name: Create pull request
         uses: peter-evans/create-pull-request@v6
