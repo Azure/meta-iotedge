@@ -9,7 +9,7 @@ Most of the release process is automated. Here's how it works:
 ```mermaid
 flowchart TD
     subgraph Automated["🤖 Fully Automated"]
-        A[New IoT Edge release<br/>on Azure/iotedge] -->|Daily check| B{watch-upstream.yml}
+        A[New IoT Edge release<br/>on Azure/azure-iotedge] -->|Daily check| B{watch-upstream.yml}
         B -->|Daemon changes| C[Clean old recipes<br/>Generate new ones]
         B -->|Docker-only| D[Create info issue<br/>no action needed]
         C --> C2[Create PR]
@@ -29,7 +29,7 @@ flowchart TD
     
     subgraph Release["🤖 Fully Automated"]
         K --> L[release.yml runs]
-        L --> M[Build packages + QEMU]
+        L --> M[Reuses ci-build.yml<br/>Build + QEMU validation]
         M --> N[Publish GitHub Release<br/>with RPMs & image]
     end
     
@@ -53,8 +53,9 @@ flowchart TD
 
 ### Version management
 
+- **Release version vs Daemon version**: The release tag (e.g., 1.5.35) matches Azure's latest release, but the daemon code may be from an earlier version (e.g., 1.5.21) if recent releases only updated Docker images.
 - **Old recipes are automatically removed** when updating to a new version
-- **Git tags preserve history** - to get old recipes, checkout the tag: `git checkout v1.5.5`
+- **Git tags preserve history** - to get old recipes, checkout the tag: `git checkout 1.5.5`
 - **GitHub Releases** contain pre-built RPMs and QEMU images for each version
 
 ## Current versions
@@ -251,10 +252,11 @@ with the desired SHAs and versions.
 The workflow in [.github/workflows/watch-upstream.yml](../.github/workflows/watch-upstream.yml)
 runs daily and automatically:
 
-1. Checks for new releases in [Azure/iotedge](https://github.com/Azure/iotedge) and [Azure/iot-identity-service](https://github.com/Azure/iot-identity-service)
-2. Compares with current versions in this file
-3. **If significant changes** (edgelet/daemon updates): Creates a PR with updated recipes
-4. **If Docker-only changes**: Creates an informational issue (no recipe update needed)
+1. Checks for new releases in [Azure/azure-iotedge](https://github.com/Azure/azure-iotedge/releases) (the combined release repo)
+2. Extracts daemon and IIS versions from release assets (e.g., `aziot-edge-1.5.21-*.rpm`)
+3. Compares with current versions in recipe files (`recipes-core/*/component_*.bb`)
+4. **If significant changes** (daemon/IIS updates): Creates a PR with updated recipes, tagged with latest release version
+5. **If Docker-only changes**: Creates an informational issue suggesting optional tag creation
 
 This means most upstream releases are handled automatically. You just need to review and merge the PRs.
 
@@ -274,11 +276,13 @@ Both checks appear as separate status checks on PRs, so you can see at a glance 
 The workflow in [.github/workflows/release.yml](../.github/workflows/release.yml) automatically creates GitHub releases when you push a tag:
 
 ```bash
-git tag v1.5.34
-git push origin v1.5.34
+git tag 1.5.35
+git push origin 1.5.35
 ```
 
-This builds packages and QEMU image, then publishes them to [GitHub Releases](https://github.com/Azure/meta-iotedge/releases).
+This calls the ci-build workflow (reusing build logic), runs QEMU validation, then publishes artifacts to [GitHub Releases](https://github.com/Azure/meta-iotedge/releases).
+
+> **Note:** Tags use format `1.5.x` (no `v` prefix) to match upstream Azure/iotedge releases.
 
 ## End-to-end release checklist
 
@@ -309,8 +313,8 @@ This builds packages and QEMU image, then publishes them to [GitHub Releases](ht
 
 6. **Tag and release** (after PR merges)
    ```bash
-   git tag v1.5.34
-   git push origin v1.5.34
+   git tag 1.5.35
+   git push origin 1.5.35
    ```
 
 ## Troubleshooting
