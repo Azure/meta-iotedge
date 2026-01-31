@@ -151,6 +151,7 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
     steps:
       - name: Checkout
         uses: actions/checkout@v4
