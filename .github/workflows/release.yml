@@ -13,6 +13,7 @@ on:
 permissions:
   contents: write
   packages: read
+  actions: write  # Required for retry-on-timeout in ci-build.yml
 
 jobs:
   # Call the CI workflow to build and validate
