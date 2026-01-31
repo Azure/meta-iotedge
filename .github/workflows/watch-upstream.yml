@@ -71,18 +71,15 @@ jobs:
               r.tag_name.match(/^1\.5\.\d+$/)
             );
             
-            // Get latest IIS release
-            const iisReleases = await github.rest.repos.listReleases({
+            // Get latest IIS tag (IIS repo uses tags, not releases)
+            const iisTags = await github.rest.repos.listTags({
               owner: 'Azure',
               repo: 'iot-identity-service',
-              per_page: 10
+              per_page: 20
             });
             
-            const latestIis = iisReleases.data.find(r => 
-              !r.prerelease && 
-              !r.draft && 
-              r.tag_name.match(/^1\.5\.\d+$/)
-            );
+            // Find latest 1.5.x tag
+            const latestIisTag = iisTags.data.find(t => t.name.match(/^1\.5\.\d+$/));
             
             let iotedgeUpdate = false;
             let iisUpdate = false;
@@ -124,10 +121,10 @@ jobs:
               }
             }
             
-            // Check IIS
-            if (latestIis) {
-              const latestVersion = latestIis.tag_name;
-              console.log(`🔍 Latest IIS release: ${latestVersion}`);
+            // Check IIS (uses tags, not releases)
+            if (latestIisTag) {
+              const latestVersion = latestIisTag.name;
+              console.log(`🔍 Latest IIS tag: ${latestVersion}`);
               
               // Always output latest IIS version for release notes link
               core.setOutput('latest_iis_version', latestVersion);
@@ -137,14 +134,9 @@ jobs:
                 isSignificant = true;  // IIS updates are always significant
                 console.log(`   ⚠️ IIS update needed: ${currentIis} → ${latestVersion}`);
                 
-                const tagRef = await github.rest.git.getRef({
-                  owner: 'Azure',
-                  repo: 'iot-identity-service',
-                  ref: `tags/${latestVersion}`
-                });
-                
+                // Tag object already has the SHA
                 core.setOutput('iis_version', latestVersion);
-                core.setOutput('iis_sha', tagRef.data.object.sha);
+                core.setOutput('iis_sha', latestIisTag.commit.sha);
               } else {
                 console.log(`   ✅ IIS is up to date`);
               }
