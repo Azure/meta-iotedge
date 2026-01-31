@@ -53,9 +53,12 @@ flowchart TD
 
 | Component | Version | SRCREV |
 |-----------|---------|--------|
-| IoT Edge | 1.5.33 | `e84cdc7bb5b8ba22da4e8f5c35afcf9b9b58f2d2` |
+| IoT Edge | 1.5.5 | `38324d1c707d5e1f848a5fcfb7daa86e5ee49e76` |
 | IoT Identity Service | 1.5.0 | `7a4e1a1fa9a4c2a37c3186c9b7a204ce384b2caa` |
 | Yocto | Scarthgap | 5.0 LTS |
+
+> **Note**: The version detection now reads from actual recipe files in `recipes-core/`, not this table.
+> This table is for documentation purposes only.
 
 ## Quick summary
 

@@ -33,14 +33,28 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            const path = require('path');
             
-            // Read current versions from release.md
-            const releaseDoc = fs.readFileSync('docs/release.md', 'utf8');
-            const currentIotedge = releaseDoc.match(/IoT Edge \| (\d+\.\d+\.\d+)/)?.[1];
-            const currentIis = releaseDoc.match(/IoT Identity Service \| (\d+\.\d+\.\d+)/)?.[1];
+            // Detect current versions from recipe files (most reliable)
+            function getRecipeVersion(recipeDir, prefix) {
+              const files = fs.readdirSync(recipeDir).filter(f => f.startsWith(prefix + '_') && f.endsWith('.bb'));
+              if (files.length === 0) return null;
+              // Get highest version
+              const versions = files.map(f => f.replace(prefix + '_', '').replace('.bb', ''));
+              versions.sort((a, b) => {
+                const [aMaj, aMin, aPatch] = a.split('.').map(Number);
+                const [bMaj, bMin, bPatch] = b.split('.').map(Number);
+                return (bMaj - aMaj) || (bMin - aMin) || (bPatch - aPatch);
+              });
+              return versions[0];
+            }
             
-            console.log(`Current IoT Edge: ${currentIotedge}`);
-            console.log(`Current IIS: ${currentIis}`);
+            const currentIotedge = getRecipeVersion('recipes-core/iotedge', 'iotedge');
+            const currentIis = getRecipeVersion('recipes-core/aziotd', 'aziotd');  // IIS version from aziotd
+            
+            console.log(`📋 Current versions from recipes:`);
+            console.log(`   IoT Edge (iotedge): ${currentIotedge || 'not found'}`);
+            console.log(`   IoT Identity Service (aziotd): ${currentIis || 'not found'}`);
             
             // Get latest IoT Edge release
             const iotedgeReleases = await github.rest.repos.listReleases({
@@ -76,7 +90,7 @@ jobs:
             // Check IoT Edge
             if (latestIotedge) {
               const latestVersion = latestIotedge.tag_name;
-              console.log(`Latest IoT Edge release: ${latestVersion}`);
+              console.log(`🔍 Latest IoT Edge release: ${latestVersion}`);
               
               if (latestVersion !== currentIotedge) {
                 iotedgeUpdate = true;
@@ -88,6 +102,7 @@ jobs:
                                           releaseBody.toLowerCase().includes('aziot-edged') ||
                                           releaseBody.toLowerCase().includes('iotedge daemon');
                 const hasOnlyDockerChanges = releaseBody.toLowerCase().includes('docker') &&
+                                             !hasEdgeletChanges;
                                              !hasEdgeletChanges;
                 
                 if (hasOnlyDockerChanges) {
@@ -112,11 +127,12 @@ jobs:
             // Check IIS
             if (latestIis) {
               const latestVersion = latestIis.tag_name;
-              console.log(`Latest IIS release: ${latestVersion}`);
+              console.log(`🔍 Latest IIS release: ${latestVersion}`);
               
               if (latestVersion !== currentIis) {
                 iisUpdate = true;
                 isSignificant = true;  // IIS updates are always significant
+                console.log(`   ⚠️ IIS update needed: ${currentIis} → ${latestVersion}`);
                 
                 const tagRef = await github.rest.git.getRef({
                   owner: 'Azure',
@@ -126,6 +142,8 @@ jobs:
                 
                 core.setOutput('iis_version', latestVersion);
                 core.setOutput('iis_sha', tagRef.data.object.sha);
+              } else {
+                console.log(`   ✅ IIS is up to date`);
               }
             }
             
