@@ -37,11 +37,13 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            const path = require('path');
             
             // Detect current versions from recipe files
             function getRecipeVersion(recipeDir, prefix) {
               try {
-                const files = fs.readdirSync(recipeDir).filter(f => f.startsWith(prefix + '_') && f.endsWith('.bb'));
+                const fullPath = path.join(process.env.GITHUB_WORKSPACE, recipeDir);
+                const files = fs.readdirSync(fullPath).filter(f => f.startsWith(prefix + '_') && f.endsWith('.bb'));
                 if (files.length === 0) return null;
                 const versions = files.map(f => f.replace(prefix + '_', '').replace('.bb', ''));
                 versions.sort((a, b) => {
@@ -50,7 +52,10 @@ jobs:
                   return (bMaj - aMaj) || (bMin - aMin) || (bPatch - aPatch);
                 });
                 return versions[0];
-              } catch { return null; }
+              } catch (e) { 
+                console.log(`   Error reading ${recipeDir}: ${e.message}`);
+                return null; 
+              }
             }
             
             const currentIotedge = getRecipeVersion('recipes-core/iotedge', 'iotedge');
