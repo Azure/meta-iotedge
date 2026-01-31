@@ -10,9 +10,10 @@ Most of the release process is automated. Here's how it works:
 flowchart TD
     subgraph Automated["🤖 Fully Automated"]
         A[New IoT Edge release<br/>on Azure/iotedge] -->|Daily check| B{watch-upstream.yml}
-        B -->|Daemon changes| C[Create PR with<br/>updated recipes]
+        B -->|Daemon changes| C[Clean old recipes<br/>Generate new ones]
         B -->|Docker-only| D[Create info issue<br/>no action needed]
-        C --> E[ci-build.yml runs]
+        C --> C2[Create PR]
+        C2 --> E[ci-build.yml runs]
         E --> F[Build packages<br/>~4 hours]
         E --> G[QEMU validation<br/>~30 min]
     end
@@ -22,8 +23,8 @@ flowchart TD
         G --> H
         H -->|Yes| I[Review & merge PR]
         H -->|No| J[Debug & fix recipes]
-        J --> C
-        I --> K[Create git tag<br/>git tag v1.5.x]
+        J --> C2
+        I --> K[Create git tag]
     end
     
     subgraph Release["🤖 Fully Automated"]
@@ -39,15 +40,22 @@ flowchart TD
 
 ### What on-call needs to do
 
-1. **Wait for automated PR** - watch-upstream.yml creates it automatically
+1. **Wait for automated PR** - watch-upstream.yml creates it automatically (daily at 6:00 UTC)
 2. **Check CI status** - Both "Build packages" and "QEMU validation" should pass
 3. **Merge the PR** - Click merge after CI passes
-4. **Tag the release**:
+4. **Tag the release** (the PR description includes the exact commands):
    ```bash
+   git pull origin main
    git tag v1.5.35
    git push origin v1.5.35
    ```
 5. **Verify release** - Check [GitHub Releases](https://github.com/Azure/meta-iotedge/releases)
+
+### Version management
+
+- **Old recipes are automatically removed** when updating to a new version
+- **Git tags preserve history** - to get old recipes, checkout the tag: `git checkout v1.5.5`
+- **GitHub Releases** contain pre-built RPMs and QEMU images for each version
 
 ## Current versions
 

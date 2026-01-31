@@ -177,6 +177,15 @@ jobs:
       - name: Fix git permissions
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
+      - name: Clean up old recipe versions
+        run: |
+          echo "Removing old version-specific recipe files..."
+          # Remove version-specific .bb and .inc files (keep base .inc and files/)
+          find recipes-core -name "*_*.bb" -type f -delete
+          find recipes-core -name "*-[0-9]*.inc" -type f -delete
+          echo "Remaining files:"
+          find recipes-core -type f | grep -v files/ | sort
+
       - name: Update recipes
         env:
           IOTEDGE_UPDATE: ${{ needs.check-upstream.outputs.iotedge_update }}
@@ -225,17 +234,25 @@ jobs:
             ### Changes
             | Component | Previous | New |
             |-----------|----------|-----|
-            | IoT Edge | (check release.md) | ${{ needs.check-upstream.outputs.iotedge_version || 'unchanged' }} |
-            | IoT Identity Service | (check release.md) | ${{ needs.check-upstream.outputs.iis_version || 'unchanged' }} |
+            | IoT Edge | see deleted files | ${{ needs.check-upstream.outputs.iotedge_version || 'unchanged' }} |
+            | IoT Identity Service | see deleted files | ${{ needs.check-upstream.outputs.iis_version || 'unchanged' }} |
             
-            ### Validation
+            ### Validation Checklist
             - [ ] CI build passes
             - [ ] QEMU validation passes
-            - [ ] Recipe parsing succeeds
+            
+            ### After Merging
+            Create a release by running:
+            ```bash
+            git pull origin main
+            git tag v${{ needs.check-upstream.outputs.iotedge_version }}
+            git push origin v${{ needs.check-upstream.outputs.iotedge_version }}
+            ```
+            This will trigger the [release workflow](../actions/workflows/release.yml) to build and publish packages.
             
             ### Release Notes
-            - [IoT Edge releases](https://github.com/Azure/iotedge/releases)
-            - [IoT Identity Service releases](https://github.com/Azure/iot-identity-service/releases)
+            - [IoT Edge ${{ needs.check-upstream.outputs.iotedge_version }}](https://github.com/Azure/iotedge/releases/tag/${{ needs.check-upstream.outputs.iotedge_version }})
+            - [IoT Identity Service ${{ needs.check-upstream.outputs.iis_version }}](https://github.com/Azure/iot-identity-service/releases/tag/${{ needs.check-upstream.outputs.iis_version }})
 
   notify-docker-only:
     name: Notify Docker-only update
