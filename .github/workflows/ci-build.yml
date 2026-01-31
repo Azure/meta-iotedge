@@ -48,7 +48,8 @@ jobs:
       BB_SERVER_TIMEOUT: "600"
       BB_COMMAND_TIMEOUT: "300"
       DEVCONTAINER: "1"
-      YOCTO_CACHE_DIR: ${{ github.workspace }}/.yocto-cache
+      # Use same path as devcontainer.json/local.conf.sample for consistency
+      YOCTO_CACHE_DIR: /workspaces/yocto-cache
     steps:
       - name: Create build user
         run: useradd -m builder
