@@ -53,9 +53,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Create build user and fix permissions
+        run: |
+          useradd -m builder
+          chown -R builder:builder "${{ github.workspace }}"
+
       - name: Prepare cache directories
         run: |
           mkdir -p "${YOCTO_CACHE_DIR}/downloads" "${YOCTO_CACHE_DIR}/sstate-cache"
+          chown -R builder:builder "${YOCTO_CACHE_DIR}"
 
       - name: Fetch + Build + (Optional) QEMU validation
         env:
@@ -63,8 +69,8 @@ jobs:
         run: |
           set -euo pipefail
           template="${{ inputs.template || 'scarthgap' }}"
-          ./scripts/fetch.sh "${template}"
-          ./scripts/build.sh "${template}"
+          sudo -u builder ./scripts/fetch.sh "${template}"
+          sudo -u builder ./scripts/build.sh "${template}"
           if [[ "${RUN_QEMU}" == "true" ]]; then
-            ./scripts/validate-qemu.sh "${template}"
+            sudo -u builder ./scripts/validate-qemu.sh "${template}"
           fi
