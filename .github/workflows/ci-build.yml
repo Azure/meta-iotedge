@@ -68,7 +68,36 @@ jobs:
           mkdir -p "${YOCTO_CACHE_DIR}/downloads" "${YOCTO_CACHE_DIR}/sstate-cache"
           chown -R builder:builder "${YOCTO_CACHE_DIR}"
 
+      # Restore Yocto sstate-cache to accelerate builds
+      # Uses branch-specific key with fallback to main branch cache
+      - name: Restore sstate-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: /workspaces/yocto-cache/sstate-cache
+          key: yocto-sstate-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            yocto-sstate-${{ github.ref_name }}-
+            yocto-sstate-main-
+            yocto-sstate-
+
+      # Restore Yocto downloads cache to avoid re-downloading sources
+      - name: Restore downloads cache
+        uses: actions/cache/restore@v4
+        with:
+          path: /workspaces/yocto-cache/downloads
+          key: yocto-downloads-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            yocto-downloads-${{ github.ref_name }}-
+            yocto-downloads-main-
+            yocto-downloads-
+
+      - name: Fix cache permissions
+        run: chown -R builder:builder "${YOCTO_CACHE_DIR}"
+
+      # Timeout set to 330 minutes (5.5 hours) to allow cache save steps
+      # to complete before GitHub's 6-hour job limit cancels the workflow
       - name: Fetch + Build + (Optional) QEMU validation
+        timeout-minutes: 330
         env:
           RUN_QEMU: ${{ inputs.run_qemu || 'false' }}
         run: |
@@ -79,3 +108,19 @@ jobs:
           if [[ "${RUN_QEMU}" == "true" ]]; then
             sudo -E -u builder ./scripts/validate-qemu.sh "${template}"
           fi
+
+      # Always save caches after build (even on failure) to preserve progress
+      # Using unique key with run_id ensures cache is always saved as new entry
+      - name: Save sstate-cache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: /workspaces/yocto-cache/sstate-cache
+          key: yocto-sstate-${{ github.ref_name }}-${{ github.run_id }}
+
+      - name: Save downloads cache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: /workspaces/yocto-cache/downloads
+          key: yocto-downloads-${{ github.ref_name }}-${{ github.run_id }}
