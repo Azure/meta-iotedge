@@ -328,10 +328,9 @@ jobs:
 No recipe updates are needed since the daemon binaries haven't changed.
 
 However, you may want to create a new release tag to stay in sync with upstream:
-\`\`\`bash
-git tag ${releaseVersion}
-git push origin ${releaseVersion}
-\`\`\`
+
+    git tag ${releaseVersion}
+    git push origin ${releaseVersion}
 
 This issue is for tracking purposes only. Close it once acknowledged.
 
