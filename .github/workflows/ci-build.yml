@@ -41,6 +41,7 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
     env:
       # Increase these to reduce client-side BitBake timeouts during server startup.
       # Note: BB_COMMAND_TIMEOUT must also be whitelisted in BitBake env passthrough.
