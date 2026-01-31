@@ -267,12 +267,12 @@ jobs:
             ### Release Notes
             - [Azure IoT Edge ${{ needs.check-upstream.outputs.release_version }}](https://github.com/Azure/azure-iotedge/releases/tag/${{ needs.check-upstream.outputs.release_version }})
 
-  # Notify when recipes are at daemon version but there's a newer Docker-only release
+  # Notify when recipes are current (daemon + IIS) but there's a newer Docker-only release
   notify-docker-only:
     name: Notify Docker-only update
     needs: check-upstream
-    # Notify if: no significant update needed AND recipe is behind release version
-    # This means recipe is at daemon version but a newer Docker-only release exists
+    # Notify if: no significant update (daemon or IIS) AND recipe is behind release version
+    # This means only Docker images changed, not the daemon or IIS binaries
     if: |
       needs.check-upstream.outputs.is_significant != 'true' &&
       needs.check-upstream.outputs.current_iotedge != needs.check-upstream.outputs.release_version
