@@ -10,8 +10,7 @@ Most of the release process is automated. Here's how it works:
 flowchart TD
     subgraph Automated["🤖 Fully Automated"]
         A[New IoT Edge release<br/>on Azure/azure-iotedge] -->|Daily check| B{watch-upstream.yml}
-        B -->|Daemon changes| C[Clean old recipes<br/>Generate new ones]
-        B -->|Docker-only| D[Create info issue<br/>no action needed]
+        B -->|New version| C[Clean old recipes<br/>Generate new ones]
         C --> C2[Create PR]
         C2 --> E[ci-build.yml runs]
         E --> F[Build packages<br/>~4 hours]
@@ -53,7 +52,8 @@ flowchart TD
 
 ### Version management
 
-- **Release version vs Daemon version**: The release tag (e.g., 1.5.35) matches Azure's latest release, but the daemon code may be from an earlier version (e.g., 1.5.21) if recent releases only updated Docker images.
+- **Version source**: [Azure/azure-iotedge](https://github.com/Azure/azure-iotedge/releases) combined releases
+- **Source code**: Tags from [Azure/iotedge](https://github.com/Azure/iotedge/tags) (all releases, including Docker-only, have matching tags)
 - **Old recipes are automatically removed** when updating to a new version
 - **Git tags preserve history** - to get old recipes, checkout the tag: `git checkout 1.5.5`
 - **GitHub Releases** contain pre-built RPMs and QEMU images for each version

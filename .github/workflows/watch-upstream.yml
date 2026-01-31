@@ -59,106 +59,62 @@ jobs:
             console.log(`   IoT Identity Service: ${currentIis || 'not found'}`);
             
             // Use Azure/azure-iotedge as the canonical source (combined releases)
-            // This repo tells us which versions go together and if it's a significant update
+            // This tells us which IIS version goes with each Edge release
             const releases = await github.rest.repos.listReleases({
               owner: 'Azure',
               repo: 'azure-iotedge',
-              per_page: 20
+              per_page: 10
             });
             
-            // Find the latest significant 1.5.x release (has daemon changes, not just Docker images)
-            let latestSignificant = null;
-            let latestEdgeVersion = null;
-            let latestIisVersion = null;
-            let latestReleaseVersion = null;  // The overall latest release tag (e.g., 1.5.35)
+            // Find latest stable 1.5.x release
+            const latestRelease = releases.data.find(r => 
+              !r.prerelease && !r.draft && r.tag_name.match(/^1\.5\.\d+$/)
+            );
             
-            for (const release of releases.data) {
-              if (release.prerelease || release.draft) continue;
-              if (!release.tag_name.match(/^1\.5\.\d+$/)) continue;
-              
-              // Track the latest overall release version (first non-prerelease 1.5.x we see)
-              if (!latestReleaseVersion) {
-                latestReleaseVersion = release.tag_name;
-              }
-              
-              const body = release.body || '';
-              
-              // Docker-only releases say "daemon remains at version X"
-              const isDaemonUpdate = body.includes('## aziot-edge') || 
-                                     body.includes('## aziot-identity-service');
-              const isDockerOnly = body.toLowerCase().includes('daemon remains at version');
-              
-              // Extract versions from release assets (most reliable)
-              // Asset names like: aziot-edge-1.5.21-1.el8.x86_64.rpm, aziot-identity-service-1.5.6-1.el8.x86_64.rpm
-              const edgeAsset = release.assets.find(a => a.name.match(/^aziot-edge-[\d.]+-.*\.rpm$/));
-              const iisAsset = release.assets.find(a => a.name.match(/^aziot-identity-service-[\d.]+-.*\.rpm$/));
-              
-              const edgeVer = edgeAsset ? edgeAsset.name.match(/aziot-edge-([\d.]+)-/)?.[1] : null;
-              const iisVer = iisAsset ? iisAsset.name.match(/aziot-identity-service-([\d.]+)-/)?.[1] : null;
-              
-              console.log(`🔍 Release ${release.tag_name}: edge=${edgeVer}, iis=${iisVer}, significant=${isDaemonUpdate && !isDockerOnly}`);
-              
-              // Track latest IIS version we've seen
-              if (iisVer && !latestIisVersion) {
-                latestIisVersion = iisVer;
-              }
-              
-              // Track latest edge version (even Docker-only releases bump this)
-              if (edgeVer && !latestEdgeVersion) {
-                latestEdgeVersion = edgeVer;
-              }
-              
-              // Find the most recent significant update
-              if (!latestSignificant && isDaemonUpdate && !isDockerOnly && edgeVer && iisVer) {
-                latestSignificant = { release, edgeVersion: edgeVer, iisVersion: iisVer };
-              }
-            }
-            
-            // Always output latest IIS version for release notes links
-            core.setOutput('latest_iis_version', latestIisVersion || currentIis);
-            // Output the latest overall release version for tagging
-            core.setOutput('release_version', latestReleaseVersion);
-            
-            console.log(`\n📦 Latest overall release: ${latestReleaseVersion}`);
-            
-            if (!latestSignificant) {
-              console.log('No significant updates found');
+            if (!latestRelease) {
+              console.log('No stable 1.5.x release found');
               core.setOutput('needs_update', false);
-              core.setOutput('is_significant', false);
               return;
             }
             
-            const { release, edgeVersion, iisVersion } = latestSignificant;
-            console.log(`✨ Latest significant release: ${release.tag_name} (daemon code)`);
-            console.log(`   IoT Edge daemon: ${edgeVersion}`);
-            console.log(`   IoT Identity Service: ${iisVersion}`);
+            const releaseVersion = latestRelease.tag_name;
+            console.log(`🔍 Latest release: ${releaseVersion}`);
             
+            // Extract IIS version from release assets
+            const iisAsset = latestRelease.assets.find(a => a.name.match(/^aziot-identity-service-[\d.]+-.*\.rpm$/));
+            const iisVersion = iisAsset ? iisAsset.name.match(/aziot-identity-service-([\d.]+)-/)?.[1] : null;
+            
+            console.log(`   IoT Edge: ${releaseVersion}`);
+            console.log(`   IIS (from assets): ${iisVersion}`);
+            
+            // Output versions for release notes
+            core.setOutput('release_version', releaseVersion);
+            core.setOutput('latest_iis_version', iisVersion || currentIis);
+            
+            // Check if we need to update
             let needsUpdate = false;
             let iotedgeUpdate = false;
             let iisUpdate = false;
             
-            // Check if we need IoT Edge update
-            if (edgeVersion !== currentIotedge) {
+            if (releaseVersion !== currentIotedge) {
               iotedgeUpdate = true;
               needsUpdate = true;
-              console.log(`   ⚠️ IoT Edge update needed: ${currentIotedge} → ${edgeVersion}`);
+              console.log(`   ⚠️ IoT Edge update needed: ${currentIotedge} → ${releaseVersion}`);
               
-              // Get commit SHA from Azure/iotedge repo
+              // Get SHA from Azure/iotedge repo (has tags for all releases)
               const tagRef = await github.rest.git.getRef({
                 owner: 'Azure', repo: 'iotedge',
-                ref: `tags/${edgeVersion}`
+                ref: `tags/${releaseVersion}`
               });
-              core.setOutput('iotedge_version', edgeVersion);
+              core.setOutput('iotedge_version', releaseVersion);
               core.setOutput('iotedge_sha', tagRef.data.object.sha);
             }
             
-            // Check if we need IIS update  
-            if (iisVersion !== currentIis) {
+            if (iisVersion && iisVersion !== currentIis) {
               iisUpdate = true;
               needsUpdate = true;
               console.log(`   ⚠️ IIS update needed: ${currentIis} → ${iisVersion}`);
               
-              // Get commit SHA from Azure/iot-identity-service repo
               const tagRef = await github.rest.git.getRef({
                 owner: 'Azure', repo: 'iot-identity-service',
                 ref: `tags/${iisVersion}`
@@ -170,10 +126,10 @@ jobs:
             core.setOutput('iotedge_update', iotedgeUpdate);
             core.setOutput('iis_update', iisUpdate);
             core.setOutput('needs_update', needsUpdate);
-            core.setOutput('is_significant', true);
+            core.setOutput('is_significant', needsUpdate);  // Any update is significant now
             
             if (!needsUpdate) {
-              console.log('✅ Already at latest significant versions');
+              console.log('✅ Already at latest versions');
             }
 
   update-recipes:
@@ -198,7 +154,7 @@ jobs:
       - name: Update recipes
         env:
           IOTEDGE_UPDATE: ${{ needs.check-upstream.outputs.iotedge_update }}
-          RELEASE_VERSION: ${{ needs.check-upstream.outputs.release_version }}
+          IOTEDGE_VERSION: ${{ needs.check-upstream.outputs.iotedge_version }}
           IOTEDGE_SHA: ${{ needs.check-upstream.outputs.iotedge_sha }}
           IIS_UPDATE: ${{ needs.check-upstream.outputs.iis_update }}
           IIS_VERSION: ${{ needs.check-upstream.outputs.iis_version }}
@@ -215,9 +171,8 @@ jobs:
               find "recipes-core/${dir}" -name "*_*.bb" -type f -delete 2>/dev/null || true
               find "recipes-core/${dir}" -name "*-[0-9]*.inc" -type f -delete 2>/dev/null || true
             done
-            # Use release version for package name, but daemon SHA for source code
-            echo "Updating IoT Edge to ${RELEASE_VERSION} (source from ${IOTEDGE_SHA})"
-            args+=(--iotedge-rev "${IOTEDGE_SHA}" --iotedge-version "${RELEASE_VERSION}")
+            echo "Updating IoT Edge to ${IOTEDGE_VERSION} (${IOTEDGE_SHA})"
+            args+=(--iotedge-rev "${IOTEDGE_SHA}" --iotedge-version "${IOTEDGE_VERSION}")
           fi
           
           if [[ "${IIS_UPDATE}" == "true" ]]; then
@@ -244,9 +199,9 @@ jobs:
       - name: Create pull request
         uses: peter-evans/create-pull-request@v6
         with:
-          title: "Update to IoT Edge ${{ needs.check-upstream.outputs.release_version }}"
+          title: "Update to IoT Edge ${{ needs.check-upstream.outputs.iotedge_version }}"
           commit-message: |
-            Update IoT Edge recipes for ${{ needs.check-upstream.outputs.release_version }}
+            Update IoT Edge recipes for ${{ needs.check-upstream.outputs.iotedge_version }}
             
             - IoT Edge daemon: ${{ needs.check-upstream.outputs.iotedge_version || 'unchanged' }}
             - IoT Identity Service: ${{ needs.check-upstream.outputs.iis_version || 'unchanged' }}
@@ -261,13 +216,10 @@ jobs:
             This PR was automatically created by the upstream release watcher.
             
             ### Versions
-            | Component | Target | Source Code From |
-            |-----------|--------|------------------|
-            | **Package Version** | **${{ needs.check-upstream.outputs.release_version }}** | - |
-            | IoT Edge daemon | ${{ needs.check-upstream.outputs.release_version }} | ${{ needs.check-upstream.outputs.iotedge_version }} |
-            | IoT Identity Service | ${{ needs.check-upstream.outputs.iis_version }} | ${{ needs.check-upstream.outputs.iis_version }} |
-            
-            > **Note:** Package version matches Azure's latest release (${{ needs.check-upstream.outputs.release_version }}). The daemon source code comes from ${{ needs.check-upstream.outputs.iotedge_version }} (last significant update with daemon changes).
+            | Component | Current | New |
+            |-----------|---------|-----|
+            | IoT Edge | ${{ env.CURRENT_IOTEDGE }} | ${{ needs.check-upstream.outputs.iotedge_version }} |
+            | IoT Identity Service | ${{ env.CURRENT_IIS }} | ${{ needs.check-upstream.outputs.iis_version || env.CURRENT_IIS }} |
             
             ### Validation Checklist
             - [ ] CI build passes
@@ -284,60 +236,3 @@ jobs:
             
             ### Release Notes
             - [Azure IoT Edge ${{ needs.check-upstream.outputs.release_version }}](https://github.com/Azure/azure-iotedge/releases/tag/${{ needs.check-upstream.outputs.release_version }})
-
-  # Notify when recipes are current but there's a newer Docker-only release
-  notify-docker-only:
-    name: Notify Docker-only update
-    needs: check-upstream
-    # Only notify if: recipes are up-to-date AND there's a newer release (Docker-only)
-    if: |
-      needs.check-upstream.outputs.needs_update == 'false' &&
-      needs.check-upstream.outputs.release_version != needs.check-upstream.outputs.iotedge_version
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Create issue for Docker-only update
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const releaseVersion = '${{ needs.check-upstream.outputs.release_version }}';
-            const daemonVersion = '${{ needs.check-upstream.outputs.iotedge_version }}';
-            
-            // Check if there's already an open issue for this release
-            const issues = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              labels: 'docker-only-update'
-            });
-            
-            const existingIssue = issues.data.find(i => i.title.includes(releaseVersion));
-            if (existingIssue) {
-              console.log(`Issue already exists for ${releaseVersion}`);
-              return;
-            }
-            
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: `IoT Edge ${releaseVersion} released (Docker images only)`,
-              labels: ['docker-only-update', 'no-action-needed'],
-              body: [
-                'A new IoT Edge release is available, but it only contains Docker image updates.',
-                '',
-                `**Latest Release:** ${releaseVersion}`,
-                `**Daemon Version:** ${daemonVersion} (unchanged)`,
-                '',
-                'No recipe updates are needed since the daemon binaries haven\'t changed.',
-                '',
-                'However, you may want to create a new release tag to stay in sync with upstream:',
-                '',
-                '```bash',
-                `git tag ${releaseVersion}`,
-                `git push origin ${releaseVersion}`,
-                '```',
-                '',
-                'This issue is for tracking purposes only. Close it once acknowledged.',
-                '',
-                `[View release notes](https://github.com/Azure/azure-iotedge/releases/tag/${releaseVersion})`
-              ].join('\n')
-            });
