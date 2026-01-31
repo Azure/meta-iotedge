@@ -156,6 +156,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Fix git permissions
+        run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+
       - name: Update recipes
         env:
           IOTEDGE_UPDATE: ${{ needs.check-upstream.outputs.iotedge_update }}
