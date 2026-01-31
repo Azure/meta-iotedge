@@ -132,6 +132,41 @@ export TEMPLATECONF="meta-iotedge/conf/templates/scarthgap"
 - Full Yocto builds can exceed GitHub-hosted runner limits (time/disk). For CI reliability, prefer a **self-hosted runner** with sstate caches.
 - Templates set `BB_FETCH_RETRIES` and `BB_FETCH_TIMEOUT` for network robustness, and keep `BB_HASHSERVE = ""` to avoid hashserv socket issues in Codespaces.
 
+## QEMU validation
+
+The `validate-qemu.sh` script boots the built QEMU image and validates IoT Edge is working:
+
+```bash
+./scripts/validate-qemu.sh scarthgap
+```
+
+### What it validates
+
+1. **iotedge --version** - Confirms IoT Edge CLI is installed
+2. **iotedge check --verbose** - Runs comprehensive diagnostics (some failures expected without Azure config)
+3. **aziot-edged service** - Checks the Edge daemon status
+4. **aziot-identityd service** - Checks the Identity Service status
+5. **Installed packages** - Lists all IoT Edge RPMs
+
+### Expected output
+
+Without Azure IoT Hub configuration, you'll see:
+- ✅ Services running: keyd, certd, tpmd, identityd
+- ⚠️ Configuration errors (no config.toml)
+- ⚠️ Connectivity warnings (no Azure connection)
+- ❌ aziot-edged failed (needs config to start)
+
+This is **normal** - it confirms packages are installed correctly. Full functionality requires Azure IoT Hub provisioning.
+
+### SSH access
+
+The QEMU image uses `debug-tweaks` which enables root SSH with an empty password. The script uses `sshpass` for automated authentication:
+
+```bash
+# Manual SSH (if QEMU is still running)
+sshpass -p '' ssh -o StrictHostKeyChecking=no -p 2222 root@localhost
+```
+
 ## Update meta-rust (if needed)
 
 If the build fails due to Rust version incompatibility:
@@ -147,22 +182,45 @@ Create a PR with the updated recipes and validate as above.
 
 ## Automation (GitHub Actions)
 
-The workflow in [.github/workflows/update-recipes.yml](.github/workflows/update-recipes.yml)
+### Recipe updates
+
+The workflow in [.github/workflows/update-recipes.yml](../.github/workflows/update-recipes.yml)
 can generate updated recipes and open a PR. Trigger it via **Actions → Update Yocto recipes**
 with the desired SHAs and versions.
 
-## CI validation (GitHub Actions)
+### Automated upstream watching
 
-The workflow in [.github/workflows/ci-build.yml](.github/workflows/ci-build.yml)
-mimics the Azure DevOps pipeline by running:
+The workflow in [.github/workflows/watch-upstream.yml](../.github/workflows/watch-upstream.yml)
+runs daily and automatically:
+
+1. Checks for new releases in [Azure/iotedge](https://github.com/Azure/iotedge) and [Azure/iot-identity-service](https://github.com/Azure/iot-identity-service)
+2. Compares with current versions in this file
+3. **If significant changes** (edgelet/daemon updates): Creates a PR with updated recipes
+4. **If Docker-only changes**: Creates an informational issue (no recipe update needed)
+
+This means most upstream releases are handled automatically. You just need to review and merge the PRs.
+
+### CI validation
+
+The workflow in [.github/workflows/ci-build.yml](../.github/workflows/ci-build.yml) runs on every PR with two checks:
+
+| Check | Description | Duration |
+|-------|-------------|----------|
+| **Build packages** | Compiles all IoT Edge packages | ~2-4 hours |
+| **QEMU validation** | Boots image and runs `iotedge check` | ~30 min |
+
+Both checks appear as separate status checks on PRs, so you can see at a glance if packages build and if they work in QEMU.
+
+### Releases
+
+The workflow in [.github/workflows/release.yml](../.github/workflows/release.yml) automatically creates GitHub releases when you push a tag:
 
 ```bash
-./scripts/fetch.sh scarthgap
-./scripts/build.sh scarthgap
+git tag v1.5.34
+git push origin v1.5.34
 ```
 
-This requires Docker, large disk, and enough runtime for full Yocto builds. It is
-intended to be used as a PR status check. GitHub-hosted runners may time out.
+This builds packages and QEMU image, then publishes them to [GitHub Releases](https://github.com/Azure/meta-iotedge/releases).
 
 ## End-to-end release checklist
 
@@ -184,7 +242,18 @@ intended to be used as a PR status check. GitHub-hosted runners may time out.
    ./scripts/build.sh scarthgap
    ```
 
-4. **Create PR** targeting the appropriate branch (main for Scarthgap, kirkstone for Kirkstone)
+4. **QEMU validation** (after build completes)
+   ```bash
+   ./scripts/validate-qemu.sh scarthgap
+   ```
+
+5. **Create PR** targeting the appropriate branch (main for Scarthgap, kirkstone for Kirkstone)
+
+6. **Tag and release** (after PR merges)
+   ```bash
+   git tag v1.5.34
+   git push origin v1.5.34
+   ```
 
 ## Troubleshooting
 
@@ -249,34 +318,14 @@ upstream changes introduce new build or recipe issues, for example:
 
 The following improvements are planned but not yet implemented:
 
-### 1. GitHub Actions: Use devcontainer image for recipe generation
+### 1. Kirkstone QEMU validation
 
-Currently, the recipe generation workflow sets up its build environment from scratch.
-This should be updated to use the devcontainer image for:
+Currently QEMU validation only runs for Scarthgap. Add support for Kirkstone branch validation.
 
-- Faster CI execution
-- Consistency between local development and CI
-- Reduced maintenance of duplicate environment setup
+### 2. ARM64 builds
 
-**Implementation:**
-- Update `.github/workflows/update-recipes.yml` to use the devcontainer image
-- Ensure cargo-bitbake and other tools are available in the image
+Add support for building and validating ARM64 (aarch64) targets for Raspberry Pi and similar devices.
 
-### 2. QEMU validation in CI
+### 3. Azure IoT Hub integration tests
 
-Add automated QEMU validation to verify the built image boots and IoT Edge services
-start correctly.
-
-**Implementation:**
-- Complete `scripts/validate-qemu.sh` to:
-  - Boot the built QEMU image
-  - Wait for systemd to reach multi-user target
-  - Run `aziotctl system status` to verify services are healthy
-  - Optionally check `iotedge list` for module manager connectivity
-- Add QEMU validation step to CI workflow after successful build
-- Consider timeout and retry logic for flaky QEMU boots
-
-**Validation criteria:**
-- aziot-keyd, aziot-certd, aziot-identityd, aziot-tpmd services running
-- aziot-edged service running
-- No critical errors in journalctl logs
+Add optional provisioning with a test IoT Hub to validate full end-to-end connectivity.

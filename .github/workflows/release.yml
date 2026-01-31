@@ -1,0 +1,157 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g., v1.5.34)"
+        required: true
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  build-and-release:
+    name: Build and release
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/meta-iotedge-devcontainer:scarthgap
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
+    env:
+      BB_SERVER_TIMEOUT: "600"
+      BB_COMMAND_TIMEOUT: "300"
+      DEVCONTAINER: "1"
+      YOCTO_CACHE_DIR: /workspaces/yocto-cache
+      TEMPLATE: scarthgap
+    steps:
+      - name: Create build user
+        run: useradd -m builder
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Fix permissions
+        run: |
+          chown -R builder:builder "${GITHUB_WORKSPACE}"
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+
+      - name: Prepare cache directories
+        run: |
+          mkdir -p "${YOCTO_CACHE_DIR}/downloads" "${YOCTO_CACHE_DIR}/sstate-cache"
+          chown -R builder:builder "${YOCTO_CACHE_DIR}"
+
+      - name: Restore sstate cache
+        uses: actions/cache/restore@v4
+        with:
+          path: sstate-cache.tar.zst
+          key: yocto-sstate-${{ env.TEMPLATE }}-
+          restore-keys: |
+            yocto-sstate-${{ env.TEMPLATE }}-
+
+      - name: Restore downloads cache
+        uses: actions/cache/restore@v4
+        with:
+          path: downloads.tar.zst
+          key: yocto-downloads-
+          restore-keys: |
+            yocto-downloads-
+
+      - name: Decompress caches
+        run: |
+          if [[ -f sstate-cache.tar.zst ]]; then
+            tar -I 'zstd -T0 -d' -xf sstate-cache.tar.zst -C "${YOCTO_CACHE_DIR}/"
+            rm sstate-cache.tar.zst
+          fi
+          if [[ -f downloads.tar.zst ]]; then
+            tar -I 'zstd -T0 -d' -xf downloads.tar.zst -C "${YOCTO_CACHE_DIR}/"
+            rm downloads.tar.zst
+          fi
+
+      - name: Fix cache permissions
+        run: chown -R builder:builder "${YOCTO_CACHE_DIR}"
+
+      - name: Fetch layers
+        run: sudo -E -u builder ./scripts/fetch.sh "${TEMPLATE}"
+
+      - name: Build packages
+        run: sudo -E -u builder ./scripts/build.sh "${TEMPLATE}"
+
+      - name: Build QEMU image
+        run: sudo -E -u builder ./scripts/bitbake.sh iotedge-qemu-image
+
+      - name: Collect release artifacts
+        id: artifacts
+        run: |
+          mkdir -p release-artifacts
+          
+          # Find and copy RPM packages
+          find build/tmp/deploy/rpm -name "*.rpm" -exec cp {} release-artifacts/ \; 2>/dev/null || true
+          
+          # Copy QEMU image files
+          DEPLOY_DIR="build/tmp/deploy/images/qemux86-64"
+          if [[ -d "${DEPLOY_DIR}" ]]; then
+            # Compress the rootfs
+            if [[ -f "${DEPLOY_DIR}/iotedge-qemu-image-qemux86-64.rootfs.ext4" ]]; then
+              zstd -T0 -19 "${DEPLOY_DIR}/iotedge-qemu-image-qemux86-64.rootfs.ext4" -o release-artifacts/iotedge-qemu-image-qemux86-64.rootfs.ext4.zst
+            fi
+            # Copy kernel
+            cp "${DEPLOY_DIR}/bzImage" release-artifacts/ 2>/dev/null || true
+          fi
+          
+          # List artifacts
+          echo "Release artifacts:"
+          ls -la release-artifacts/
+          
+          # Get version from tag
+          TAG="${{ inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          name: IoT Edge Yocto Layer ${{ steps.artifacts.outputs.version }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') }}
+          generate_release_notes: true
+          files: |
+            release-artifacts/*
+          body: |
+            ## Azure IoT Edge Yocto Layer Release
+            
+            This release contains pre-built packages for IoT Edge on Yocto Scarthgap (5.0 LTS).
+            
+            ### Included Packages
+            - **iotedge** - IoT Edge CLI and management tools
+            - **aziot-edged** - IoT Edge daemon
+            - **aziotd** - Azure IoT Identity Service daemon
+            - **aziotctl** - Azure IoT Identity Service CLI
+            - **aziot-keys** - Azure IoT Keys Service
+            
+            ### QEMU Image
+            A bootable QEMU image is included for testing. To run:
+            ```bash
+            # Decompress the image
+            zstd -d iotedge-qemu-image-qemux86-64.rootfs.ext4.zst
+            
+            # Boot with QEMU
+            qemu-system-x86_64 \
+              -kernel bzImage \
+              -drive file=iotedge-qemu-image-qemux86-64.rootfs.ext4,format=raw \
+              -append "root=/dev/sda console=ttyS0" \
+              -nographic -m 512
+            ```
+            
+            ### Building from Source
+            See [README.md](https://github.com/Azure/meta-iotedge#readme) for build instructions.
