@@ -65,35 +65,53 @@ jobs:
             const releases = await github.rest.repos.listReleases({
               owner: 'Azure',
               repo: 'azure-iotedge',
-              per_page: 10
+              per_page: 20
             });
             
             // Find latest stable 1.5.x release
-            const latestRelease = releases.data.find(r => 
+            const stableReleases = releases.data.filter(r => 
               !r.prerelease && !r.draft && r.tag_name.match(/^1\.5\.\d+$/)
             );
             
-            if (!latestRelease) {
+            if (stableReleases.length === 0) {
               console.log('No stable 1.5.x release found');
               core.setOutput('needs_update', false);
               return;
             }
             
+            const latestRelease = stableReleases[0];
             const releaseVersion = latestRelease.tag_name;
             console.log(`🔍 Latest release: ${releaseVersion}`);
             
-            // Extract daemon version from release assets (e.g., aziot-edge-1.5.21-1.el8.x86_64.rpm)
-            // This tells us what version of the daemon binary is in this release
-            const edgeAsset = latestRelease.assets.find(a => a.name.match(/^aziot-edge-[\d.]+-.*\.rpm$/));
-            const daemonVersion = edgeAsset ? edgeAsset.name.match(/aziot-edge-([\d.]+)-/)?.[1] : releaseVersion;
+            // Find daemon and IIS versions from release assets
+            // Docker-only releases don't have package assets, so we search through releases
+            // to find the most recent one with actual packages
+            let daemonVersion = null;
+            let iisVersion = null;
+            let packageRelease = null;
             
-            // Extract IIS version from release assets
-            const iisAsset = latestRelease.assets.find(a => a.name.match(/^aziot-identity-service-[\d.]+-.*\.rpm$/));
-            const iisVersion = iisAsset ? iisAsset.name.match(/aziot-identity-service-([\d.]+)-/)?.[1] : null;
+            for (const release of stableReleases) {
+              const edgeAsset = release.assets.find(a => a.name.match(/^aziot-edge-[\d.]+-.*\.rpm$/));
+              const iisAsset = release.assets.find(a => a.name.match(/^aziot-identity-service-[\d.]+-.*\.rpm$/));
+              
+              if (edgeAsset && iisAsset) {
+                packageRelease = release.tag_name;
+                daemonVersion = edgeAsset.name.match(/aziot-edge-([\d.]+)-/)?.[1];
+                iisVersion = iisAsset.name.match(/aziot-identity-service-([\d.]+)-/)?.[1];
+                break;
+              }
+            }
+            
+            if (!daemonVersion || !iisVersion) {
+              console.log('Could not find release with package assets');
+              core.setOutput('needs_update', false);
+              return;
+            }
             
             console.log(`   Release version: ${releaseVersion}`);
-            console.log(`   Daemon version (from assets): ${daemonVersion}`);
-            console.log(`   IIS version (from assets): ${iisVersion}`);
+            console.log(`   Package release: ${packageRelease}`);
+            console.log(`   Daemon (aziot-edge) version: ${daemonVersion}`);
+            console.log(`   IIS (aziot-identity-service) version: ${iisVersion}`);
             
             // Output versions for release notes and other jobs
             core.setOutput('release_version', releaseVersion);
