@@ -46,8 +46,8 @@ flowchart TD
 4. **Tag the release** (the PR description includes the exact commands):
    ```bash
    git pull origin main
-   git tag v1.5.35
-   git push origin v1.5.35
+   git tag 1.5.35
+   git push origin 1.5.35
    ```
 5. **Verify release** - Check [GitHub Releases](https://github.com/Azure/meta-iotedge/releases)
 

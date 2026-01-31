@@ -245,8 +245,8 @@ jobs:
             Create a release by running:
             ```bash
             git pull origin main
-            git tag v${{ needs.check-upstream.outputs.iotedge_version }}
-            git push origin v${{ needs.check-upstream.outputs.iotedge_version }}
+            git tag ${{ needs.check-upstream.outputs.iotedge_version }}
+            git push origin ${{ needs.check-upstream.outputs.iotedge_version }}
             ```
             This will trigger the [release workflow](../actions/workflows/release.yml) to build and publish packages.
             
