@@ -320,19 +320,23 @@ jobs:
               repo: context.repo.repo,
               title: `IoT Edge ${releaseVersion} released (Docker images only)`,
               labels: ['docker-only-update', 'no-action-needed'],
-              body: `A new IoT Edge release is available, but it only contains Docker image updates.
-
-**Latest Release:** ${releaseVersion}
-**Daemon Version:** ${daemonVersion} (unchanged)
-
-No recipe updates are needed since the daemon binaries haven't changed.
-
-However, you may want to create a new release tag to stay in sync with upstream:
-
-    git tag ${releaseVersion}
-    git push origin ${releaseVersion}
-
-This issue is for tracking purposes only. Close it once acknowledged.
-
-[View release notes](https://github.com/Azure/azure-iotedge/releases/tag/${releaseVersion})`
+              body: [
+                'A new IoT Edge release is available, but it only contains Docker image updates.',
+                '',
+                `**Latest Release:** ${releaseVersion}`,
+                `**Daemon Version:** ${daemonVersion} (unchanged)`,
+                '',
+                'No recipe updates are needed since the daemon binaries haven\'t changed.',
+                '',
+                'However, you may want to create a new release tag to stay in sync with upstream:',
+                '',
+                '```bash',
+                `git tag ${releaseVersion}`,
+                `git push origin ${releaseVersion}`,
+                '```',
+                '',
+                'This issue is for tracking purposes only. Close it once acknowledged.',
+                '',
+                `[View release notes](https://github.com/Azure/azure-iotedge/releases/tag/${releaseVersion})`
+              ].join('\n')
             });
