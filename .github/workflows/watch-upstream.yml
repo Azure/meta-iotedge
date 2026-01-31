@@ -283,3 +283,57 @@ jobs:
             
             ### Release Notes
             - [Azure IoT Edge ${{ needs.check-upstream.outputs.release_version }}](https://github.com/Azure/azure-iotedge/releases/tag/${{ needs.check-upstream.outputs.release_version }})
+
+  # Notify when recipes are current but there's a newer Docker-only release
+  notify-docker-only:
+    name: Notify Docker-only update
+    needs: check-upstream
+    # Only notify if: recipes are up-to-date AND there's a newer release (Docker-only)
+    if: |
+      needs.check-upstream.outputs.needs_update == 'false' &&
+      needs.check-upstream.outputs.release_version != needs.check-upstream.outputs.iotedge_version
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Create issue for Docker-only update
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const releaseVersion = '${{ needs.check-upstream.outputs.release_version }}';
+            const daemonVersion = '${{ needs.check-upstream.outputs.iotedge_version }}';
+            
+            // Check if there's already an open issue for this release
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'docker-only-update'
+            });
+            
+            const existingIssue = issues.data.find(i => i.title.includes(releaseVersion));
+            if (existingIssue) {
+              console.log(`Issue already exists for ${releaseVersion}`);
+              return;
+            }
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `IoT Edge ${releaseVersion} released (Docker images only)`,
+              labels: ['docker-only-update', 'no-action-needed'],
+              body: `A new IoT Edge release is available, but it only contains Docker image updates.
+
+**Latest Release:** ${releaseVersion}
+**Daemon Version:** ${daemonVersion} (unchanged)
+
+No recipe updates are needed since the daemon binaries haven't changed.
+
+However, you may want to create a new release tag to stay in sync with upstream:
+\`\`\`bash
+git tag ${releaseVersion}
+git push origin ${releaseVersion}
+\`\`\`
+
+This issue is for tracking purposes only. Close it once acknowledged.
+
+[View release notes](https://github.com/Azure/azure-iotedge/releases/tag/${releaseVersion})`
+            });
