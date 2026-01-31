@@ -153,6 +153,9 @@ sync_checksums() {
     [[ -f "${recipe}" ]] || return 0
     [[ -f "${lockfile}" ]] && python3 "${HELPERS}" add-checksums "${recipe}" "${lockfile}"
     
+    # Add known checksums (e.g., wasi crates that bitbake complains about)
+    python3 "${HELPERS}" add-known-checksums "${recipe}"
+    
     # Copy checksums from previous version
     local prev; prev=$(ls "${recipe_dir}/${component}_"*.bb 2>/dev/null | sort -V | grep -v "_${version}.bb$" | tail -1 || true)
     [[ -n "${prev}" ]] || return 0

@@ -3,7 +3,7 @@
 # Grab the MACHINE from the environment; otherwise, set it to a sane default
 export MACHINE="${MACHINE-qemux86-64}"
 
-TEMPLATE=${1-default}
+TEMPLATE=${1-scarthgap}
 
 # What to build
 BUILD_TARGETS="\

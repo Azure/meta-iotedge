@@ -12,7 +12,8 @@
   "postCreateCommand": "sudo mkdir -p /workspaces/yocto-cache/sstate-cache /workspaces/yocto-cache/downloads && sudo chmod -R a+rwx /workspaces/yocto-cache",
   "containerEnv": {
     "BB_SERVER_TIMEOUT": "600",
-    "BB_COMMAND_TIMEOUT": "300"
+    "BB_COMMAND_TIMEOUT": "300",
+    "DEVCONTAINER": "1"
   },
   "customizations": {
     "vscode": {

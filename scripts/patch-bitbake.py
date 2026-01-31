@@ -64,6 +64,25 @@ def ensure_inherit(lines, inherit_line):
     return False
 
 
+def remove_include_statements(lines):
+    """Remove explicit include statements since BitBake auto-includes matching .inc files."""
+    # Find and remove lines like:
+    # # includes this file if it exists but does not fail
+    # include foo-${PV}.inc
+    # include foo.inc
+    indices_to_remove = []
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("include ") and stripped.endswith(".inc"):
+            indices_to_remove.append(i)
+            # Also check for preceding comment
+            if i > 0 and "includes this file if it exists" in lines[i - 1]:
+                indices_to_remove.append(i - 1)
+    # Remove in reverse order to maintain indices
+    for idx in sorted(set(indices_to_remove), reverse=True):
+        del lines[idx]
+
+
 def main():
     parser = argparse.ArgumentParser(description="Patch cargo-bitbake output to match meta-iotedge conventions.")
     parser.add_argument("--component", required=True, choices=[
@@ -89,6 +108,11 @@ def main():
             if not inserted:
                 lines.insert(0, f'CARGO_SRC_DIR = "{cargo_dir}"')
 
+        # Cargo.lock is at the workspace level (edgelet/), not in the per-crate subdirectory
+        if find_line_index(lines, "CARGO_LOCK_PATH") == -1:
+            if not insert_after(lines, "CARGO_SRC_DIR =", ['CARGO_LOCK_PATH = "${S}/edgelet/Cargo.lock"']):
+                insert_after(lines, "S =", ['CARGO_LOCK_PATH = "${S}/edgelet/Cargo.lock"'])
+
         if find_line_index(lines, "do_compile[network]") == -1:
             if not insert_after(lines, "CARGO_SRC_DIR =", ['do_compile[network] = "1"']):
                 insert_after(lines, "S =", ['do_compile[network] = "1"'])
@@ -102,6 +126,11 @@ def main():
                 '"',
             ],
         )
+        # Keep the include statements - we need them to load version-specific and common .inc files
+        # The cargo-bitbake template adds:
+        #   include iotedge-${PV}.inc
+        #   include iotedge.inc
+        # These are needed to load our DEPENDS, SRC_URI patches, and do_configure:append
     else:
         if args.component in {"aziot-keys", "aziotd"}:
             ensure_inherit(lines, "inherit cargo pkgconfig")
@@ -114,6 +143,7 @@ def main():
                 '"',
             ],
         )
+        # Keep the include statements for version-specific .inc files
 
     output_path.write_text("\n".join(lines) + "\n")
 
