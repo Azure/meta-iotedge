@@ -54,7 +54,8 @@ flowchart TD
 ### Version management
 
 - **Version source**: [Azure/azure-iotedge](https://github.com/Azure/azure-iotedge/releases) combined releases
-- **Daemon version detection**: Extracted from release asset names (e.g., `aziot-edge-1.5.21-*.rpm`)
+- **Daemon version detection**: Extracted from release asset names (e.g., `aziot-edge-1.5.21-*.rpm`) by searching for the most recent release with package assets
+- **Recipe version**: Always matches the latest release (e.g., 1.5.35), even if daemon binary is from an earlier version (e.g., 1.5.21). The source code at tag 1.5.35 still builds correctly.
 - **Significant vs Docker-only**: If daemon or IIS version changed → update recipes. If only Docker images changed → create info issue.
 - **Old recipes are automatically removed** when updating to a new version
 - **Git tags preserve history** - to get old recipes, checkout the tag: `git checkout 1.5.5`
