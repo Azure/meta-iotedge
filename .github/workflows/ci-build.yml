@@ -50,13 +50,14 @@ jobs:
       DEVCONTAINER: "1"
       YOCTO_CACHE_DIR: ${{ github.workspace }}/.yocto-cache
     steps:
+      - name: Create build user
+        run: useradd -m builder
+
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create build user and fix permissions
-        run: |
-          useradd -m builder
-          chown -R builder:builder "${{ github.workspace }}"
+      - name: Fix permissions for build user
+        run: chown -R builder:builder "${GITHUB_WORKSPACE}"
 
       - name: Prepare cache directories
         run: |
