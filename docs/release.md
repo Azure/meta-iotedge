@@ -2,12 +2,59 @@
 
 This guide describes how to update recipes for a new IoT Edge and/or IoT Identity Service release, and how to validate for Scarthgap (main) and Kirkstone (kirkstone).
 
+## Automated release flow
+
+Most of the release process is automated. Here's how it works:
+
+```mermaid
+flowchart TD
+    subgraph Automated["🤖 Fully Automated"]
+        A[New IoT Edge release<br/>on Azure/iotedge] -->|Daily check| B{watch-upstream.yml}
+        B -->|Daemon changes| C[Create PR with<br/>updated recipes]
+        B -->|Docker-only| D[Create info issue<br/>no action needed]
+        C --> E[ci-build.yml runs]
+        E --> F[Build packages<br/>~4 hours]
+        E --> G[QEMU validation<br/>~30 min]
+    end
+    
+    subgraph Manual["👤 Manual Steps (~5 min)"]
+        F --> H{CI passes?}
+        G --> H
+        H -->|Yes| I[Review & merge PR]
+        H -->|No| J[Debug & fix recipes]
+        J --> C
+        I --> K[Create git tag<br/>git tag v1.5.x]
+    end
+    
+    subgraph Release["🤖 Fully Automated"]
+        K --> L[release.yml runs]
+        L --> M[Build packages + QEMU]
+        M --> N[Publish GitHub Release<br/>with RPMs & image]
+    end
+    
+    style Automated fill:#e8f5e9
+    style Manual fill:#fff3e0
+    style Release fill:#e8f5e9
+```
+
+### What on-call needs to do
+
+1. **Wait for automated PR** - watch-upstream.yml creates it automatically
+2. **Check CI status** - Both "Build packages" and "QEMU validation" should pass
+3. **Merge the PR** - Click merge after CI passes
+4. **Tag the release**:
+   ```bash
+   git tag v1.5.35
+   git push origin v1.5.35
+   ```
+5. **Verify release** - Check [GitHub Releases](https://github.com/Azure/meta-iotedge/releases)
+
 ## Current versions
 
 | Component | Version | SRCREV |
 |-----------|---------|--------|
-| IoT Edge | 1.5.34 | `0e45ed930f9659bbca757c0f3aea00aedc1e358f` |
-| IoT Identity Service | 1.5.6 | `833381accec8d53436cac20fc3fb85303e4504eb` |
+| IoT Edge | 1.5.33 | `e84cdc7bb5b8ba22da4e8f5c35afcf9b9b58f2d2` |
+| IoT Identity Service | 1.5.0 | `7a4e1a1fa9a4c2a37c3186c9b7a204ce384b2caa` |
 | Yocto | Scarthgap | 5.0 LTS |
 
 ## Quick summary
