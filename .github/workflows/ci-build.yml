@@ -1,0 +1,69 @@
+name: Yocto build
+
+on:
+  pull_request:
+    branches:
+      - main
+      - kirkstone
+  push:
+    branches:
+      - main
+      - kirkstone
+  workflow_dispatch:
+    inputs:
+      template:
+        description: "Template name passed to scripts/fetch.sh and scripts/build.sh"
+        required: false
+        default: "scarthgap"
+      build_targets:
+        description: "Optional bitbake targets (space-separated). Leave empty for script defaults."
+        required: false
+        default: ""
+      run_qemu:
+        description: "Run QEMU validation (iotedge --version) after build"
+        required: false
+        default: "false"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yocto-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  yocto-build:
+    name: Yocto build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 2400
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/meta-iotedge-devcontainer:scarthgap
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    env:
+      # Increase these to reduce client-side BitBake timeouts during server startup.
+      # Note: BB_COMMAND_TIMEOUT must also be whitelisted in BitBake env passthrough.
+      BB_SERVER_TIMEOUT: "600"
+      BB_COMMAND_TIMEOUT: "300"
+      DEVCONTAINER: "1"
+      YOCTO_CACHE_DIR: ${{ github.workspace }}/.yocto-cache
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare cache directories
+        run: |
+          mkdir -p "${YOCTO_CACHE_DIR}/downloads" "${YOCTO_CACHE_DIR}/sstate-cache"
+
+      - name: Fetch + Build + (Optional) QEMU validation
+        env:
+          RUN_QEMU: ${{ inputs.run_qemu || 'false' }}
+        run: |
+          set -euo pipefail
+          template="${{ inputs.template || 'scarthgap' }}"
+          ./scripts/fetch.sh "${template}"
+          ./scripts/build.sh "${template}"
+          if [[ "${RUN_QEMU}" == "true" ]]; then
+            ./scripts/validate-qemu.sh "${template}"
+          fi

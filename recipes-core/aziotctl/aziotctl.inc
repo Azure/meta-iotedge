@@ -1,5 +1,5 @@
-DEPENDS += "openssl virtual/docker"
-RDEPENDS:${PN} += "docker"
+DEPENDS += "openssl"
+RDEPENDS:${PN} += ""
 
 export OPENSSL_DIR = "${STAGING_EXECPREFIXDIR}"
 export SOCKET_DIR="/run/aziot"

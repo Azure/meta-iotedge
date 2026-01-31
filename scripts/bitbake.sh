@@ -12,6 +12,19 @@ DIR=${SCRIPT_DIR%/scripts}
 # build targets
 targets=$@
 
+# allow longer startup for the bitbake server in containerized builds
+export BB_SERVER_TIMEOUT="${BB_SERVER_TIMEOUT:-600}"
+export BB_COMMAND_TIMEOUT="${BB_COMMAND_TIMEOUT:-300}"
+
 source ${DIR}/poky/oe-init-build-env build
 
-bitbake ${targets}
+# Ensure BB_COMMAND_TIMEOUT survives BitBake's environment cleanup
+export BB_ENV_PASSTHROUGH_ADDITIONS="${BB_ENV_PASSTHROUGH_ADDITIONS:+${BB_ENV_PASSTHROUGH_ADDITIONS} }BB_COMMAND_TIMEOUT"
+
+# remove stale BitBake server state
+rm -f bitbake.sock bitbake.lock bitbake-cookerdaemon.log
+
+# ensure patched BitBake server code is loaded (clear pyc cache)
+rm -f ${DIR}/poky/bitbake/lib/bb/server/__pycache__/process.*.pyc 2>/dev/null || true
+
+bitbake -T "${BB_SERVER_TIMEOUT}" ${targets}
