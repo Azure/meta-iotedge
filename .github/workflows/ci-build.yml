@@ -11,45 +11,59 @@ on:
       - kirkstone
   workflow_dispatch:
     inputs:
-      template:
-        description: "Template name passed to scripts/fetch.sh and scripts/build.sh"
-        required: false
-        default: "scarthgap"
-      build_targets:
-        description: "Optional bitbake targets (space-separated). Leave empty for script defaults."
-        required: false
-        default: ""
-      run_qemu:
-        description: "Run QEMU validation (iotedge --version) after build"
-        required: false
-        default: "false"
+      skip_qemu:
+        description: "Skip QEMU validation (faster, packages only)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: yocto-build-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  yocto-build:
-    name: Yocto build
+  # Determine which template to use based on branch
+  setup:
+    name: Setup
     runs-on: ubuntu-22.04
-    timeout-minutes: 2400
+    outputs:
+      template: ${{ steps.set-template.outputs.template }}
+    steps:
+      - name: Determine template from branch
+        id: set-template
+        run: |
+          # Map branch to template - templates are different per Yocto release
+          case "${{ github.base_ref || github.ref_name }}" in
+            kirkstone)
+              echo "template=kirkstone" >> "$GITHUB_OUTPUT"
+              ;;
+            main|scarthgap|*)
+              echo "template=scarthgap" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+  build:
+    name: Build packages
+    needs: setup
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+    outputs:
+      build-success: ${{ steps.build.outcome == 'success' }}
     container:
-      image: ghcr.io/${{ github.repository_owner }}/meta-iotedge-devcontainer:scarthgap
+      image: ghcr.io/${{ github.repository_owner }}/meta-iotedge-devcontainer:${{ needs.setup.outputs.template }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
       options: --user root
     env:
-      # Increase these to reduce client-side BitBake timeouts during server startup.
-      # Note: BB_COMMAND_TIMEOUT must also be whitelisted in BitBake env passthrough.
       BB_SERVER_TIMEOUT: "600"
       BB_COMMAND_TIMEOUT: "300"
       DEVCONTAINER: "1"
-      # Use same path as devcontainer.json/local.conf.sample for consistency
       YOCTO_CACHE_DIR: /workspaces/yocto-cache
+      TEMPLATE: ${{ needs.setup.outputs.template }}
     steps:
       - name: Create build user
         run: useradd -m builder
@@ -57,10 +71,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Fix permissions for build user
+      - name: Fix permissions
         run: |
           chown -R builder:builder "${GITHUB_WORKSPACE}"
-          # Mark workspace as safe for git operations by any user
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Prepare cache directories
@@ -68,59 +81,211 @@ jobs:
           mkdir -p "${YOCTO_CACHE_DIR}/downloads" "${YOCTO_CACHE_DIR}/sstate-cache"
           chown -R builder:builder "${YOCTO_CACHE_DIR}"
 
-      # Restore Yocto sstate-cache to accelerate builds
-      # Uses branch-specific key with fallback to main branch cache
-      - name: Restore sstate-cache
+      # Restore compressed sstate cache
+      - name: Restore sstate cache
+        id: cache-sstate
         uses: actions/cache/restore@v4
         with:
-          path: /workspaces/yocto-cache/sstate-cache
-          key: yocto-sstate-${{ github.ref_name }}-${{ github.run_id }}
+          path: sstate-cache.tar.zst
+          key: yocto-sstate-${{ env.TEMPLATE }}-${{ hashFiles('conf/templates/*/local.conf.sample', 'conf/templates/*/bblayers.conf.sample') }}
           restore-keys: |
-            yocto-sstate-${{ github.ref_name }}-
-            yocto-sstate-main-
-            yocto-sstate-
+            yocto-sstate-${{ env.TEMPLATE }}-
 
-      # Restore Yocto downloads cache to avoid re-downloading sources
+      # Restore compressed downloads cache
       - name: Restore downloads cache
+        id: cache-downloads
         uses: actions/cache/restore@v4
         with:
-          path: /workspaces/yocto-cache/downloads
-          key: yocto-downloads-${{ github.ref_name }}-${{ github.run_id }}
+          path: downloads.tar.zst
+          key: yocto-downloads-${{ hashFiles('recipes-*/**/*.bb', 'recipes-*/**/*.inc') }}
           restore-keys: |
-            yocto-downloads-${{ github.ref_name }}-
-            yocto-downloads-main-
             yocto-downloads-
+
+      - name: Decompress caches
+        run: |
+          if [[ -f sstate-cache.tar.zst ]]; then
+            echo "Decompressing sstate cache..."
+            tar -I 'zstd -T0 -d' -xf sstate-cache.tar.zst -C "${YOCTO_CACHE_DIR}/"
+            rm sstate-cache.tar.zst
+            echo "Sstate cache size: $(du -sh ${YOCTO_CACHE_DIR}/sstate-cache 2>/dev/null | cut -f1 || echo 'empty')"
+          fi
+          if [[ -f downloads.tar.zst ]]; then
+            echo "Decompressing downloads cache..."
+            tar -I 'zstd -T0 -d' -xf downloads.tar.zst -C "${YOCTO_CACHE_DIR}/"
+            rm downloads.tar.zst
+            echo "Downloads cache size: $(du -sh ${YOCTO_CACHE_DIR}/downloads 2>/dev/null | cut -f1 || echo 'empty')"
+          fi
 
       - name: Fix cache permissions
         run: chown -R builder:builder "${YOCTO_CACHE_DIR}"
 
-      # Timeout set to 330 minutes (5.5 hours) to allow cache save steps
-      # to complete before GitHub's 6-hour job limit cancels the workflow
-      - name: Fetch + Build + (Optional) QEMU validation
-        timeout-minutes: 330
-        env:
-          RUN_QEMU: ${{ inputs.run_qemu || 'false' }}
+      - name: Fetch layers
+        run: sudo -E -u builder ./scripts/fetch.sh "${TEMPLATE}"
+
+      - name: Build packages
+        id: build
+        run: sudo -E -u builder ./scripts/build.sh "${TEMPLATE}"
+
+      # Compress and save caches (only on push to main/kirkstone)
+      - name: Compress caches
+        if: always() && github.event_name == 'push'
         run: |
-          set -euo pipefail
-          template="${{ inputs.template || 'scarthgap' }}"
-          sudo -E -u builder ./scripts/fetch.sh "${template}"
-          sudo -E -u builder ./scripts/build.sh "${template}"
-          if [[ "${RUN_QEMU}" == "true" ]]; then
-            sudo -E -u builder ./scripts/validate-qemu.sh "${template}"
+          if [[ -d "${YOCTO_CACHE_DIR}/sstate-cache" ]]; then
+            echo "Compressing sstate cache..."
+            tar -I 'zstd -T0 -19' -cf sstate-cache.tar.zst -C "${YOCTO_CACHE_DIR}" sstate-cache
+            echo "Compressed sstate size: $(du -sh sstate-cache.tar.zst | cut -f1)"
+          fi
+          if [[ -d "${YOCTO_CACHE_DIR}/downloads" ]]; then
+            echo "Compressing downloads cache..."
+            tar -I 'zstd -T0 -19' -cf downloads.tar.zst -C "${YOCTO_CACHE_DIR}" downloads
+            echo "Compressed downloads size: $(du -sh downloads.tar.zst | cut -f1)"
           fi
 
-      # Always save caches after build (even on failure) to preserve progress
-      # Using unique key with run_id ensures cache is always saved as new entry
-      - name: Save sstate-cache
+      - name: Save sstate cache
         uses: actions/cache/save@v4
-        if: always()
+        if: always() && github.event_name == 'push'
         with:
-          path: /workspaces/yocto-cache/sstate-cache
-          key: yocto-sstate-${{ github.ref_name }}-${{ github.run_id }}
+          path: sstate-cache.tar.zst
+          key: yocto-sstate-${{ env.TEMPLATE }}-${{ hashFiles('conf/templates/*/local.conf.sample', 'conf/templates/*/bblayers.conf.sample') }}
 
       - name: Save downloads cache
         uses: actions/cache/save@v4
-        if: always()
+        if: always() && github.event_name == 'push'
         with:
-          path: /workspaces/yocto-cache/downloads
-          key: yocto-downloads-${{ github.ref_name }}-${{ github.run_id }}
+          path: downloads.tar.zst
+          key: yocto-downloads-${{ hashFiles('recipes-*/**/*.bb', 'recipes-*/**/*.inc') }}
+
+  # QEMU image build and validation - runs as separate check after build succeeds
+  qemu-validation:
+    name: QEMU validation
+    needs: [setup, build]
+    # Run on all PRs and pushes, skip only if explicitly requested via workflow_dispatch
+    if: ${{ !inputs.skip_qemu }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/meta-iotedge-devcontainer:${{ needs.setup.outputs.template }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
+    env:
+      BB_SERVER_TIMEOUT: "600"
+      BB_COMMAND_TIMEOUT: "300"
+      DEVCONTAINER: "1"
+      YOCTO_CACHE_DIR: /workspaces/yocto-cache
+      TEMPLATE: ${{ needs.setup.outputs.template }}
+    steps:
+      - name: Create build user
+        run: useradd -m builder
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fix permissions
+        run: |
+          chown -R builder:builder "${GITHUB_WORKSPACE}"
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+
+      - name: Prepare cache directories
+        run: |
+          mkdir -p "${YOCTO_CACHE_DIR}/downloads" "${YOCTO_CACHE_DIR}/sstate-cache"
+          chown -R builder:builder "${YOCTO_CACHE_DIR}"
+
+      # Restore caches (will have been populated by build job)
+      - name: Restore sstate cache
+        uses: actions/cache/restore@v4
+        with:
+          path: sstate-cache.tar.zst
+          key: yocto-sstate-${{ env.TEMPLATE }}-${{ hashFiles('conf/templates/*/local.conf.sample', 'conf/templates/*/bblayers.conf.sample') }}
+          restore-keys: |
+            yocto-sstate-${{ env.TEMPLATE }}-
+
+      - name: Restore downloads cache
+        uses: actions/cache/restore@v4
+        with:
+          path: downloads.tar.zst
+          key: yocto-downloads-${{ hashFiles('recipes-*/**/*.bb', 'recipes-*/**/*.inc') }}
+          restore-keys: |
+            yocto-downloads-
+
+      - name: Decompress caches
+        run: |
+          if [[ -f sstate-cache.tar.zst ]]; then
+            tar -I 'zstd -T0 -d' -xf sstate-cache.tar.zst -C "${YOCTO_CACHE_DIR}/"
+            rm sstate-cache.tar.zst
+          fi
+          if [[ -f downloads.tar.zst ]]; then
+            tar -I 'zstd -T0 -d' -xf downloads.tar.zst -C "${YOCTO_CACHE_DIR}/"
+            rm downloads.tar.zst
+          fi
+
+      - name: Fix cache permissions
+        run: chown -R builder:builder "${YOCTO_CACHE_DIR}"
+
+      - name: Fetch layers
+        run: sudo -E -u builder ./scripts/fetch.sh "${TEMPLATE}"
+
+      - name: Build QEMU image
+        run: |
+          sudo -E -u builder ./scripts/bitbake.sh iotedge-qemu-image
+
+      - name: Run QEMU validation
+        run: |
+          sudo -E -u builder ./scripts/validate-qemu.sh "${TEMPLATE}"
+
+      # Upload image as artifact for releases
+      - name: Upload QEMU image
+        uses: actions/upload-artifact@v4
+        with:
+          name: iotedge-qemu-image-${{ env.TEMPLATE }}
+          path: |
+            build/tmp/deploy/images/qemux86-64/iotedge-qemu-image-qemux86-64.rootfs.ext4
+            build/tmp/deploy/images/qemux86-64/bzImage
+          retention-days: 7
+          if-no-files-found: warn
+
+  # Auto-retry on timeout: trigger a new workflow run
+  retry-on-timeout:
+    name: Queue retry on timeout
+    needs: [setup, build, qemu-validation]
+    if: failure() && (needs.build.result == 'cancelled' || needs.qemu-validation.result == 'cancelled')
+    runs-on: ubuntu-22.04
+    permissions:
+      actions: write
+    steps:
+      - name: Trigger retry workflow
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Only retry on push events, not PRs (to avoid infinite loops)
+            if (context.eventName !== 'push') {
+              console.log('Skipping retry for non-push event');
+              return;
+            }
+            
+            // Check if this is already a retry (prevent infinite loops)
+            const runs = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'ci-build.yml',
+              branch: context.ref.replace('refs/heads/', ''),
+              per_page: 5
+            });
+            
+            const recentRuns = runs.data.workflow_runs.filter(
+              run => run.conclusion === 'cancelled' || run.conclusion === 'timed_out'
+            );
+            
+            if (recentRuns.length >= 3) {
+              console.log('Too many recent failures, not retrying');
+              return;
+            }
+            
+            console.log('Triggering retry workflow...');
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'ci-build.yml',
+              ref: context.ref
+            });

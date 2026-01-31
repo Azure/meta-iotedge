@@ -37,6 +37,9 @@
 # This sets the default machine to be qemux86 if no other machine is selected:
 MACHINE ??= "qemux86-64"
 
+# Increase BitBake server timeout for slower container starts
+BB_SERVER_TIMEOUT = "600"
+
 #
 # Where to place downloads
 #
@@ -87,6 +90,16 @@ SSTATE_DIR ?= "/workspaces/yocto-cache/sstate-cache"
 # Scale parallelism to available CPU (override as needed)
 BB_NUMBER_THREADS ?= "${@oe.utils.cpu_count()}"
 PARALLEL_MAKE ?= "-j ${@oe.utils.cpu_count()}"
+
+# Hash equivalence - local server enables sstate sharing across different build paths
+# This runs a local hashserve (no external network needed)
+BB_HASHSERVE ?= "auto"
+BB_SIGNATURE_HANDLER ?= "OEEquivHash"
+
+# Remove work directories after packaging to save disk space (~50GB savings)
+# Exclude IoT Edge packages for debugging purposes
+INHERIT += "rm_work"
+RM_WORK_EXCLUDE += "iotedge aziot-edged aziotd aziotctl aziot-keys"
 
 #
 # Default policy config
