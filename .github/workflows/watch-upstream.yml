@@ -21,6 +21,7 @@ jobs:
       iis_update: ${{ steps.check.outputs.iis_update }}
       iis_version: ${{ steps.check.outputs.iis_version }}
       iis_sha: ${{ steps.check.outputs.iis_sha }}
+      latest_iis_version: ${{ steps.check.outputs.latest_iis_version }}
       needs_update: ${{ steps.check.outputs.needs_update }}
       is_significant: ${{ steps.check.outputs.is_significant }}
     steps:
@@ -128,6 +129,9 @@ jobs:
             if (latestIis) {
               const latestVersion = latestIis.tag_name;
               console.log(`🔍 Latest IIS release: ${latestVersion}`);
+              
+              // Always output latest IIS version for release notes link
+              core.setOutput('latest_iis_version', latestVersion);
               
               if (latestVersion !== currentIis) {
                 iisUpdate = true;
@@ -252,7 +256,7 @@ jobs:
             
             ### Release Notes
             - [IoT Edge ${{ needs.check-upstream.outputs.iotedge_version }}](https://github.com/Azure/iotedge/releases/tag/${{ needs.check-upstream.outputs.iotedge_version }})
-            - [IoT Identity Service ${{ needs.check-upstream.outputs.iis_version }}](https://github.com/Azure/iot-identity-service/releases/tag/${{ needs.check-upstream.outputs.iis_version }})
+            - [IoT Identity Service ${{ needs.check-upstream.outputs.latest_iis_version }}](https://github.com/Azure/iot-identity-service/releases/tag/${{ needs.check-upstream.outputs.latest_iis_version }})
 
   notify-docker-only:
     name: Notify Docker-only update
