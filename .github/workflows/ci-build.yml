@@ -70,8 +70,8 @@ jobs:
         run: |
           set -euo pipefail
           template="${{ inputs.template || 'scarthgap' }}"
-          sudo -u builder ./scripts/fetch.sh "${template}"
-          sudo -u builder ./scripts/build.sh "${template}"
+          sudo -E -u builder ./scripts/fetch.sh "${template}"
+          sudo -E -u builder ./scripts/build.sh "${template}"
           if [[ "${RUN_QEMU}" == "true" ]]; then
-            sudo -u builder ./scripts/validate-qemu.sh "${template}"
+            sudo -E -u builder ./scripts/validate-qemu.sh "${template}"
           fi
