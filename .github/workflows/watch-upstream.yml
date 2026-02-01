@@ -206,7 +206,7 @@ jobs:
       - name: Fix git permissions
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
-      - name: Update recipes
+      - name: Update and validate recipes
         env:
           IOTEDGE_UPDATE: ${{ needs.check-upstream.outputs.iotedge_update }}
           IOTEDGE_VERSION: ${{ needs.check-upstream.outputs.iotedge_version }}
@@ -214,42 +214,28 @@ jobs:
           IIS_UPDATE: ${{ needs.check-upstream.outputs.iis_update }}
           IIS_VERSION: ${{ needs.check-upstream.outputs.iis_version }}
           IIS_SHA: ${{ needs.check-upstream.outputs.iis_sha }}
+          LATEST_IIS_VERSION: ${{ needs.check-upstream.outputs.latest_iis_version }}
         run: |
           set -euo pipefail
-          args=()
+          args=(--clean)
           
-          # Only clean up recipes for components being updated
           if [[ "${IOTEDGE_UPDATE}" == "true" ]]; then
-            echo "Cleaning up old IoT Edge recipes..."
-            # iotedge and aziot-edged are both IoT Edge components
-            for dir in iotedge aziot-edged; do
-              find "recipes-core/${dir}" -name "*_*.bb" -type f -delete 2>/dev/null || true
-              find "recipes-core/${dir}" -name "*-[0-9]*.inc" -type f -delete 2>/dev/null || true
-            done
-            echo "Updating IoT Edge to ${IOTEDGE_VERSION} (${IOTEDGE_SHA})"
             args+=(--iotedge-rev "${IOTEDGE_SHA}" --iotedge-version "${IOTEDGE_VERSION}")
+            # For IoT Edge updates, we need IIS rev to fix cargo paths
+            if [[ -n "${IIS_SHA}" ]]; then
+              args+=(--iis-rev "${IIS_SHA}")
+            else
+              # Get SHA for current/latest IIS version
+              IIS_TAG_SHA=$(git ls-remote --tags https://github.com/Azure/iot-identity-service.git "refs/tags/${LATEST_IIS_VERSION}" | cut -f1)
+              args+=(--iis-rev "${IIS_TAG_SHA}")
+            fi
           fi
           
           if [[ "${IIS_UPDATE}" == "true" ]]; then
-            echo "Cleaning up old IIS recipes..."
-            # aziotd, aziotctl, aziot-keys are IIS components
-            for dir in aziotd aziotctl aziot-keys; do
-              find "recipes-core/${dir}" -name "*_*.bb" -type f -delete 2>/dev/null || true
-              find "recipes-core/${dir}" -name "*-[0-9]*.inc" -type f -delete 2>/dev/null || true
-            done
-            echo "Updating IIS to ${IIS_VERSION} (${IIS_SHA})"
             args+=(--iis-rev "${IIS_SHA}" --iis-version "${IIS_VERSION}")
           fi
           
-          echo "Remaining recipe files before update:"
-          find recipes-core -name "*.bb" -o -name "*.inc" | grep -v files/ | sort || true
-          
-          if [[ ${#args[@]} -gt 0 ]]; then
-            ./scripts/update-recipes.sh "${args[@]}"
-          fi
-          
-          echo "Recipe files after update:"
-          find recipes-core -name "*.bb" -o -name "*.inc" | grep -v files/ | sort
+          ./scripts/update-recipes.sh "${args[@]}"
 
       - name: Create pull request
         uses: peter-evans/create-pull-request@v6

@@ -6,17 +6,22 @@ usage() {
 Usage: update-recipes.sh [options]
 
 Options:
-    --iotedge-rev <sha>       IoT Edge git commit SHA
-    --iotedge-version <ver>   IoT Edge version (e.g., 1.5.21)
-    --iis-rev <sha>           IoT Identity Service git commit SHA
-    --iis-version <ver>       IoT Identity Service version
+    --iotedge-rev <sha>       IoT Edge git commit SHA (required with --iotedge-version)
+    --iotedge-version <ver>   IoT Edge version (e.g., 1.5.35)
+    --iis-rev <sha>           IoT Identity Service git commit SHA (required with --iis-version)
+    --iis-version <ver>       IoT Identity Service version (e.g., 1.5.6)
+    --clean                   Remove old version-specific recipe files before generating
+    --skip-validate           Skip bitbake validation (not recommended)
     --workdir <path>          Work directory (default: mktemp)
     --keep-workdir            Do not delete work directory
-    --overwrite               Overwrite existing recipe files
-    --no-sync-checksums       Do not sync SRC_URI checksums
     -h, --help                Show this help
 
-If no options given, updates both IoT Edge and IIS to latest releases.
+Examples:
+    # Update IoT Edge only (IIS rev needed for path fixing)
+    ./scripts/update-recipes.sh --iotedge-rev SHA --iotedge-version 1.5.35 --iis-rev SHA --clean
+    
+    # Update both IoT Edge and IIS
+    ./scripts/update-recipes.sh --iotedge-rev SHA --iotedge-version 1.5.35 --iis-rev SHA --iis-version 1.5.6 --clean
 EOF
 }
 
@@ -25,7 +30,7 @@ HELPERS="${ROOT_DIR}/scripts/recipe_helpers.py"
 PATCHER="${ROOT_DIR}/scripts/patch-bitbake.py"
 
 # Defaults
-WORKDIR="" KEEP_WORKDIR=false OVERWRITE=false SYNC_CHECKSUMS=true
+WORKDIR="" KEEP_WORKDIR=false CLEAN=false SKIP_VALIDATE=false
 IOTEDGE_REV="" IOTEDGE_VERSION="" IIS_REV="" IIS_VERSION=""
 
 while [[ $# -gt 0 ]]; do
@@ -34,22 +39,54 @@ while [[ $# -gt 0 ]]; do
         --iotedge-version) IOTEDGE_VERSION="$2"; shift 2;;
         --iis-rev)         IIS_REV="$2"; shift 2;;
         --iis-version)     IIS_VERSION="$2"; shift 2;;
+        --clean)           CLEAN=true; shift;;
+        --skip-validate)   SKIP_VALIDATE=true; shift;;
         --workdir)         WORKDIR="$2"; shift 2;;
         --keep-workdir)    KEEP_WORKDIR=true; shift;;
-        --overwrite)       OVERWRITE=true; shift;;
-        --no-sync-checksums) SYNC_CHECKSUMS=false; shift;;
         -h|--help)         usage; exit 0;;
         *)                 echo "Unknown arg: $1"; usage; exit 1;;
     esac
 done
 
-# Determine what to update
+# Determine what to update based on version args
 UPDATE_IOTEDGE=false UPDATE_IIS=false
-if [[ -z "${IOTEDGE_REV}${IOTEDGE_VERSION}${IIS_REV}${IIS_VERSION}" ]]; then
-    UPDATE_IOTEDGE=true UPDATE_IIS=true
-else
-    [[ -n "${IOTEDGE_REV}${IOTEDGE_VERSION}" ]] && UPDATE_IOTEDGE=true
-    [[ -n "${IIS_REV}${IIS_VERSION}" ]] && UPDATE_IIS=true
+[[ -n "${IOTEDGE_VERSION}" ]] && UPDATE_IOTEDGE=true
+[[ -n "${IIS_VERSION}" ]] && UPDATE_IIS=true
+
+# Validate required args
+if [[ "${UPDATE_IOTEDGE}" == true && -z "${IOTEDGE_REV}" ]]; then
+    echo "Error: --iotedge-rev required when --iotedge-version is specified"
+    exit 1
+fi
+if [[ "${UPDATE_IIS}" == true && -z "${IIS_REV}" ]]; then
+    echo "Error: --iis-rev required when --iis-version is specified"
+    exit 1
+fi
+if [[ "${UPDATE_IOTEDGE}" == true && -z "${IIS_REV}" ]]; then
+    echo "Error: --iis-rev required for IoT Edge updates (needed for path fixing)"
+    exit 1
+fi
+if [[ "${UPDATE_IOTEDGE}" != true && "${UPDATE_IIS}" != true ]]; then
+    echo "Error: Must specify at least --iotedge-version or --iis-version"
+    usage
+    exit 1
+fi
+
+# Clean old recipes if requested
+if [[ "${CLEAN}" == true ]]; then
+    echo "Cleaning old recipe files..."
+    if [[ "${UPDATE_IOTEDGE}" == true ]]; then
+        for dir in iotedge aziot-edged; do
+            find "${ROOT_DIR}/recipes-core/${dir}" -name "*_*.bb" -type f -delete 2>/dev/null || true
+            find "${ROOT_DIR}/recipes-core/${dir}" -name "*-[0-9]*.inc" -type f -delete 2>/dev/null || true
+        done
+    fi
+    if [[ "${UPDATE_IIS}" == true ]]; then
+        for dir in aziotd aziotctl aziot-keys; do
+            find "${ROOT_DIR}/recipes-core/${dir}" -name "*_*.bb" -type f -delete 2>/dev/null || true
+            find "${ROOT_DIR}/recipes-core/${dir}" -name "*-[0-9]*.inc" -type f -delete 2>/dev/null || true
+        done
+    fi
 fi
 
 # Setup directories
@@ -110,10 +147,8 @@ copy_recipe() {
     local dest_bb="${dest_dir}/${component}_${version}.bb"
     local dest_inc="${dest_dir}/${component}-${version}.inc"
 
-    if [[ -e "${dest_bb}" || -e "${dest_inc}" ]] && [[ "${OVERWRITE}" != true ]]; then
-        echo "Refusing to overwrite ${component} ${version}. Use --overwrite."
-        exit 1
-    fi
+    # Remove any existing files (--clean already handled cleanup of other versions)
+    rm -f "${dest_bb}" "${dest_inc}"
 
     python3 "${PATCHER}" --component "${component}" --input "${src}" --output "${dest_bb}"
     printf 'export VERSION = "%s"\n' "${version}" > "${dest_inc}"
@@ -172,18 +207,7 @@ IOTEDGE_REPO="https://github.com/Azure/iotedge.git"
 IIS_REPO="https://github.com/Azure/iot-identity-service.git"
 
 if [[ "${UPDATE_IOTEDGE}" == true ]]; then
-    # Resolve version/rev
-    if [[ -z "${IOTEDGE_REV}" && -z "${IOTEDGE_VERSION}" ]]; then
-        mapfile -t latest < <(resolve_latest "${IOTEDGE_REPO}")
-        IOTEDGE_VERSION=${latest[0]#v}; IOTEDGE_REV=${latest[1]}
-    elif [[ -z "${IOTEDGE_REV}" ]]; then
-        IOTEDGE_REV=$(resolve_tag_sha "${IOTEDGE_REPO}" "${IOTEDGE_VERSION}")
-    elif [[ -z "${IOTEDGE_VERSION}" ]]; then
-        IOTEDGE_VERSION=$(resolve_version "${IOTEDGE_REPO}" "${IOTEDGE_REV}")
-        IOTEDGE_VERSION=${IOTEDGE_VERSION#v}
-    fi
-    
-    [[ -n "${IOTEDGE_REV}" && -n "${IOTEDGE_VERSION}" ]] || { echo "Need both rev and version for IoT Edge"; exit 1; }
+    echo "Updating IoT Edge to ${IOTEDGE_VERSION} (${IOTEDGE_REV:0:8})"
     
     IOTEDGE_DIR="${WORKDIR}/iotedge"
     prepare_repo "${IOTEDGE_REPO}" "${IOTEDGE_DIR}" "${IOTEDGE_REV}"
@@ -199,43 +223,27 @@ if [[ "${UPDATE_IOTEDGE}" == true ]]; then
             "${ROOT_DIR}/recipes-core/${pkg}" "${IOTEDGE_VERSION}"
     done
     
-    # Get IIS repo for fixing cargo paths (need to scan for crate locations)
-    # Always clone IIS repo - we need it to find crate subdirectory paths
-    if [[ -n "${IIS_REV}" ]]; then
-        IIS_SHA="${IIS_REV}"
-    else
-        mapfile -t iis_latest < <(resolve_latest "${IIS_REPO}")
-        IIS_SHA="${iis_latest[1]}"
-    fi
+    # Clone IIS repo to get crate subdirectory paths for fixing recipes
     IIS_PATH="${WORKDIR}/iot-identity-service"
-    prepare_repo "${IIS_REPO}" "${IIS_PATH}" "${IIS_SHA}"
+    prepare_repo "${IIS_REPO}" "${IIS_PATH}" "${IIS_REV}"
     
     # Fix recipes
     for pkg in aziot-edged iotedge; do
         recipe="${ROOT_DIR}/recipes-core/${pkg}/${pkg}_${IOTEDGE_VERSION}.bb"
         python3 "${HELPERS}" fix-cargo-paths "${IIS_PATH}" "${recipe}"
-        fix_srcrev "${recipe}" "${IIS_SHA}"
+        fix_srcrev "${recipe}" "${IIS_REV}"
         generate_patch "${IOTEDGE_DIR}" "${ROOT_DIR}/recipes-core/${pkg}/files/0001-Remove-git-from-Cargo.patch" "${pkg}"
-        [[ "${SYNC_CHECKSUMS}" == true ]] && sync_checksums "${pkg}" "${IOTEDGE_VERSION}" "${IOTEDGE_DIR}/edgelet/Cargo.lock"
+        sync_checksums "${pkg}" "${IOTEDGE_VERSION}" "${IOTEDGE_DIR}/edgelet/Cargo.lock"
     done
 fi
 
 if [[ "${UPDATE_IIS}" == true ]]; then
-    # Resolve version/rev
-    if [[ -z "${IIS_REV}" && -z "${IIS_VERSION}" ]]; then
-        mapfile -t latest < <(resolve_latest "${IIS_REPO}")
-        IIS_VERSION=${latest[0]#v}; IIS_REV=${latest[1]}
-    elif [[ -z "${IIS_REV}" ]]; then
-        IIS_REV=$(resolve_tag_sha "${IIS_REPO}" "${IIS_VERSION}")
-    elif [[ -z "${IIS_VERSION}" ]]; then
-        IIS_VERSION=$(resolve_version "${IIS_REPO}" "${IIS_REV}")
-        IIS_VERSION=${IIS_VERSION#v}
-    fi
-    
-    [[ -n "${IIS_REV}" && -n "${IIS_VERSION}" ]] || { echo "Need both rev and version for IIS"; exit 1; }
+    echo "Updating IIS to ${IIS_VERSION} (${IIS_REV:0:8})"
     
     IIS_DIR="${WORKDIR}/iot-identity-service"
-    prepare_repo "${IIS_REPO}" "${IIS_DIR}" "${IIS_REV}"
+    if [[ ! -d "${IIS_DIR}" ]]; then
+        prepare_repo "${IIS_REPO}" "${IIS_DIR}" "${IIS_REV}"
+    fi
     normalize_cargo_config "${IIS_DIR}/.cargo"
     
     # Generate recipes
@@ -247,8 +255,45 @@ if [[ "${UPDATE_IIS}" == true ]]; then
         popd >/dev/null
         copy_recipe "${pkg}" "${IIS_DIR}/${IIS_PATHS[$pkg]}/${bb_file}" \
             "${ROOT_DIR}/recipes-core/${pkg}" "${IIS_VERSION}"
-        [[ "${SYNC_CHECKSUMS}" == true ]] && sync_checksums "${pkg}" "${IIS_VERSION}" "${IIS_DIR}/Cargo.lock"
+        sync_checksums "${pkg}" "${IIS_VERSION}" "${IIS_DIR}/Cargo.lock"
     done
 fi
 
-echo "Recipe update complete. Review and commit changes."
+# Validate recipes with bitbake (skip with --skip-validate)
+if [[ "${SKIP_VALIDATE}" != true ]]; then
+    echo "Validating recipes with bitbake..."
+    VALIDATE_DIR=$(mktemp -d)
+    
+    # Fetch required layers
+    retry "fetch poky" git clone --depth=1 --branch scarthgap git://git.yoctoproject.org/poky "${VALIDATE_DIR}/poky"
+    retry "fetch meta-openembedded" git clone --depth=1 --branch scarthgap git://git.openembedded.org/meta-openembedded "${VALIDATE_DIR}/meta-openembedded"
+    retry "fetch meta-rust-bin" git clone --depth=1 --branch master https://github.com/sirhcel/meta-rust-bin.git "${VALIDATE_DIR}/meta-rust-bin"
+    retry "fetch meta-virtualization" git clone --depth=1 --branch scarthgap https://github.com/lgirdk/meta-virtualization.git "${VALIDATE_DIR}/meta-virtualization"
+    
+    # Source build environment and set up layers
+    pushd "${VALIDATE_DIR}" >/dev/null
+    . poky/oe-init-build-env build >/dev/null
+    
+    bitbake-layers add-layer "${VALIDATE_DIR}/meta-openembedded/meta-oe"
+    bitbake-layers add-layer "${VALIDATE_DIR}/meta-openembedded/meta-python"
+    bitbake-layers add-layer "${VALIDATE_DIR}/meta-openembedded/meta-networking"
+    bitbake-layers add-layer "${VALIDATE_DIR}/meta-openembedded/meta-filesystems"
+    bitbake-layers add-layer "${VALIDATE_DIR}/meta-rust-bin"
+    bitbake-layers add-layer "${VALIDATE_DIR}/meta-virtualization"
+    bitbake-layers add-layer "${ROOT_DIR}"
+    
+    # Parse recipes
+    if bitbake -p; then
+        echo "✓ Recipe validation passed"
+    else
+        echo "✗ Recipe validation failed"
+        popd >/dev/null
+        rm -rf "${VALIDATE_DIR}"
+        exit 1
+    fi
+    
+    popd >/dev/null
+    rm -rf "${VALIDATE_DIR}"
+fi
+
+echo "Recipe update complete."

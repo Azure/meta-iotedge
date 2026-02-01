@@ -257,8 +257,7 @@ jobs:
         run: sudo -E -u builder ./scripts/fetch.sh "${TEMPLATE}"
 
       - name: Build QEMU image
-        run: |
-          sudo -E -u builder ./scripts/bitbake.sh iotedge-qemu-image
+        run: sudo -E -u builder ./scripts/build.sh "${TEMPLATE}" --with-qemu
 
       - name: Run QEMU validation
         run: |
