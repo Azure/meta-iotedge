@@ -46,7 +46,7 @@ jobs:
   build:
     name: Build and validate
     runs-on: ubuntu-22.04
-    timeout-minutes: 360
+    timeout-minutes: 330
     outputs:
       template: ${{ steps.set-template.outputs.template }}
     container:
