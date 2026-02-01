@@ -32,7 +32,7 @@ on:
     outputs:
       template:
         description: "Template used for build"
-        value: ${{ jobs.setup.outputs.template }}
+        value: ${{ jobs.build.outputs.template }}
 
 permissions:
   contents: read
@@ -43,35 +43,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Determine which template to use based on branch
-  setup:
-    name: Setup
-    runs-on: ubuntu-22.04
-    outputs:
-      template: ${{ steps.set-template.outputs.template }}
-    steps:
-      - name: Determine template from branch
-        id: set-template
-        run: |
-          # Map branch to template - templates are different per Yocto release
-          case "${{ github.base_ref || github.ref_name }}" in
-            kirkstone)
-              echo "template=kirkstone" >> "$GITHUB_OUTPUT"
-              ;;
-            main|scarthgap|*)
-              echo "template=scarthgap" >> "$GITHUB_OUTPUT"
-              ;;
-          esac
-
   build:
-    name: Build packages
-    needs: setup
+    name: Build and validate
     runs-on: ubuntu-22.04
     timeout-minutes: 360
     outputs:
-      build-success: ${{ steps.build.outcome == 'success' }}
+      template: ${{ steps.set-template.outputs.template }}
     container:
-      image: ghcr.io/${{ github.repository_owner }}/meta-iotedge-devcontainer:${{ needs.setup.outputs.template }}
+      image: ghcr.io/${{ github.repository_owner }}/meta-iotedge-devcontainer:scarthgap
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -81,8 +60,15 @@ jobs:
       BB_COMMAND_TIMEOUT: "300"
       DEVCONTAINER: "1"
       YOCTO_CACHE_DIR: /workspaces/yocto-cache
-      TEMPLATE: ${{ needs.setup.outputs.template }}
     steps:
+      - name: Determine template from branch
+        id: set-template
+        run: |
+          case "${{ github.base_ref || github.ref_name }}" in
+            kirkstone) echo "template=kirkstone" >> "$GITHUB_OUTPUT" ;;
+            *) echo "template=scarthgap" >> "$GITHUB_OUTPUT" ;;
+          esac
+
       - name: Create build user
         run: useradd -m builder
 
@@ -101,19 +87,15 @@ jobs:
           mkdir -p "${YOCTO_CACHE_DIR}/downloads" "${YOCTO_CACHE_DIR}/sstate-cache"
           chown -R builder:builder "${YOCTO_CACHE_DIR}"
 
-      # Restore compressed sstate cache
       - name: Restore sstate cache
-        id: cache-sstate
         uses: actions/cache/restore@v4
         with:
           path: sstate-cache.tar.zst
-          key: yocto-sstate-${{ env.TEMPLATE }}-${{ hashFiles('conf/templates/*/local.conf.sample', 'conf/templates/*/bblayers.conf.sample') }}
+          key: yocto-sstate-${{ steps.set-template.outputs.template }}-${{ hashFiles('conf/templates/*/local.conf.sample', 'conf/templates/*/bblayers.conf.sample') }}
           restore-keys: |
-            yocto-sstate-${{ env.TEMPLATE }}-
+            yocto-sstate-${{ steps.set-template.outputs.template }}-
 
-      # Restore compressed downloads cache
       - name: Restore downloads cache
-        id: cache-downloads
         uses: actions/cache/restore@v4
         with:
           path: downloads.tar.zst
@@ -140,17 +122,40 @@ jobs:
         run: chown -R builder:builder "${YOCTO_CACHE_DIR}"
 
       - name: Fetch layers
-        run: sudo -E -u builder ./scripts/fetch.sh "${TEMPLATE}"
+        run: sudo -E -u builder ./scripts/fetch.sh "${{ steps.set-template.outputs.template }}"
 
-      - name: Build packages
+      - name: Build
         id: build
-        run: sudo -E -u builder ./scripts/build.sh "${TEMPLATE}"
+        env:
+          SKIP_QEMU: ${{ inputs.skip_qemu }}
+          TEMPLATE: ${{ steps.set-template.outputs.template }}
+        run: |
+          if [[ "${SKIP_QEMU}" == "true" ]]; then
+            sudo -E -u builder ./scripts/build.sh "${TEMPLATE}"
+          else
+            sudo -E -u builder ./scripts/build.sh "${TEMPLATE}" --with-qemu
+          fi
+
+      - name: Run QEMU validation
+        if: ${{ !inputs.skip_qemu }}
+        run: sudo -E -u builder ./scripts/validate-qemu.sh "${{ steps.set-template.outputs.template }}"
 
       - name: Upload RPM packages
         uses: actions/upload-artifact@v4
         with:
-          name: rpm-packages-${{ env.TEMPLATE }}
+          name: rpm-packages-${{ steps.set-template.outputs.template }}
           path: build/tmp/deploy/rpm/**/*.rpm
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Upload QEMU image
+        if: ${{ !inputs.skip_qemu }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: iotedge-qemu-image-${{ steps.set-template.outputs.template }}
+          path: |
+            build/tmp/deploy/images/qemux86-64/iotedge-qemu-image-qemux86-64.rootfs.ext4
+            build/tmp/deploy/images/qemux86-64/bzImage
           retention-days: 7
           if-no-files-found: warn
 
@@ -174,7 +179,7 @@ jobs:
         if: always() && github.event_name == 'push'
         with:
           path: sstate-cache.tar.zst
-          key: yocto-sstate-${{ env.TEMPLATE }}-${{ hashFiles('conf/templates/*/local.conf.sample', 'conf/templates/*/bblayers.conf.sample') }}
+          key: yocto-sstate-${{ steps.set-template.outputs.template }}-${{ hashFiles('conf/templates/*/local.conf.sample', 'conf/templates/*/bblayers.conf.sample') }}
 
       - name: Save downloads cache
         uses: actions/cache/save@v4
@@ -183,102 +188,11 @@ jobs:
           path: downloads.tar.zst
           key: yocto-downloads-${{ hashFiles('recipes-*/**/*.bb', 'recipes-*/**/*.inc') }}
 
-  # QEMU image build and validation - runs as separate check after build succeeds
-  qemu-validation:
-    name: QEMU validation
-    needs: [setup, build]
-    # Run on all PRs and pushes, skip only if explicitly requested via workflow_dispatch
-    if: ${{ !inputs.skip_qemu }}
-    runs-on: ubuntu-22.04
-    timeout-minutes: 120
-    container:
-      image: ghcr.io/${{ github.repository_owner }}/meta-iotedge-devcontainer:${{ needs.setup.outputs.template }}
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-      options: --user root
-    env:
-      BB_SERVER_TIMEOUT: "600"
-      BB_COMMAND_TIMEOUT: "300"
-      DEVCONTAINER: "1"
-      YOCTO_CACHE_DIR: /workspaces/yocto-cache
-      TEMPLATE: ${{ needs.setup.outputs.template }}
-    steps:
-      - name: Create build user
-        run: useradd -m builder
-
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || '' }}
-
-      - name: Fix permissions
-        run: |
-          chown -R builder:builder "${GITHUB_WORKSPACE}"
-          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
-
-      - name: Prepare cache directories
-        run: |
-          mkdir -p "${YOCTO_CACHE_DIR}/downloads" "${YOCTO_CACHE_DIR}/sstate-cache"
-          chown -R builder:builder "${YOCTO_CACHE_DIR}"
-
-      # Restore caches (will have been populated by build job)
-      - name: Restore sstate cache
-        uses: actions/cache/restore@v4
-        with:
-          path: sstate-cache.tar.zst
-          key: yocto-sstate-${{ env.TEMPLATE }}-${{ hashFiles('conf/templates/*/local.conf.sample', 'conf/templates/*/bblayers.conf.sample') }}
-          restore-keys: |
-            yocto-sstate-${{ env.TEMPLATE }}-
-
-      - name: Restore downloads cache
-        uses: actions/cache/restore@v4
-        with:
-          path: downloads.tar.zst
-          key: yocto-downloads-${{ hashFiles('recipes-*/**/*.bb', 'recipes-*/**/*.inc') }}
-          restore-keys: |
-            yocto-downloads-
-
-      - name: Decompress caches
-        run: |
-          if [[ -f sstate-cache.tar.zst ]]; then
-            tar -I 'zstd -T0 -d' -xf sstate-cache.tar.zst -C "${YOCTO_CACHE_DIR}/"
-            rm sstate-cache.tar.zst
-          fi
-          if [[ -f downloads.tar.zst ]]; then
-            tar -I 'zstd -T0 -d' -xf downloads.tar.zst -C "${YOCTO_CACHE_DIR}/"
-            rm downloads.tar.zst
-          fi
-
-      - name: Fix cache permissions
-        run: chown -R builder:builder "${YOCTO_CACHE_DIR}"
-
-      - name: Fetch layers
-        run: sudo -E -u builder ./scripts/fetch.sh "${TEMPLATE}"
-
-      - name: Build QEMU image
-        run: sudo -E -u builder ./scripts/build.sh "${TEMPLATE}" --with-qemu
-
-      - name: Run QEMU validation
-        run: |
-          sudo -E -u builder ./scripts/validate-qemu.sh "${TEMPLATE}"
-
-      # Upload image as artifact for releases
-      - name: Upload QEMU image
-        uses: actions/upload-artifact@v4
-        with:
-          name: iotedge-qemu-image-${{ env.TEMPLATE }}
-          path: |
-            build/tmp/deploy/images/qemux86-64/iotedge-qemu-image-qemux86-64.rootfs.ext4
-            build/tmp/deploy/images/qemux86-64/bzImage
-          retention-days: 7
-          if-no-files-found: warn
-
-  # Auto-retry on timeout: trigger a new workflow run
+  # Auto-retry on timeout
   retry-on-timeout:
     name: Queue retry on timeout
-    needs: [setup, build, qemu-validation]
-    if: always() && (needs.build.result == 'cancelled' || needs.qemu-validation.result == 'cancelled')
+    needs: build
+    if: always() && needs.build.result == 'cancelled'
     runs-on: ubuntu-22.04
     permissions:
       actions: write
@@ -290,18 +204,13 @@ jobs:
             const retryWorkflow = '${{ inputs.retry_workflow || 'ci-build.yml' }}';
             const ref = '${{ inputs.ref }}' || context.ref;
             
-            // Skip retry for PRs (to avoid infinite loops on flaky PRs)
             if (context.eventName === 'pull_request') {
               console.log('Skipping retry for pull_request event');
               return;
             }
             
-            // For workflow_call (e.g., from release.yml), use the provided ref
-            // For push events, use the context ref
-            const targetRef = ref.startsWith('refs/') ? ref : `refs/tags/${ref}`;
             const refName = ref.replace(/^refs\/(heads|tags)\//, '');
             
-            // Check recent runs to prevent infinite retry loops
             const runs = await github.rest.actions.listWorkflowRuns({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -309,7 +218,6 @@ jobs:
               per_page: 10
             });
             
-            // Count recent failures for this ref
             const recentFailures = runs.data.workflow_runs.filter(run => 
               (run.conclusion === 'cancelled' || run.conclusion === 'timed_out' || run.conclusion === 'failure') &&
               run.head_branch === refName
@@ -322,7 +230,6 @@ jobs:
             
             console.log(`Triggering retry of ${retryWorkflow} for ref: ${refName}`);
             
-            // Use workflow_dispatch to retry
             const inputs = retryWorkflow === 'release.yml' 
               ? { tag: refName }
               : {};
