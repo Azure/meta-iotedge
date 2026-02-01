@@ -199,16 +199,16 @@ if [[ "${UPDATE_IOTEDGE}" == true ]]; then
             "${ROOT_DIR}/recipes-core/${pkg}" "${IOTEDGE_VERSION}"
     done
     
-    # Get IIS SHA for fixing SRCREV
+    # Get IIS repo for fixing cargo paths (need to scan for crate locations)
+    # Always clone IIS repo - we need it to find crate subdirectory paths
     if [[ -n "${IIS_REV}" ]]; then
         IIS_SHA="${IIS_REV}"
-        IIS_PATH="${WORKDIR}/iot-identity-service"
     else
         mapfile -t iis_latest < <(resolve_latest "${IIS_REPO}")
         IIS_SHA="${iis_latest[1]}"
-        IIS_PATH="${WORKDIR}/iot-identity-service-for-iotedge"
-        prepare_repo "${IIS_REPO}" "${IIS_PATH}" "${IIS_SHA}"
     fi
+    IIS_PATH="${WORKDIR}/iot-identity-service"
+    prepare_repo "${IIS_REPO}" "${IIS_PATH}" "${IIS_SHA}"
     
     # Fix recipes
     for pkg in aziot-edged iotedge; do
