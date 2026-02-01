@@ -21,8 +21,9 @@ jobs:
     name: Build and validate
     uses: ./.github/workflows/ci-build.yml
     with:
-      ref: ${{ inputs.tag || github.ref }}
+      ref: ${{ inputs.tag || github.ref_name }}
       skip_qemu: false
+      retry_workflow: release.yml
     secrets: inherit
 
   # Create release after successful build and validation
