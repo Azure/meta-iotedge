@@ -49,6 +49,7 @@ jobs:
     runs-on: ubuntu-22.04
     outputs:
       template: ${{ steps.set-template.outputs.template }}
+      build_step_outcome: ${{ steps.build.outcome }}
     container:
       image: ghcr.io/${{ github.repository_owner }}/meta-iotedge-devcontainer:scarthgap
       credentials:
@@ -65,8 +66,8 @@ jobs:
         id: set-template
         run: |
           case "${{ github.base_ref || github.ref_name }}" in
-            kirkstone) echo "template=kirkstone" >> "$GITHUB_OUTPUT" ;;
-            *) echo "template=scarthgap" >> "$GITHUB_OUTPUT" ;;
+            kirkstone) echo "template=kirkstone" >> "$GITHUB_OUTPUT" ;;  
+            *) echo "template=scarthgap" >> "$GITHUB_OUTPUT" ;;  
           esac
 
       - name: Create build user
@@ -162,9 +163,9 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
-      # Compress and save caches (only on push to main/kirkstone)
+      # Compress and save caches (on push and workflow_dispatch/workflow_call, not pull_request)
       - name: Compress caches
-        if: always() && github.event_name == 'push'
+        if: always() && github.event_name != 'pull_request'
         run: |
           if [[ -d "${YOCTO_CACHE_DIR}/sstate-cache" ]]; then
             echo "Compressing sstate cache..."
@@ -179,14 +180,14 @@ jobs:
 
       - name: Save sstate cache
         uses: actions/cache/save@v4
-        if: always() && github.event_name == 'push'
+        if: always() && github.event_name != 'pull_request'
         with:
           path: sstate-cache.tar.zst
           key: yocto-sstate-${{ steps.set-template.outputs.template }}-${{ hashFiles('conf/templates/*/local.conf.sample', 'conf/templates/*/bblayers.conf.sample') }}
 
       - name: Save downloads cache
         uses: actions/cache/save@v4
-        if: always() && github.event_name == 'push'
+        if: always() && github.event_name != 'pull_request'
         with:
           path: downloads.tar.zst
           key: yocto-downloads-${{ hashFiles('recipes-*/**/*.bb', 'recipes-*/**/*.inc') }}
@@ -195,7 +196,7 @@ jobs:
   retry-on-timeout:
     name: Queue retry on timeout
     needs: build
-    if: always() && needs.build.result == 'cancelled'
+    if: always() && needs.build.outputs.build_step_outcome == 'cancelled'
     runs-on: ubuntu-22.04
     permissions:
       actions: write
@@ -236,6 +237,6 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: retryWorkflow,
-              ref: refName.match(/^\d+\./) ? `refs/tags/${refName}` : `refs/heads/${refName}`,
+              ref: refName.match(/^^\d+\.*/) ? `refs/tags/${refName}` : `refs/heads/${refName}`,
               inputs: inputs
             });
