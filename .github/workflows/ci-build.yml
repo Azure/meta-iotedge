@@ -42,9 +42,16 @@ jobs:
       - name: Verify cache setup
         run: |
           # Symlink should already exist: /workspaces/yocto-cache -> ~/yocto-cache
+          echo "Checking /workspaces..."
+          ls -la /workspaces/ || echo "/workspaces does not exist"
+          echo "Checking symlink target..."
+          ls -la /workspaces/yocto-cache/ || echo "symlink broken"
+          echo "Testing write..."
+          touch /workspaces/yocto-cache/sstate-cache/.write-test && rm /workspaces/yocto-cache/sstate-cache/.write-test
+          echo "Write test passed"
           if [[ ! -L /workspaces/yocto-cache ]]; then
             echo "ERROR: /workspaces/yocto-cache symlink not found!"
-            echo "Run this once on the runner: sudo ln -sf ~/yocto-cache /workspaces/yocto-cache"
+            echo "Run this once on the runner: sudo mkdir -p /workspaces && sudo ln -sf ~/yocto-cache /workspaces/yocto-cache"
             exit 1
           fi
           mkdir -p "${HOME}/yocto-cache/sstate-cache" "${HOME}/yocto-cache/downloads"
