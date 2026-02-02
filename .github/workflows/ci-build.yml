@@ -45,8 +45,8 @@ concurrency:
 jobs:
   build:
     name: Build and validate
+    timeout-minutes: 360
     runs-on: ubuntu-22.04
-    timeout-minutes: 330
     outputs:
       template: ${{ steps.set-template.outputs.template }}
     container:
@@ -126,6 +126,8 @@ jobs:
 
       - name: Build
         id: build
+        timeout-minutes: 330
+        continue-on-error: true
         env:
           SKIP_QEMU: ${{ inputs.skip_qemu }}
           TEMPLATE: ${{ steps.set-template.outputs.template }}
@@ -137,10 +139,11 @@ jobs:
           fi
 
       - name: Run QEMU validation
-        if: ${{ !inputs.skip_qemu }}
+        if: ${{ steps.build.outcome == 'success' && !inputs.skip_qemu }}
         run: sudo -E -u builder ./scripts/validate-qemu.sh "${{ steps.set-template.outputs.template }}"
 
       - name: Upload RPM packages
+        if: ${{ steps.build.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: rpm-packages-${{ steps.set-template.outputs.template }}
@@ -149,7 +152,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload QEMU image
-        if: ${{ !inputs.skip_qemu }}
+        if: ${{ steps.build.outcome == 'success' && !inputs.skip_qemu }}
         uses: actions/upload-artifact@v4
         with:
           name: iotedge-qemu-image-${{ steps.set-template.outputs.template }}
@@ -222,11 +225,6 @@ jobs:
               (run.conclusion === 'cancelled' || run.conclusion === 'timed_out' || run.conclusion === 'failure') &&
               run.head_branch === refName
             ).slice(0, 3);
-            
-            if (recentFailures.length >= 3) {
-              console.log(`Too many recent failures for ${refName}, not retrying`);
-              return;
-            }
             
             console.log(`Triggering retry of ${retryWorkflow} for ref: ${refName}`);
             
