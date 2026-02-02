@@ -13,7 +13,6 @@ on:
 permissions:
   contents: write
   packages: read
-  actions: write  # Required for retry-on-timeout in ci-build.yml
 
 jobs:
   # Call the CI workflow to build and validate
@@ -23,7 +22,6 @@ jobs:
     with:
       ref: ${{ inputs.tag || github.ref_name }}
       skip_qemu: false
-      retry_workflow: release.yml
     secrets: inherit
 
   # Create release after successful build and validation

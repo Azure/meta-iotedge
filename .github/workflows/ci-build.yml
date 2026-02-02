@@ -37,10 +37,6 @@ on:
         description: "Skip QEMU validation"
         type: boolean
         default: false
-      retry_workflow:
-        description: "Workflow to retry on timeout (unused, kept for compatibility)"
-        type: string
-        default: "ci-build.yml"
     outputs:
       template:
         description: "Template used for build"
