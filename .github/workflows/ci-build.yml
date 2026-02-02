@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: yocto-build-${{ github.ref }}
@@ -27,6 +28,14 @@ jobs:
   build:
     name: Build and validate
     runs-on: self-hosted
+    container:
+      image: ghcr.io/azure/meta-iotedge-devcontainer:scarthgap
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root -v /home/jlian/yocto-cache:/workspaces/yocto-cache
+    env:
+      DEVCONTAINER: "1"
     steps:
       - name: Determine template from branch
         id: set-template
@@ -36,44 +45,40 @@ jobs:
             *) echo "template=scarthgap" >> "$GITHUB_OUTPUT" ;;  
           esac
 
+      - name: Create build user
+        run: |
+          useradd -m builder
+          chown -R builder:builder /workspaces/yocto-cache
+
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify cache setup
+      - name: Fix permissions
         run: |
-          # Symlink should already exist: /workspaces/yocto-cache -> ~/yocto-cache
-          echo "Checking /workspaces..."
-          ls -la /workspaces/ || echo "/workspaces does not exist"
-          echo "Checking symlink target..."
-          ls -la /workspaces/yocto-cache/ || echo "symlink broken"
-          echo "Testing write..."
-          touch /workspaces/yocto-cache/sstate-cache/.write-test && rm /workspaces/yocto-cache/sstate-cache/.write-test
-          echo "Write test passed"
-          if [[ ! -L /workspaces/yocto-cache ]]; then
-            echo "ERROR: /workspaces/yocto-cache symlink not found!"
-            echo "Run this once on the runner: sudo mkdir -p /workspaces && sudo ln -sf ~/yocto-cache /workspaces/yocto-cache"
-            exit 1
-          fi
-          mkdir -p "${HOME}/yocto-cache/sstate-cache" "${HOME}/yocto-cache/downloads"
-          echo "Sstate cache size: $(du -sh ${HOME}/yocto-cache/sstate-cache 2>/dev/null | cut -f1 || echo 'empty')"
-          echo "Downloads size: $(du -sh ${HOME}/yocto-cache/downloads 2>/dev/null | cut -f1 || echo 'empty')"
+          chown -R builder:builder "${GITHUB_WORKSPACE}"
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+
+      - name: Show cache status
+        run: |
+          echo "Sstate cache: $(du -sh /workspaces/yocto-cache/sstate-cache 2>/dev/null | cut -f1 || echo 'empty')"
+          echo "Downloads: $(du -sh /workspaces/yocto-cache/downloads 2>/dev/null | cut -f1 || echo 'empty')"
 
       - name: Fetch layers
-        run: ./scripts/fetch.sh "${{ steps.set-template.outputs.template }}"
+        run: sudo -E -u builder ./scripts/fetch.sh "${{ steps.set-template.outputs.template }}"
 
       - name: Build
         env:
           TEMPLATE: ${{ steps.set-template.outputs.template }}
         run: |
           if [[ "${{ inputs.skip_qemu }}" == "true" ]]; then
-            ./scripts/build.sh "${TEMPLATE}"
+            sudo -E -u builder ./scripts/build.sh "${TEMPLATE}"
           else
-            ./scripts/build.sh "${TEMPLATE}" --with-qemu
+            sudo -E -u builder ./scripts/build.sh "${TEMPLATE}" --with-qemu
           fi
 
       - name: Run QEMU validation
         if: ${{ !inputs.skip_qemu }}
-        run: ./scripts/validate-qemu.sh "${{ steps.set-template.outputs.template }}"
+        run: sudo -E -u builder ./scripts/validate-qemu.sh "${{ steps.set-template.outputs.template }}"
 
       - name: Upload RPM packages
         uses: actions/upload-artifact@v4
@@ -93,9 +98,3 @@ jobs:
             build/tmp/deploy/images/qemux86-64/bzImage
           retention-days: 7
           if-no-files-found: warn
-
-      - name: Cleanup workspace
-        if: always()
-        run: |
-          # Keep cache, clean build artifacts to save disk space
-          rm -rf build/tmp/work build/tmp/stamps
