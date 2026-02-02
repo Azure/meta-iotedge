@@ -267,8 +267,8 @@ if [[ "${SKIP_VALIDATE}" != true ]]; then
     # Fetch required layers
     retry "fetch poky" git clone --depth=1 --branch scarthgap git://git.yoctoproject.org/poky "${VALIDATE_DIR}/poky"
     retry "fetch meta-openembedded" git clone --depth=1 --branch scarthgap git://git.openembedded.org/meta-openembedded "${VALIDATE_DIR}/meta-openembedded"
-    retry "fetch meta-rust-bin" git clone --depth=1 --branch master https://github.com/sirhcel/meta-rust-bin.git "${VALIDATE_DIR}/meta-rust-bin"
-    retry "fetch meta-virtualization" git clone --depth=1 --branch scarthgap https://github.com/lgirdk/meta-virtualization.git "${VALIDATE_DIR}/meta-virtualization"
+    retry "fetch meta-rust-bin" git clone --depth=1 --branch master https://github.com/rust-embedded/meta-rust-bin.git "${VALIDATE_DIR}/meta-rust-bin"
+    retry "fetch meta-virtualization" git clone --depth=1 --branch scarthgap git://git.yoctoproject.org/meta-virtualization "${VALIDATE_DIR}/meta-virtualization"
     
     # Source build environment and set up layers
     pushd "${VALIDATE_DIR}" >/dev/null
