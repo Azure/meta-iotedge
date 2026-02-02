@@ -1,5 +1,4 @@
-name: Yocto build
-run-name: "Yocto build${{ inputs.attempt > 1 && format(' (attempt #{0})', inputs.attempt) || '' }}"
+name: Yocto build (self-hosted)
 
 on:
   pull_request:
@@ -16,36 +15,9 @@ on:
         description: "Skip QEMU validation (faster, packages only)"
         type: boolean
         default: false
-      attempt:
-        description: "Attempt number (for retries)"
-        type: number
-        default: 1
-  workflow_call:
-    inputs:
-      ref:
-        description: "Git ref to checkout (tag or branch)"
-        type: string
-        required: false
-      skip_qemu:
-        description: "Skip QEMU validation"
-        type: boolean
-        default: false
-      attempt:
-        description: "Attempt number (for retries)"
-        type: number
-        default: 1
-      retry_workflow:
-        description: "Workflow to retry on timeout (defaults to ci-build.yml)"
-        type: string
-        default: "ci-build.yml"
-    outputs:
-      template:
-        description: "Template used for build"
-        value: ${{ jobs.build.outputs.template }}
 
 permissions:
   contents: read
-  packages: read
 
 concurrency:
   group: yocto-build-${{ github.ref }}
@@ -54,22 +26,11 @@ concurrency:
 jobs:
   build:
     name: Build and validate
-    runs-on: ubuntu-22.04
-    outputs:
-      template: ${{ steps.set-template.outputs.template }}
-      build_step_outcome: ${{ steps.build.outcome }}
-      cache_saved: ${{ steps.save-sstate.outcome == 'success' }}
-    container:
-      image: ghcr.io/${{ github.repository_owner }}/meta-iotedge-devcontainer:scarthgap
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-      options: --user root
+    runs-on: self-hosted
     env:
-      BB_SERVER_TIMEOUT: "600"
-      BB_COMMAND_TIMEOUT: "300"
-      DEVCONTAINER: "1"
-      YOCTO_CACHE_DIR: /workspaces/yocto-cache
+      # Persistent cache directories on the runner (uses $HOME which expands at runtime)
+      SSTATE_DIR: /home/jlian/yocto-cache/sstate-cache
+      DL_DIR: /home/jlian/yocto-cache/downloads
     steps:
       - name: Determine template from branch
         id: set-template
@@ -79,67 +40,35 @@ jobs:
             *) echo "template=scarthgap" >> "$GITHUB_OUTPUT" ;;  
           esac
 
-      - name: Create build user
-        run: useradd -m builder
-
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || '' }}
 
-      - name: Fix permissions
+      - name: Ensure cache directories exist
         run: |
-          chown -R builder:builder "${GITHUB_WORKSPACE}"
-          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
-
-      - name: Prepare cache directories
-        run: |
-          mkdir -p "${YOCTO_CACHE_DIR}/sstate-cache"
-          chown -R builder:builder "${YOCTO_CACHE_DIR}"
-
-      - name: Restore sstate cache
-        uses: actions/cache/restore@v4
-        with:
-          path: sstate-cache.tar.zst
-          key: yocto-sstate-${{ steps.set-template.outputs.template }}-${{ hashFiles('conf/templates/*/local.conf.sample', 'conf/templates/*/bblayers.conf.sample') }}
-          restore-keys: |
-            yocto-sstate-${{ steps.set-template.outputs.template }}-
-
-      - name: Decompress sstate cache
-        run: |
-          if [[ -f sstate-cache.tar.zst ]]; then
-            echo "Decompressing sstate cache..."
-            tar -I 'zstd -T0 -d' -xf sstate-cache.tar.zst -C "${YOCTO_CACHE_DIR}/"
-            rm sstate-cache.tar.zst
-            echo "Sstate cache size: $(du -sh ${YOCTO_CACHE_DIR}/sstate-cache 2>/dev/null | cut -f1 || echo 'empty')"
-          fi
-
-      - name: Fix cache permissions
-        run: chown -R builder:builder "${YOCTO_CACHE_DIR}"
+          mkdir -p "${SSTATE_DIR}" "${DL_DIR}"
+          echo "Sstate cache size: $(du -sh ${SSTATE_DIR} 2>/dev/null | cut -f1 || echo 'empty')"
+          echo "Downloads size: $(du -sh ${DL_DIR} 2>/dev/null | cut -f1 || echo 'empty')"
 
       - name: Fetch layers
-        run: sudo -E -u builder ./scripts/fetch.sh "${{ steps.set-template.outputs.template }}"
+        run: ./scripts/fetch.sh "${{ steps.set-template.outputs.template }}"
 
       - name: Build
-        id: build
-        timeout-minutes: 330
-        continue-on-error: true
         env:
-          SKIP_QEMU: ${{ inputs.skip_qemu }}
           TEMPLATE: ${{ steps.set-template.outputs.template }}
+          SSTATE_DIR: ${{ env.SSTATE_DIR }}
+          DL_DIR: ${{ env.DL_DIR }}
         run: |
-          if [[ "${SKIP_QEMU}" == "true" ]]; then
-            sudo -E -u builder ./scripts/build.sh "${TEMPLATE}"
+          if [[ "${{ inputs.skip_qemu }}" == "true" ]]; then
+            ./scripts/build.sh "${TEMPLATE}"
           else
-            sudo -E -u builder ./scripts/build.sh "${TEMPLATE}" --with-qemu
+            ./scripts/build.sh "${TEMPLATE}" --with-qemu
           fi
 
       - name: Run QEMU validation
-        if: ${{ steps.build.outcome == 'success' && !inputs.skip_qemu }}
-        run: sudo -E -u builder ./scripts/validate-qemu.sh "${{ steps.set-template.outputs.template }}"
+        if: ${{ !inputs.skip_qemu }}
+        run: ./scripts/validate-qemu.sh "${{ steps.set-template.outputs.template }}"
 
       - name: Upload RPM packages
-        if: ${{ steps.build.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: rpm-packages-${{ steps.set-template.outputs.template }}
@@ -148,7 +77,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload QEMU image
-        if: ${{ steps.build.outcome == 'success' && !inputs.skip_qemu }}
+        if: ${{ !inputs.skip_qemu }}
         uses: actions/upload-artifact@v4
         with:
           name: iotedge-qemu-image-${{ steps.set-template.outputs.template }}
@@ -158,109 +87,8 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
-      # Compress and save sstate cache (on push and workflow_dispatch/workflow_call, not pull_request)
-      - name: Compress sstate cache
-        if: always() && github.event_name != 'pull_request'
-        run: |
-          if [[ -d "${YOCTO_CACHE_DIR}/sstate-cache" ]]; then
-            echo "Compressing sstate cache..."
-            tar -I 'zstd -T0 -19' -cf sstate-cache.tar.zst -C "${YOCTO_CACHE_DIR}" sstate-cache
-            echo "Compressed sstate size: $(du -sh sstate-cache.tar.zst | cut -f1)"
-          fi
-
-      - name: Save sstate cache
-        id: save-sstate
-        uses: actions/cache/save@v4
-        if: always() && github.event_name != 'pull_request'
-        with:
-          path: sstate-cache.tar.zst
-          key: yocto-sstate-${{ steps.set-template.outputs.template }}-${{ hashFiles('conf/templates/*/local.conf.sample', 'conf/templates/*/bblayers.conf.sample') }}
-
-      - name: Check build result
+      - name: Cleanup workspace
         if: always()
         run: |
-          if [[ "${{ steps.build.outcome }}" != "success" ]]; then
-            echo "Build step did not succeed (outcome: ${{ steps.build.outcome }})"
-            exit 1
-          fi
-
-  # Auto-retry on timeout (only if cache was saved successfully)
-  retry-on-timeout:
-    name: Queue retry on timeout
-    needs: build
-    if: always() && needs.build.outputs.build_step_outcome == 'cancelled' && needs.build.outputs.cache_saved == 'true'
-    runs-on: ubuntu-22.04
-    permissions:
-      actions: write
-    steps:
-      - name: Trigger retry workflow
-        uses: actions/github-script@v7
-        env:
-          ORIGINAL_EVENT: ${{ github.event_name }}
-          SKIP_QEMU: ${{ inputs.skip_qemu }}
-          CURRENT_ATTEMPT: ${{ inputs.attempt || 1 }}
-        with:
-          script: |
-            const retryWorkflow = '${{ inputs.retry_workflow || 'ci-build.yml' }}';
-            const ref = '${{ inputs.ref }}' || context.ref;
-            const originalEvent = process.env.ORIGINAL_EVENT;
-            const skipQemu = process.env.SKIP_QEMU === 'true';
-            const currentAttempt = parseInt(process.env.CURRENT_ATTEMPT) || 1;
-            
-            // Skip retry for pull_request events (including workflow_call from PR)
-            if (originalEvent === 'pull_request') {
-              console.log('Skipping retry for pull_request event');
-              return;
-            }
-            
-            const refName = ref.replace(/^refs\/(heads|tags)\//, '');
-            
-            const runs = await github.rest.actions.listWorkflowRuns({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: retryWorkflow,
-              per_page: 10
-            });
-            
-            // Count consecutive failures/cancellations for this ref
-            const runsForRef = runs.data.workflow_runs.filter(run => 
-              run.head_branch === refName
-            );
-            
-            let consecutiveFailures = 0;
-            for (const run of runsForRef) {
-              if (run.conclusion === 'cancelled' || run.conclusion === 'timed_out' || run.conclusion === 'failure') {
-                consecutiveFailures++;
-              } else {
-                break; // Stop counting on first success
-              }
-            }
-            
-            console.log(`Consecutive failures for ${refName}: ${consecutiveFailures}`);
-            
-            if (consecutiveFailures >= 3) {
-              console.log('Skipping retry: 3 or more consecutive failures detected');
-              core.setFailed('Too many consecutive failures, manual intervention required');
-              return;
-            }
-            
-            console.log(`Triggering retry of ${retryWorkflow} for ref: ${refName} (attempt ${currentAttempt + 1})`);
-            
-            let workflowInputs = {};
-            if (retryWorkflow === 'release.yml') {
-              workflowInputs = { tag: refName };
-            } else {
-              // Preserve skip_qemu setting and increment attempt for ci-build.yml retries
-              workflowInputs = { 
-                skip_qemu: skipQemu,
-                attempt: currentAttempt + 1
-              };
-            }
-            
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: retryWorkflow,
-              ref: refName.match(/^\d+\./) ? `refs/tags/${refName}` : `refs/heads/${refName}`,
-              inputs: workflowInputs
-            });
+          # Keep cache, clean build artifacts to save disk space
+          rm -rf build/tmp/work build/tmp/stamps
