@@ -39,12 +39,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Ensure cache symlink exists
+      - name: Verify cache setup
         run: |
-          # Create symlink so /workspaces/yocto-cache points to local cache
-          sudo mkdir -p /workspaces
+          # Symlink should already exist: /workspaces/yocto-cache -> ~/yocto-cache
           if [[ ! -L /workspaces/yocto-cache ]]; then
-            sudo ln -sf "${HOME}/yocto-cache" /workspaces/yocto-cache
+            echo "ERROR: /workspaces/yocto-cache symlink not found!"
+            echo "Run this once on the runner: sudo ln -sf ~/yocto-cache /workspaces/yocto-cache"
+            exit 1
           fi
           mkdir -p "${HOME}/yocto-cache/sstate-cache" "${HOME}/yocto-cache/downloads"
           echo "Sstate cache size: $(du -sh ${HOME}/yocto-cache/sstate-cache 2>/dev/null | cut -f1 || echo 'empty')"
