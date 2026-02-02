@@ -50,10 +50,9 @@ BB_SERVER_TIMEOUT = "600"
 # is safe to share between multiple builds on the same machine too.
 #
 # The default is a downloads directory under TOPDIR which is the build directory.
-# Set DL_DIR environment variable to override, or it defaults to the devcontainer path.
 #
 #DL_DIR ?= "${TOPDIR}/downloads"
-DL_DIR ?= "${@os.environ.get('DL_DIR', '/workspaces/yocto-cache/downloads')}"
+DL_DIR ?= "/workspaces/yocto-cache/downloads"
 
 # Fetch robustness (retries + per-try timeout). Increase if your network is flaky.
 BB_FETCH_RETRIES ?= "5"
@@ -72,10 +71,9 @@ BB_FETCH_TIMEOUT ?= "60"
 # be used (done using checksums).
 #
 # The default is a sstate-cache directory under TOPDIR.
-# Set SSTATE_DIR environment variable to override, or it defaults to the devcontainer path.
 #
 #SSTATE_DIR ?= "${TOPDIR}/sstate-cache"
-SSTATE_DIR ?= "${@os.environ.get('SSTATE_DIR', '/workspaces/yocto-cache/sstate-cache')}"
+SSTATE_DIR ?= "/workspaces/yocto-cache/sstate-cache"
 
 #
 # Where to place the build output

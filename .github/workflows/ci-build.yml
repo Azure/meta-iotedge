@@ -27,10 +27,6 @@ jobs:
   build:
     name: Build and validate
     runs-on: self-hosted
-    env:
-      # Persistent cache directories on the runner (uses $HOME which expands at runtime)
-      SSTATE_DIR: /home/jlian/yocto-cache/sstate-cache
-      DL_DIR: /home/jlian/yocto-cache/downloads
     steps:
       - name: Determine template from branch
         id: set-template
@@ -43,11 +39,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Ensure cache directories exist
+      - name: Ensure cache symlink exists
         run: |
-          mkdir -p "${SSTATE_DIR}" "${DL_DIR}"
-          echo "Sstate cache size: $(du -sh ${SSTATE_DIR} 2>/dev/null | cut -f1 || echo 'empty')"
-          echo "Downloads size: $(du -sh ${DL_DIR} 2>/dev/null | cut -f1 || echo 'empty')"
+          # Create symlink so /workspaces/yocto-cache points to local cache
+          sudo mkdir -p /workspaces
+          if [[ ! -L /workspaces/yocto-cache ]]; then
+            sudo ln -sf "${HOME}/yocto-cache" /workspaces/yocto-cache
+          fi
+          mkdir -p "${HOME}/yocto-cache/sstate-cache" "${HOME}/yocto-cache/downloads"
+          echo "Sstate cache size: $(du -sh ${HOME}/yocto-cache/sstate-cache 2>/dev/null | cut -f1 || echo 'empty')"
+          echo "Downloads size: $(du -sh ${HOME}/yocto-cache/downloads 2>/dev/null | cut -f1 || echo 'empty')"
 
       - name: Fetch layers
         run: ./scripts/fetch.sh "${{ steps.set-template.outputs.template }}"
@@ -55,8 +56,6 @@ jobs:
       - name: Build
         env:
           TEMPLATE: ${{ steps.set-template.outputs.template }}
-          SSTATE_DIR: ${{ env.SSTATE_DIR }}
-          DL_DIR: ${{ env.DL_DIR }}
         run: |
           if [[ "${{ inputs.skip_qemu }}" == "true" ]]; then
             ./scripts/build.sh "${TEMPLATE}"
