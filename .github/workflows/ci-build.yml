@@ -33,7 +33,7 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-      options: --user root -v /home/jlian/yocto-cache:/workspaces/yocto-cache
+      options: --user root -v /home/jlian/yocto-cache:/workspaces/yocto-cache --device /dev/kvm
     env:
       DEVCONTAINER: "1"
     steps:
