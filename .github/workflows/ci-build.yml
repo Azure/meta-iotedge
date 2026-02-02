@@ -15,6 +15,24 @@ on:
         description: "Skip QEMU validation (faster, packages only)"
         type: boolean
         default: false
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to checkout (tag or branch)"
+        type: string
+        required: false
+      skip_qemu:
+        description: "Skip QEMU validation"
+        type: boolean
+        default: false
+      retry_workflow:
+        description: "Workflow to retry on timeout (unused, kept for compatibility)"
+        type: string
+        default: "ci-build.yml"
+    outputs:
+      template:
+        description: "Template used for build"
+        value: ${{ jobs.build.outputs.template }}
 
 permissions:
   contents: read
@@ -28,6 +46,8 @@ jobs:
   build:
     name: Build and validate
     runs-on: self-hosted
+    outputs:
+      template: ${{ steps.set-template.outputs.template }}
     container:
       image: ghcr.io/${{ github.repository_owner }}/meta-iotedge-devcontainer:scarthgap
       credentials:
@@ -52,6 +72,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || '' }}
 
       - name: Fix permissions
         run: |
@@ -80,7 +102,9 @@ jobs:
         if: ${{ !inputs.skip_qemu }}
         run: sudo -E -u builder ./scripts/validate-qemu.sh "${{ steps.set-template.outputs.template }}"
 
+      # Only upload artifacts when called from release workflow (workflow_call)
       - name: Upload RPM packages
+        if: ${{ github.event_name == 'workflow_call' }}
         uses: actions/upload-artifact@v4
         with:
           name: rpm-packages-${{ steps.set-template.outputs.template }}
@@ -89,7 +113,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload QEMU image
-        if: ${{ !inputs.skip_qemu }}
+        if: ${{ github.event_name == 'workflow_call' && !inputs.skip_qemu }}
         uses: actions/upload-artifact@v4
         with:
           name: iotedge-qemu-image-${{ steps.set-template.outputs.template }}
