@@ -272,7 +272,9 @@ if [[ "${SKIP_VALIDATE}" != true ]]; then
     
     # Source build environment and set up layers
     pushd "${VALIDATE_DIR}" >/dev/null
+    set +u  # oe-init-build-env uses unset variables
     . poky/oe-init-build-env build >/dev/null
+    set -u
     
     bitbake-layers add-layer "${VALIDATE_DIR}/meta-openembedded/meta-oe"
     bitbake-layers add-layer "${VALIDATE_DIR}/meta-openembedded/meta-python"
