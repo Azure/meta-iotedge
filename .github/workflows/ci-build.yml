@@ -1,4 +1,5 @@
 name: Yocto build
+run-name: "Yocto build${{ inputs.attempt > 1 && format(' (attempt #{0})', inputs.attempt) || '' }}"
 
 on:
   pull_request:
@@ -15,6 +16,10 @@ on:
         description: "Skip QEMU validation (faster, packages only)"
         type: boolean
         default: false
+      attempt:
+        description: "Attempt number (for retries)"
+        type: number
+        default: 1
   workflow_call:
     inputs:
       ref:
@@ -25,6 +30,10 @@ on:
         description: "Skip QEMU validation"
         type: boolean
         default: false
+      attempt:
+        description: "Attempt number (for retries)"
+        type: number
+        default: 1
       retry_workflow:
         description: "Workflow to retry on timeout (defaults to ci-build.yml)"
         type: string
@@ -49,7 +58,7 @@ jobs:
     outputs:
       template: ${{ steps.set-template.outputs.template }}
       build_step_outcome: ${{ steps.build.outcome }}
-      cache_saved: ${{ steps.save-sstate.outcome == 'success' || steps.save-downloads.outcome == 'success' }}
+      cache_saved: ${{ steps.save-sstate.outcome == 'success' }}
     container:
       image: ghcr.io/${{ github.repository_owner }}/meta-iotedge-devcontainer:scarthgap
       credentials:
@@ -85,7 +94,7 @@ jobs:
 
       - name: Prepare cache directories
         run: |
-          mkdir -p "${YOCTO_CACHE_DIR}/downloads" "${YOCTO_CACHE_DIR}/sstate-cache"
+          mkdir -p "${YOCTO_CACHE_DIR}/sstate-cache"
           chown -R builder:builder "${YOCTO_CACHE_DIR}"
 
       - name: Restore sstate cache
@@ -96,27 +105,13 @@ jobs:
           restore-keys: |
             yocto-sstate-${{ steps.set-template.outputs.template }}-
 
-      - name: Restore downloads cache
-        uses: actions/cache/restore@v4
-        with:
-          path: downloads.tar.zst
-          key: yocto-downloads-${{ hashFiles('recipes-*/**/*.bb', 'recipes-*/**/*.inc') }}
-          restore-keys: |
-            yocto-downloads-
-
-      - name: Decompress caches
+      - name: Decompress sstate cache
         run: |
           if [[ -f sstate-cache.tar.zst ]]; then
             echo "Decompressing sstate cache..."
             tar -I 'zstd -T0 -d' -xf sstate-cache.tar.zst -C "${YOCTO_CACHE_DIR}/"
             rm sstate-cache.tar.zst
             echo "Sstate cache size: $(du -sh ${YOCTO_CACHE_DIR}/sstate-cache 2>/dev/null | cut -f1 || echo 'empty')"
-          fi
-          if [[ -f downloads.tar.zst ]]; then
-            echo "Decompressing downloads cache..."
-            tar -I 'zstd -T0 -d' -xf downloads.tar.zst -C "${YOCTO_CACHE_DIR}/"
-            rm downloads.tar.zst
-            echo "Downloads cache size: $(du -sh ${YOCTO_CACHE_DIR}/downloads 2>/dev/null | cut -f1 || echo 'empty')"
           fi
 
       - name: Fix cache permissions
@@ -163,19 +158,14 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
-      # Compress and save caches (on push and workflow_dispatch/workflow_call, not pull_request)
-      - name: Compress caches
+      # Compress and save sstate cache (on push and workflow_dispatch/workflow_call, not pull_request)
+      - name: Compress sstate cache
         if: always() && github.event_name != 'pull_request'
         run: |
           if [[ -d "${YOCTO_CACHE_DIR}/sstate-cache" ]]; then
             echo "Compressing sstate cache..."
             tar -I 'zstd -T0 -19' -cf sstate-cache.tar.zst -C "${YOCTO_CACHE_DIR}" sstate-cache
             echo "Compressed sstate size: $(du -sh sstate-cache.tar.zst | cut -f1)"
-          fi
-          if [[ -d "${YOCTO_CACHE_DIR}/downloads" ]]; then
-            echo "Compressing downloads cache..."
-            tar -I 'zstd -T0 -19' -cf downloads.tar.zst -C "${YOCTO_CACHE_DIR}" downloads
-            echo "Compressed downloads size: $(du -sh downloads.tar.zst | cut -f1)"
           fi
 
       - name: Save sstate cache
@@ -185,14 +175,6 @@ jobs:
         with:
           path: sstate-cache.tar.zst
           key: yocto-sstate-${{ steps.set-template.outputs.template }}-${{ hashFiles('conf/templates/*/local.conf.sample', 'conf/templates/*/bblayers.conf.sample') }}
-
-      - name: Save downloads cache
-        id: save-downloads
-        uses: actions/cache/save@v4
-        if: always() && github.event_name != 'pull_request'
-        with:
-          path: downloads.tar.zst
-          key: yocto-downloads-${{ hashFiles('recipes-*/**/*.bb', 'recipes-*/**/*.inc') }}
 
       - name: Check build result
         if: always()
@@ -216,12 +198,14 @@ jobs:
         env:
           ORIGINAL_EVENT: ${{ github.event_name }}
           SKIP_QEMU: ${{ inputs.skip_qemu }}
+          CURRENT_ATTEMPT: ${{ inputs.attempt || 1 }}
         with:
           script: |
             const retryWorkflow = '${{ inputs.retry_workflow || 'ci-build.yml' }}';
             const ref = '${{ inputs.ref }}' || context.ref;
             const originalEvent = process.env.ORIGINAL_EVENT;
             const skipQemu = process.env.SKIP_QEMU === 'true';
+            const currentAttempt = parseInt(process.env.CURRENT_ATTEMPT) || 1;
             
             // Skip retry for pull_request events (including workflow_call from PR)
             if (originalEvent === 'pull_request') {
@@ -260,14 +244,17 @@ jobs:
               return;
             }
             
-            console.log(`Triggering retry of ${retryWorkflow} for ref: ${refName}`);
+            console.log(`Triggering retry of ${retryWorkflow} for ref: ${refName} (attempt ${currentAttempt + 1})`);
             
             let workflowInputs = {};
             if (retryWorkflow === 'release.yml') {
               workflowInputs = { tag: refName };
             } else {
-              // Preserve skip_qemu setting for ci-build.yml retries
-              workflowInputs = { skip_qemu: skipQemu };
+              // Preserve skip_qemu setting and increment attempt for ci-build.yml retries
+              workflowInputs = { 
+                skip_qemu: skipQemu,
+                attempt: currentAttempt + 1
+              };
             }
             
             await github.rest.actions.createWorkflowDispatch({
