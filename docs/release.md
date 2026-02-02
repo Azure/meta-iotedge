@@ -12,8 +12,8 @@ flowchart TD
         B -->|Docker-only| D[Create info issue<br/>no recipe changes needed]
         C --> C2[Create PR]
         C2 --> E[ci-build.yml runs]
-        E --> F[Build packages<br/>~4 hours]
-        E --> G[QEMU validation<br/>~30 min]
+        E --> F[Build packages<br/>~30 min cached]
+        E --> G[QEMU validation<br/>~5 min]
     end
     
     subgraph Manual["👤 Manual Steps (~5 min)"]
@@ -62,10 +62,12 @@ flowchart TD
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `watch-upstream.yml` | Daily 6:00 UTC | Detects new releases, creates PRs |
-| `ci-build.yml` | PR events | Builds packages (~4h), QEMU validation (~30m) |
+| `watch-upstream.yml` | Daily 6:00 UTC | Detects new releases, generates recipes, creates PRs |
+| `ci-build.yml` | PR/push events | Builds packages, QEMU validation (self-hosted runner) |
 | `release.yml` | Git tag push | Publishes to GitHub Releases |
-| `update-recipes.yml` | Manual dispatch | Generate recipes with specific SHAs |
+| `build-devcontainer.yml` | `.devcontainer/**` changes | Rebuilds devcontainer image |
+
+> **Note:** CI runs on a self-hosted runner with persistent sstate-cache, making incremental builds much faster (~30 min vs ~4 hours). First builds or builds with recipe changes may take longer.
 
 ### Recipe Management
 
@@ -125,13 +127,15 @@ QEMU validation (after build):
 
 ### Devcontainer
 
-In the devcontainer, `scripts/build.sh` runs `scripts/bitbake.sh` directly (no Docker nesting):
+Both local development and CI use the same devcontainer image (`ghcr.io/<owner>/meta-iotedge-devcontainer:scarthgap`). In the devcontainer, `scripts/build.sh` runs `scripts/bitbake.sh` directly (no Docker nesting):
 
 ```bash
 export DEVCONTAINER=1
 export TEMPLATECONF="meta-iotedge/conf/templates/scarthgap"
 ./scripts/bitbake.sh iotedge aziot-edged
 ```
+
+The CI workflow mounts a persistent cache directory at `/workspaces/yocto-cache` for sstate-cache and downloads, enabling fast incremental builds.
 
 ## QEMU Validation
 

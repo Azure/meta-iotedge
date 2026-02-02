@@ -5,10 +5,22 @@ on:
     branches:
       - main
       - kirkstone
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - 'SECURITY.md'
+      - 'THIRDPARTYNOTICES'
   push:
     branches:
       - main
       - kirkstone
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - 'SECURITY.md'
+      - 'THIRDPARTYNOTICES'
   workflow_dispatch:
     inputs:
       skip_qemu:
