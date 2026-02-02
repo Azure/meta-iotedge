@@ -276,6 +276,10 @@ if [[ "${SKIP_VALIDATE}" != true ]]; then
     . poky/oe-init-build-env build >/dev/null
     set -u
     
+    # Allow running as root (CI containers) and silence meta-virtualization warning
+    echo 'INHERIT:remove = "sanity"' >> conf/local.conf
+    echo 'SKIP_META_VIRT_SANITY_CHECK = "1"' >> conf/local.conf
+    
     bitbake-layers add-layer "${VALIDATE_DIR}/meta-openembedded/meta-oe"
     bitbake-layers add-layer "${VALIDATE_DIR}/meta-openembedded/meta-python"
     bitbake-layers add-layer "${VALIDATE_DIR}/meta-openembedded/meta-networking"
