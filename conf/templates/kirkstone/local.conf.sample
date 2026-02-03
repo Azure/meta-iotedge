@@ -242,9 +242,11 @@ BB_DISKMON_DIRS = "\
 #file://.* http://someserver.tld/share/sstate/PATH;downloadfilename=PATH \n \
 #file://.* file:///some/local/dir/sstate/PATH"
 
-# Disable hashserv in Codespaces to avoid socket/connect failures
-BB_SIGNATURE_HANDLER = "OEBasicHash"
-BB_HASHSERVE = ""
+# Hash equivalence server configuration
+# Disabled in CI/Codespaces environments where hashserv socket may fail
+# Enable for local builds: BB_HASHSERVE = "auto" and BB_SIGNATURE_HANDLER = "OEEquivHash"
+BB_SIGNATURE_HANDLER ?= "OEBasicHash"
+BB_HASHSERVE ?= ""
 SSTATE_MIRRORS ?= "file://.* https://sstate.yoctoproject.org/all/PATH;downloadfilename=PATH"
 
 #

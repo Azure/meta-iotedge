@@ -1,5 +1,5 @@
 DEPENDS += "openssl iotedge aziotd systemd"
-RDEPENDS:${PN} += "iotedge aziotd aziot-keys systemd glibc-utils"
+RDEPENDS:${PN} += "iotedge aziotd aziot-keys systemd glibc-utils docker"
 
 export SOCKET_DIR="/run/aziot"
 

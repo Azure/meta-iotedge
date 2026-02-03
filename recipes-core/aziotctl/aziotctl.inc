@@ -1,5 +1,4 @@
 DEPENDS += "openssl"
-RDEPENDS:${PN} += ""
 
 export OPENSSL_DIR = "${STAGING_EXECPREFIXDIR}"
 export SOCKET_DIR="/run/aziot"

@@ -83,24 +83,23 @@ update_repo() {
 	path=$2
 	rev=$3
 
-	clone_with_fallback() {
-		local primary_uri="$1"
+	# Clone with retries (HTTPS only, no insecure git:// fallback)
+	clone_with_retry() {
+		local uri="$1"
 		local target_path="$2"
-		if git clone "${primary_uri}" "${target_path}"; then
-			return 0
-		fi
+		local attempt=1
+		local max_attempts=3
+		local delay=5
 
-		if [[ "${primary_uri}" == https://git.yoctoproject.org/* ]]; then
-			local fallback_uri="${primary_uri/https:\/\/git.yoctoproject.org/git:\/\/git.yoctoproject.org}"
-			echo "Retrying with ${fallback_uri}"
-			git clone "${fallback_uri}" "${target_path}" && return 0
-		fi
-		if [[ "${primary_uri}" == https://git.openembedded.org/* ]]; then
-			local fallback_uri="${primary_uri/https:\/\/git.openembedded.org/git:\/\/git.openembedded.org}"
-			echo "Retrying with ${fallback_uri}"
-			git clone "${fallback_uri}" "${target_path}" && return 0
-		fi
-
+		while [[ $attempt -le $max_attempts ]]; do
+			if git clone "${uri}" "${target_path}"; then
+				return 0
+			fi
+			echo "Clone attempt ${attempt}/${max_attempts} failed, retrying in ${delay}s..." >&2
+			rm -rf "${target_path}" 2>/dev/null || true
+			sleep "$delay"
+			((attempt++, delay*=2))
+		done
 		return 1
 	}
 
@@ -116,7 +115,7 @@ update_repo() {
 			git clone --reference ${GIT_LOCAL_REF_DIR}/`basename ${path}` \
 				${uri} ${path} || die "unable to clone ${uri}"
 		else
-			clone_with_fallback "${uri}" "${path}" || die "unable to clone ${uri}"
+			clone_with_retry "${uri}" "${path}" || die "unable to clone ${uri}"
 		fi
 		pushd ${path} > /dev/null
 	fi
