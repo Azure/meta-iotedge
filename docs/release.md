@@ -42,11 +42,13 @@ flowchart TD
 2. **Check CI status** — Both "Build packages" and "QEMU validation" must pass
 3. **Merge the PR**
 4. **Tag the release** (PR description includes exact commands):
+
    ```bash
    git pull origin main
    git tag 1.5.35
    git push origin 1.5.35
    ```
+
 5. **Verify** — Check [GitHub Releases](https://github.com/Azure/meta-iotedge/releases)
 
 ## How Automation Works
@@ -60,12 +62,12 @@ flowchart TD
 
 ### GitHub Actions Workflows
 
-| Workflow | Trigger | Purpose |
-|----------|---------|---------|
-| `watch-upstream.yml` | Daily 6:00 UTC | Detects new releases, generates recipes, creates PRs |
-| `ci-build.yml` | PR/push events | Builds packages, QEMU validation (self-hosted runner) |
-| `release.yml` | Git tag push | Publishes to GitHub Releases |
-| `build-devcontainer.yml` | `.devcontainer/**` changes | Rebuilds devcontainer image |
+| Workflow                 | Trigger                    | Purpose                                                |
+| ------------------------ | -------------------------- | ------------------------------------------------------ |
+| `watch-upstream.yml`     | Daily 6:00 UTC             | Detects new releases, generates recipes, creates PRs   |
+| `ci-build.yml`           | PR/push events             | Builds packages, QEMU validation (self-hosted runner)  |
+| `release.yml`            | Git tag push               | Publishes to GitHub Releases                           |
+| `build-devcontainer.yml` | `.devcontainer/**` changes | Rebuilds devcontainer image                            |
 
 > **Note:** CI runs on a self-hosted runner with persistent sstate-cache, making incremental builds much faster (~30 min vs ~4 hours). First builds or builds with recipe changes may take longer.
 
@@ -76,10 +78,10 @@ flowchart TD
 
 ## Branch Mapping
 
-| Branch | Yocto Release | Script Parameter |
-|--------|---------------|------------------|
-| main | Scarthgap (5.0 LTS) | `scarthgap` |
-| kirkstone | Kirkstone | `kirkstone` |
+| Branch    | Yocto Release       | Script Parameter |
+| --------- | ------------------- | ---------------- |
+| main      | Scarthgap (5.0 LTS) | `scarthgap`      |
+| kirkstone | Kirkstone           | `kirkstone`      |
 
 ## Manual Recipe Updates
 
@@ -146,6 +148,7 @@ The `validate-qemu.sh` script boots the QEMU image and checks:
 - Service status — keyd, certd, tpmd, identityd, aziot-edged
 
 **Expected without Azure config:**
+
 - ✅ Services running: keyd, certd, tpmd, identityd
 - ⚠️ Configuration warnings (no config.toml)
 - ❌ aziot-edged needs config to fully start
@@ -162,7 +165,7 @@ sshpass -p '' ssh -o StrictHostKeyChecking=no -p 2222 root@localhost
 
 ### SRCREV = "main" errors
 
-```
+```text
 ERROR: iotedge: Fetcher failure: Unable to find revision main in branch main
 ```
 
@@ -170,7 +173,7 @@ Recipe has branch names instead of commit SHAs. Run `update-recipes.sh` or manua
 
 ### Missing SOCKET_DIR error
 
-```
+```text
 error: environment variable `SOCKET_DIR` not defined at compile time
 ```
 
@@ -178,7 +181,7 @@ Ensure the recipe's `.inc` file exports: `export SOCKET_DIR="/run/aziot"`
 
 ### Missing docker group error
 
-```
+```text
 useradd: group 'docker' does not exist
 ```
 
