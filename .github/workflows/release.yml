@@ -45,11 +45,20 @@ jobs:
       - name: Prepare release artifacts
         id: artifacts
         run: |
-          mkdir -p final-artifacts
+          mkdir -p final-artifacts rpm-staging
           VERSION="${{ inputs.tag || github.ref_name }}"
           
-          # Create RPM tarball instead of uploading individual files
-          tar -czvf "final-artifacts/iotedge-rpms-${VERSION}.tar.gz" -C release-artifacts/rpm .
+          # Only include IoT Edge specific RPMs (not all dependencies)
+          find release-artifacts/rpm -type f -name "*.rpm" \( \
+            -name "iotedge-*.rpm" -o \
+            -name "aziot-*.rpm" \) \
+            -exec cp {} rpm-staging/ \;
+          
+          echo "IoT Edge RPMs to include:"
+          ls -la rpm-staging/
+          
+          # Create tarball of just the IoT Edge packages
+          tar -czvf "final-artifacts/iotedge-rpms-${VERSION}.tar.gz" -C rpm-staging .
           
           # Compress QEMU rootfs
           if [[ -f release-artifacts/qemu/iotedge-qemu-image-qemux86-64.rootfs.ext4 ]]; then
