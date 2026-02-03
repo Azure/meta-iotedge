@@ -46,9 +46,10 @@ jobs:
         id: artifacts
         run: |
           mkdir -p final-artifacts
+          VERSION="${{ inputs.tag || github.ref_name }}"
           
-          # Flatten RPM packages
-          find release-artifacts/rpm -name "*.rpm" -exec cp {} final-artifacts/ \;
+          # Create RPM tarball instead of uploading individual files
+          tar -czvf "final-artifacts/iotedge-rpms-${VERSION}.tar.gz" -C release-artifacts/rpm .
           
           # Compress QEMU rootfs
           if [[ -f release-artifacts/qemu/iotedge-qemu-image-qemux86-64.rootfs.ext4 ]]; then
@@ -62,8 +63,6 @@ jobs:
           echo "Release artifacts:"
           ls -la final-artifacts/
           
-          # Get version from tag
-          VERSION="${{ inputs.tag || github.ref_name }}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
@@ -80,7 +79,13 @@ jobs:
             
             This release contains pre-built packages for IoT Edge on Yocto Scarthgap (5.0 LTS).
             
-            ### Included Packages
+            ### RPM Packages
+            Extract the tarball to get all RPM packages:
+            ```bash
+            tar -xzvf iotedge-rpms-${{ steps.artifacts.outputs.version }}.tar.gz
+            ```
+            
+            Included packages:
             - **iotedge** - IoT Edge CLI and management tools
             - **aziot-edged** - IoT Edge daemon
             - **aziotd** - Azure IoT Identity Service daemon
@@ -88,7 +93,7 @@ jobs:
             - **aziot-keys** - Azure IoT Keys Service
             
             ### QEMU Image
-            A bootable QEMU image is included for testing. To run:
+            A bootable QEMU image is included for testing:
             ```bash
             # Decompress the image
             zstd -d iotedge-qemu-image-qemux86-64.rootfs.ext4.zst
