@@ -86,28 +86,33 @@ jobs:
           body: |
             ## Azure IoT Edge Yocto Layer Release
             
-            This release contains pre-built packages for IoT Edge on Yocto Scarthgap (5.0 LTS).
+            This release provides Yocto/OpenEmbedded recipes for building Azure IoT Edge on embedded Linux systems.
             
-            ### RPM Packages
-            Extract the tarball to get all RPM packages:
+            ### For Yocto Users
+            
+            **Most users should build from source using the recipes in this repository.** The pre-built RPMs below are for the `qemux86-64` target and won't work on other hardware. To build for your target:
+            
+            ```bash
+            git clone --branch ${{ steps.artifacts.outputs.version }} https://github.com/${{ github.repository }}.git
+            cd meta-iotedge
+            ./scripts/build.sh scarthgap
+            ```
+            
+            ### Pre-built Artifacts (qemux86-64 only)
+            
+            These artifacts are primarily for CI verification and testing:
+            
+            **RPM Packages** — Built for `qemux86-64`, useful for reference:
             ```bash
             tar -xzvf iotedge-rpms-${{ steps.artifacts.outputs.version }}.tar.gz
             ```
             
-            Included packages:
-            - **iotedge** - IoT Edge CLI and management tools
-            - **aziot-edged** - IoT Edge daemon
-            - **aziotd** - Azure IoT Identity Service daemon
-            - **aziotctl** - Azure IoT Identity Service CLI
-            - **aziot-keys** - Azure IoT Keys Service
+            Included: iotedge, aziot-edged, aziotd, aziotctl, aziot-keys
             
-            ### QEMU Image
-            A bootable QEMU image is included for testing:
+            **QEMU Test Image** — Complete bootable image with IoT Edge pre-installed:
             ```bash
-            # Decompress the image
             zstd -d iotedge-qemu-image-qemux86-64.rootfs.ext4.zst
             
-            # Boot with QEMU
             qemu-system-x86_64 \
               -kernel bzImage \
               -drive file=iotedge-qemu-image-qemux86-64.rootfs.ext4,format=raw \
@@ -115,5 +120,5 @@ jobs:
               -nographic -m 512
             ```
             
-            ### Building from Source
-            See the repository [README](https://github.com/${{ github.repository }}#readme) for build instructions.
+            ### Documentation
+            See the [README](https://github.com/${{ github.repository }}#readme) for detailed build and integration instructions.

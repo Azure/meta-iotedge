@@ -110,11 +110,22 @@ jobs:
         if: ${{ !inputs.skip_qemu }}
         run: sudo -E -u builder ./scripts/validate-qemu.sh "${{ steps.set-template.outputs.template }}"
 
+      - name: Collect IoT Edge RPM packages
+        id: collect-rpms
+        run: |
+          mkdir -p rpm-staging
+          find build/tmp/deploy/rpm -type f -name "*.rpm" \( \
+            -name "iotedge-*.rpm" -o \
+            -name "aziot-*.rpm" \) \
+            -exec cp {} rpm-staging/ \;
+          echo "IoT Edge RPMs:"
+          ls -la rpm-staging/
+
       - name: Upload RPM packages
         uses: actions/upload-artifact@v4
         with:
           name: rpm-packages-${{ steps.set-template.outputs.template }}
-          path: build/tmp/deploy/rpm/**/*.rpm
+          path: rpm-staging/*.rpm
           retention-days: 7
           if-no-files-found: warn
 
