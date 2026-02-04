@@ -1,9 +1,6 @@
 name: Build devcontainer image
 
 on:
-  pull_request:
-    branches:
-      - main
   push:
     branches:
       - main
