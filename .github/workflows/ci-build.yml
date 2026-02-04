@@ -1,4 +1,4 @@
-name: Yocto build (self-hosted)
+name: Yocto build
 
 on:
   pull_request:
