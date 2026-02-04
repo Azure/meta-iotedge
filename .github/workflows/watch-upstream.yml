@@ -6,9 +6,6 @@ on:
     - cron: "0 6 * * *"
   workflow_dispatch:
 
-env:
-  CONTAINER_REGISTRY: ghcr.io/azure/meta-iotedge-devcontainer
-
 permissions:
   contents: write
   pull-requests: write
@@ -45,7 +42,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     container:
-      image: ${{ env.CONTAINER_REGISTRY }}:scarthgap
+      image: ghcr.io/azure/meta-iotedge-devcontainer:scarthgap
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}

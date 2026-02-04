@@ -42,9 +42,6 @@ on:
         description: "Template used for build"
         value: ${{ jobs.build.outputs.template }}
 
-env:
-  CONTAINER_REGISTRY: ghcr.io/azure/meta-iotedge-devcontainer
-
 permissions:
   contents: read
   packages: read
@@ -63,7 +60,7 @@ jobs:
     outputs:
       template: ${{ steps.set-template.outputs.template }}
     container:
-      image: ${{ env.CONTAINER_REGISTRY }}:scarthgap
+      image: ghcr.io/azure/meta-iotedge-devcontainer:scarthgap
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
