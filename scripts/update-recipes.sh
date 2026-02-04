@@ -6,22 +6,17 @@ usage() {
 Usage: update-recipes.sh [options]
 
 Options:
-    --iotedge-rev <sha>       IoT Edge git commit SHA (required with --iotedge-version)
-    --iotedge-version <ver>   IoT Edge version (e.g., 1.5.35)
-    --iis-rev <sha>           IoT Identity Service git commit SHA (required with --iis-version)
-    --iis-version <ver>       IoT Identity Service version (e.g., 1.5.6)
+    --iotedge-version <ver>   IoT Edge version tag (e.g., 1.5.35)
     --clean                   Remove old version-specific recipe files before generating
     --skip-validate           Skip bitbake validation (not recommended)
     --workdir <path>          Work directory (default: mktemp)
     --keep-workdir            Do not delete work directory
     -h, --help                Show this help
 
+The IIS version is automatically resolved from the IoT Edge release's product-versions.json.
+
 Examples:
-    # Update IoT Edge only (IIS rev needed for path fixing)
-    ./scripts/update-recipes.sh --iotedge-rev SHA --iotedge-version 1.5.35 --iis-rev SHA --clean
-    
-    # Update both IoT Edge and IIS
-    ./scripts/update-recipes.sh --iotedge-rev SHA --iotedge-version 1.5.35 --iis-rev SHA --iis-version 1.5.6 --clean
+    ./scripts/update-recipes.sh --iotedge-version 1.5.35 --clean
 EOF
 }
 
@@ -31,14 +26,11 @@ PATCHER="${ROOT_DIR}/scripts/patch-bitbake.py"
 
 # Defaults
 WORKDIR="" KEEP_WORKDIR=false CLEAN=false SKIP_VALIDATE=false
-IOTEDGE_REV="" IOTEDGE_VERSION="" IIS_REV="" IIS_VERSION=""
+IOTEDGE_VERSION=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --iotedge-rev)     IOTEDGE_REV="$2"; shift 2;;
         --iotedge-version) IOTEDGE_VERSION="$2"; shift 2;;
-        --iis-rev)         IIS_REV="$2"; shift 2;;
-        --iis-version)     IIS_VERSION="$2"; shift 2;;
         --clean)           CLEAN=true; shift;;
         --skip-validate)   SKIP_VALIDATE=true; shift;;
         --workdir)         WORKDIR="$2"; shift 2;;
@@ -48,45 +40,65 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Determine what to update based on version args
-UPDATE_IOTEDGE=false UPDATE_IIS=false
-[[ -n "${IOTEDGE_VERSION}" ]] && UPDATE_IOTEDGE=true
-[[ -n "${IIS_VERSION}" ]] && UPDATE_IIS=true
-
 # Validate required args
-if [[ "${UPDATE_IOTEDGE}" == true && -z "${IOTEDGE_REV}" ]]; then
-    echo "Error: --iotedge-rev required when --iotedge-version is specified"
-    exit 1
-fi
-if [[ "${UPDATE_IIS}" == true && -z "${IIS_REV}" ]]; then
-    echo "Error: --iis-rev required when --iis-version is specified"
-    exit 1
-fi
-if [[ "${UPDATE_IOTEDGE}" == true && -z "${IIS_REV}" ]]; then
-    echo "Error: --iis-rev required for IoT Edge updates (needed for path fixing)"
-    exit 1
-fi
-if [[ "${UPDATE_IOTEDGE}" != true && "${UPDATE_IIS}" != true ]]; then
-    echo "Error: Must specify at least --iotedge-version or --iis-version"
+if [[ -z "${IOTEDGE_VERSION}" ]]; then
+    echo "Error: --iotedge-version is required"
     usage
     exit 1
 fi
 
+# Resolve versions from the IoT Edge release's product-versions.json
+echo "Fetching product-versions.json from IoT Edge ${IOTEDGE_VERSION}..."
+PRODUCT_VERSIONS_URL="https://raw.githubusercontent.com/Azure/azure-iotedge/${IOTEDGE_VERSION}/product-versions.json"
+PRODUCT_VERSIONS=$(curl -fsSL "$PRODUCT_VERSIONS_URL") || {
+    echo "Error: Could not fetch product-versions.json for tag ${IOTEDGE_VERSION}"
+    exit 1
+}
+
+# Extract IIS version from product-versions.json
+IIS_VERSION=$(echo "$PRODUCT_VERSIONS" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+stable = next((c for c in data['channels'] if c['name'] == 'stable'), None)
+if not stable:
+    print('Error: No stable channel found', file=sys.stderr)
+    sys.exit(1)
+aziot = next((p for p in stable['products'] if p['id'] == 'aziot-edge'), None)
+if not aziot:
+    print('Error: No aziot-edge product found', file=sys.stderr)
+    sys.exit(1)
+iis = next((c['version'] for c in aziot['components'] if c['name'] == 'aziot-identity-service'), '')
+if not iis:
+    print('Error: No IIS version found', file=sys.stderr)
+    sys.exit(1)
+print(iis)
+")
+echo "  IoT Edge version: ${IOTEDGE_VERSION}"
+echo "  IIS version: ${IIS_VERSION}"
+
+# Resolve SHAs from version tags
+echo "Resolving git SHAs..."
+IOTEDGE_REV=$(git ls-remote --tags https://github.com/Azure/iotedge.git "refs/tags/${IOTEDGE_VERSION}" | cut -f1)
+if [[ -z "${IOTEDGE_REV}" ]]; then
+    echo "Error: Could not resolve SHA for tag ${IOTEDGE_VERSION} in Azure/iotedge"
+    exit 1
+fi
+echo "  IoT Edge SHA: ${IOTEDGE_REV}"
+
+IIS_REV=$(git ls-remote --tags https://github.com/Azure/iot-identity-service.git "refs/tags/${IIS_VERSION}" | cut -f1)
+if [[ -z "${IIS_REV}" ]]; then
+    echo "Error: Could not resolve SHA for tag ${IIS_VERSION} in Azure/iot-identity-service"
+    exit 1
+fi
+echo "  IIS SHA: ${IIS_REV}"
+
 # Clean old recipes if requested
 if [[ "${CLEAN}" == true ]]; then
     echo "Cleaning old recipe files..."
-    if [[ "${UPDATE_IOTEDGE}" == true ]]; then
-        for dir in iotedge aziot-edged; do
-            find "${ROOT_DIR}/recipes-core/${dir}" -name "*_*.bb" -type f -delete 2>/dev/null || true
-            find "${ROOT_DIR}/recipes-core/${dir}" -name "*-[0-9]*.inc" -type f -delete 2>/dev/null || true
-        done
-    fi
-    if [[ "${UPDATE_IIS}" == true ]]; then
-        for dir in aziotd aziotctl aziot-keys; do
-            find "${ROOT_DIR}/recipes-core/${dir}" -name "*_*.bb" -type f -delete 2>/dev/null || true
-            find "${ROOT_DIR}/recipes-core/${dir}" -name "*-[0-9]*.inc" -type f -delete 2>/dev/null || true
-        done
-    fi
+    for dir in iotedge aziot-edged aziotd aziotctl aziot-keys; do
+        find "${ROOT_DIR}/recipes-core/${dir}" -name "*_*.bb" -type f -delete 2>/dev/null || true
+        find "${ROOT_DIR}/recipes-core/${dir}" -name "*-[0-9]*.inc" -type f -delete 2>/dev/null || true
+    done
 fi
 
 # Setup directories
@@ -206,58 +218,48 @@ sync_checksums() {
 IOTEDGE_REPO="https://github.com/Azure/iotedge.git"
 IIS_REPO="https://github.com/Azure/iot-identity-service.git"
 
-if [[ "${UPDATE_IOTEDGE}" == true ]]; then
-    echo "Updating IoT Edge to ${IOTEDGE_VERSION} (${IOTEDGE_REV:0:8})"
-    
-    IOTEDGE_DIR="${WORKDIR}/iotedge"
-    prepare_repo "${IOTEDGE_REPO}" "${IOTEDGE_DIR}" "${IOTEDGE_REV}"
-    normalize_cargo_config "${IOTEDGE_DIR}/edgelet/.cargo"
-    
-    # Generate recipes
-    for pkg in aziot-edged iotedge; do
-        pushd "${IOTEDGE_DIR}/edgelet/${pkg}" >/dev/null
-        retry "cargo bitbake (${pkg})" env CARGO_HOME="${CARGO_HOME_DIR}" cargo bitbake
-        bb_file=$(ls "${pkg}_"*.bb | head -1)
-        popd >/dev/null
-        copy_recipe "${pkg}" "${IOTEDGE_DIR}/edgelet/${pkg}/${bb_file}" \
-            "${ROOT_DIR}/recipes-core/${pkg}" "${IOTEDGE_VERSION}"
-    done
-    
-    # Clone IIS repo to get crate subdirectory paths for fixing recipes
-    IIS_PATH="${WORKDIR}/iot-identity-service"
-    prepare_repo "${IIS_REPO}" "${IIS_PATH}" "${IIS_REV}"
-    
-    # Fix recipes
-    for pkg in aziot-edged iotedge; do
-        recipe="${ROOT_DIR}/recipes-core/${pkg}/${pkg}_${IOTEDGE_VERSION}.bb"
-        python3 "${HELPERS}" fix-cargo-paths "${IIS_PATH}" "${recipe}"
-        fix_srcrev "${recipe}" "${IIS_REV}"
-        generate_patch "${IOTEDGE_DIR}" "${ROOT_DIR}/recipes-core/${pkg}/files/0001-Remove-git-from-Cargo.patch" "${pkg}"
-        sync_checksums "${pkg}" "${IOTEDGE_VERSION}" "${IOTEDGE_DIR}/edgelet/Cargo.lock"
-    done
-fi
+echo "Updating IoT Edge to ${IOTEDGE_VERSION} (${IOTEDGE_REV:0:8})"
 
-if [[ "${UPDATE_IIS}" == true ]]; then
-    echo "Updating IIS to ${IIS_VERSION} (${IIS_REV:0:8})"
-    
-    IIS_DIR="${WORKDIR}/iot-identity-service"
-    if [[ ! -d "${IIS_DIR}" ]]; then
-        prepare_repo "${IIS_REPO}" "${IIS_DIR}" "${IIS_REV}"
-    fi
-    normalize_cargo_config "${IIS_DIR}/.cargo"
-    
-    # Generate recipes
-    declare -A IIS_PATHS=([aziot-keys]="key/aziot-keys" [aziotd]="aziotd" [aziotctl]="aziotctl")
-    for pkg in aziot-keys aziotd aziotctl; do
-        pushd "${IIS_DIR}/${IIS_PATHS[$pkg]}" >/dev/null
-        retry "cargo bitbake (${pkg})" env CARGO_HOME="${CARGO_HOME_DIR}" cargo bitbake
-        bb_file=$(ls "${pkg}_"*.bb | head -1)
-        popd >/dev/null
-        copy_recipe "${pkg}" "${IIS_DIR}/${IIS_PATHS[$pkg]}/${bb_file}" \
-            "${ROOT_DIR}/recipes-core/${pkg}" "${IIS_VERSION}"
-        sync_checksums "${pkg}" "${IIS_VERSION}" "${IIS_DIR}/Cargo.lock"
-    done
-fi
+IOTEDGE_DIR="${WORKDIR}/iotedge"
+prepare_repo "${IOTEDGE_REPO}" "${IOTEDGE_DIR}" "${IOTEDGE_REV}"
+normalize_cargo_config "${IOTEDGE_DIR}/edgelet/.cargo"
+
+# Generate IoT Edge recipes
+for pkg in aziot-edged iotedge; do
+    pushd "${IOTEDGE_DIR}/edgelet/${pkg}" >/dev/null
+    retry "cargo bitbake (${pkg})" env CARGO_HOME="${CARGO_HOME_DIR}" cargo bitbake
+    bb_file=$(ls "${pkg}_"*.bb | head -1)
+    popd >/dev/null
+    copy_recipe "${pkg}" "${IOTEDGE_DIR}/edgelet/${pkg}/${bb_file}" \
+        "${ROOT_DIR}/recipes-core/${pkg}" "${IOTEDGE_VERSION}"
+done
+
+# Clone IIS repo for fixing IoT Edge recipes and generating IIS recipes
+echo "Updating IIS to ${IIS_VERSION} (${IIS_REV:0:8})"
+IIS_DIR="${WORKDIR}/iot-identity-service"
+prepare_repo "${IIS_REPO}" "${IIS_DIR}" "${IIS_REV}"
+normalize_cargo_config "${IIS_DIR}/.cargo"
+
+# Fix IoT Edge recipes with IIS paths
+for pkg in aziot-edged iotedge; do
+    recipe="${ROOT_DIR}/recipes-core/${pkg}/${pkg}_${IOTEDGE_VERSION}.bb"
+    python3 "${HELPERS}" fix-cargo-paths "${IIS_DIR}" "${recipe}"
+    fix_srcrev "${recipe}" "${IIS_REV}"
+    generate_patch "${IOTEDGE_DIR}" "${ROOT_DIR}/recipes-core/${pkg}/files/0001-Remove-git-from-Cargo.patch" "${pkg}"
+    sync_checksums "${pkg}" "${IOTEDGE_VERSION}" "${IOTEDGE_DIR}/edgelet/Cargo.lock"
+done
+
+# Generate IIS recipes
+declare -A IIS_PATHS=([aziot-keys]="key/aziot-keys" [aziotd]="aziotd" [aziotctl]="aziotctl")
+for pkg in aziot-keys aziotd aziotctl; do
+    pushd "${IIS_DIR}/${IIS_PATHS[$pkg]}" >/dev/null
+    retry "cargo bitbake (${pkg})" env CARGO_HOME="${CARGO_HOME_DIR}" cargo bitbake
+    bb_file=$(ls "${pkg}_"*.bb | head -1)
+    popd >/dev/null
+    copy_recipe "${pkg}" "${IIS_DIR}/${IIS_PATHS[$pkg]}/${bb_file}" \
+        "${ROOT_DIR}/recipes-core/${pkg}" "${IIS_VERSION}"
+    sync_checksums "${pkg}" "${IIS_VERSION}" "${IIS_DIR}/Cargo.lock"
+done
 
 # Validate recipes with bitbake (skip with --skip-validate)
 if [[ "${SKIP_VALIDATE}" != true ]]; then

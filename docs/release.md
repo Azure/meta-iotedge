@@ -8,7 +8,7 @@ This guide covers the IoT Edge release process for Yocto Scarthgap (main branch)
 flowchart TD
     subgraph Automated["🤖 Fully Automated"]
         A[New IoT Edge release<br/>on Azure/azure-iotedge] -->|Daily check| B{watch-upstream.yml}
-        B -->|Daemon or IIS changed| C[Clean old recipes<br/>Generate new ones]
+        B -->|Daemon changed| C[Clean old recipes<br/>Generate new ones]
         B -->|Docker-only| D[Create info issue<br/>no recipe changes needed]
         C --> C2[Create PR]
         C2 --> E[ci-build.yml runs]
@@ -55,10 +55,17 @@ flowchart TD
 
 ### Version Detection
 
-- **Source**: [Azure/azure-iotedge](https://github.com/Azure/azure-iotedge/releases) combined releases
-- **Daemon version**: Extracted from release asset names (e.g., `aziot-edge-1.5.21-*.rpm`)
-- **Recipe version**: Matches the latest release tag, even if daemon binary is older
-- **Significant vs Docker-only**: Daemon/IIS changes → update recipes; Docker-only → info issue
+- **Source**: [product-versions.json](https://github.com/Azure/azure-iotedge/blob/main/product-versions.json) in Azure/azure-iotedge
+- **Release version**: The overall product version (e.g., `1.5.35`) — used for recipe versioning and tags
+- **Daemon version**: The `aziot-edge` component version (e.g., `1.5.21`) — determines if update is needed
+- **Significant vs Docker-only**: If daemon version changed → update recipes; Docker-only → info issue
+
+The workflow uses `scripts/check-upstream.sh` to fetch `product-versions.json` and compare versions. You can run this locally to test:
+
+```bash
+./scripts/check-upstream.sh         # Key=value output
+./scripts/check-upstream.sh --json  # JSON output
+```
 
 ### GitHub Actions Workflows
 
@@ -96,15 +103,16 @@ cargo install --locked cargo-bitbake
 ### Update Recipes
 
 ```bash
-./scripts/update-recipes.sh \
-  --iotedge-rev <sha> --iotedge-version 1.5.34 \
-  --iis-rev <sha> --iis-version 1.5.6
+./scripts/update-recipes.sh --iotedge-version 1.5.35 --clean
 ```
 
-The script generates `*.bb` and `*.inc` files via cargo-bitbake, normalizes cargo sources, fixes license checksums, and resolves IIS SRCREV to actual git SHAs.
+The script:
+1. Fetches `product-versions.json` from the specified IoT Edge release tag
+2. Resolves git SHAs from version tags
+3. Generates `*.bb` and `*.inc` files via cargo-bitbake
+4. Normalizes cargo sources and fixes license checksums
 
-- Omit `--iis-*` flags for IoT Edge-only updates (auto-resolves latest IIS)
-- Use `--keep-workdir` to debug generated files
+Use `--keep-workdir` to debug generated files.
 
 ### Validate Recipes
 
