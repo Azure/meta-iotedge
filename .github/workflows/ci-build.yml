@@ -27,6 +27,10 @@ on:
         description: "Skip QEMU validation (faster, packages only)"
         type: boolean
         default: false
+      container_owner:
+        description: "Container registry owner (lowercase)"
+        type: string
+        default: "azure"
   workflow_call:
     inputs:
       ref:
@@ -37,6 +41,10 @@ on:
         description: "Skip QEMU validation"
         type: boolean
         default: false
+      container_owner:
+        description: "Container registry owner (lowercase)"
+        type: string
+        default: "azure"
     outputs:
       template:
         description: "Template used for build"
@@ -60,7 +68,7 @@ jobs:
     outputs:
       template: ${{ steps.set-template.outputs.template }}
     container:
-      image: ghcr.io/${{ lower(github.repository_owner) }}/meta-iotedge-devcontainer:scarthgap
+      image: ghcr.io/${{ inputs.container_owner || 'azure' }}/meta-iotedge-devcontainer:scarthgap
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
