@@ -72,7 +72,7 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-      options: --user root -v ${{ vars.YOCTO_CACHE_PATH || '/var/cache/yocto' }}:/workspaces/yocto-cache --device /dev/kvm
+      options: --user root -v ${{ vars.YOCTO_CACHE_PATH || '/var/cache/yocto' }}:/workspaces/yocto-cache
     env:
       DEVCONTAINER: "1"
     steps:
