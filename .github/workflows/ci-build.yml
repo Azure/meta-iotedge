@@ -60,7 +60,7 @@ jobs:
     outputs:
       template: ${{ steps.set-template.outputs.template }}
     container:
-      image: ghcr.io/${{ toLower(github.repository_owner) }}/meta-iotedge-devcontainer:scarthgap
+      image: ghcr.io/${{ lower(github.repository_owner) }}/meta-iotedge-devcontainer:scarthgap
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
