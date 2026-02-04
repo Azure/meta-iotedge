@@ -1,0 +1,25 @@
+{
+  "name": "meta-iotedge (Yocto public image)",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "remoteUser": "vscode",
+  "updateRemoteUserUID": true,
+  "overrideCommand": true,
+  "mounts": [
+    "source=yocto-cache,target=/workspaces/yocto-cache,type=volume"
+  ],
+  "postCreateCommand": "sudo mkdir -p /workspaces/yocto-cache/sstate-cache /workspaces/yocto-cache/downloads && sudo chmod -R a+rwx /workspaces/yocto-cache",
+  "containerEnv": {
+    "BB_SERVER_TIMEOUT": "600",
+    "BB_COMMAND_TIMEOUT": "300",
+    "DEVCONTAINER": "1"
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  }
+}

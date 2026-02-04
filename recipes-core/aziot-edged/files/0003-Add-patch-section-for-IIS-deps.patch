@@ -1,0 +1,47 @@
+From: Yocto Build System <noreply@yocto.org>
+Subject: [PATCH] Add [patch] section to use local IIS crates instead of git
+Upstream-Status: Inappropriate [embedded specific]
+
+The iot-identity-service dependencies are fetched separately by BitBake
+and placed in the work directory. This patch adds a [patch] section to
+redirect Cargo to use these local copies instead of fetching from git.
+
+The paths use relative paths from the edgelet directory up to the work
+directory where IIS crates are unpacked.
+
+diff --git a/edgelet/Cargo.toml b/edgelet/Cargo.toml
+index d0fdba5c8..b287a826e 100644
+--- a/edgelet/Cargo.toml
++++ b/edgelet/Cargo.toml
+@@ -25,3 +25,31 @@ panic = 'abort'
+ # Notes: Snaps don't have a good story for debug symbols, so for now we'll override this setting in
+ # the snapcraft.yaml file by setting CARGO_PROFILE_RELEASE_DEBUG=0.
+ debug = 2
++
++[patch."https://github.com/Azure/iot-identity-service"]
++aziot-cert-client-async = { path = "../aziot-cert-client-async/cert/aziot-cert-client-async" }
++aziot-cert-common-http = { path = "../aziot-cert-common-http/cert/aziot-cert-common-http" }
++aziot-certd-config = { path = "../aziot-certd-config/cert/aziot-certd-config" }
++aziot-identity-client-async = { path = "../aziot-identity-client-async/identity/aziot-identity-client-async" }
++aziot-identity-common = { path = "../aziot-identity-common/identity/aziot-identity-common" }
++aziot-identity-common-http = { path = "../aziot-identity-common-http/identity/aziot-identity-common-http" }
++aziot-identityd-config = { path = "../aziot-identityd-config/identity/aziot-identityd-config" }
++aziot-key-client = { path = "../aziot-key-client/key/aziot-key-client" }
++aziot-key-client-async = { path = "../aziot-key-client-async/key/aziot-key-client-async" }
++aziot-key-common = { path = "../aziot-key-common/key/aziot-key-common" }
++aziot-key-common-http = { path = "../aziot-key-common-http/key/aziot-key-common-http" }
++aziot-key-openssl-engine = { path = "../aziot-key-openssl-engine/key/aziot-key-openssl-engine" }
++aziot-keyd-config = { path = "../aziot-keyd-config/key/aziot-keyd-config" }
++aziot-keys-common = { path = "../aziot-keys-common/key/aziot-keys-common" }
++aziot-tpmd-config = { path = "../aziot-tpmd-config/tpm/aziot-tpmd-config" }
++aziotctl-common = { path = "../aziotctl-common/aziotctl/aziotctl-common" }
++cert-renewal = { path = "../cert-renewal/cert/cert-renewal" }
++config-common = { path = "../config-common/config-common" }
++http-common = { path = "../http-common/http-common" }
++logger = { path = "../logger/logger" }
++openssl-build = { path = "../openssl-build/openssl-build" }
++openssl-sys2 = { path = "../openssl-sys2/openssl-sys2" }
++openssl2 = { path = "../openssl2/openssl2" }
++pkcs11 = { path = "../pkcs11/pkcs11/pkcs11" }
++pkcs11-sys = { path = "../pkcs11-sys/pkcs11/pkcs11-sys" }
++test-common = { path = "../test-common/test-common" }

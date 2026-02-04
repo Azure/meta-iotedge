@@ -37,6 +37,9 @@
 # This sets the default machine to be qemux86 if no other machine is selected:
 MACHINE ??= "qemux86-64"
 
+# Increase BitBake server timeout for slower container starts
+BB_SERVER_TIMEOUT = "600"
+
 #
 # Where to place downloads
 #
@@ -49,6 +52,11 @@ MACHINE ??= "qemux86-64"
 # The default is a downloads directory under TOPDIR which is the build directory.
 #
 #DL_DIR ?= "${TOPDIR}/downloads"
+DL_DIR ?= "/workspaces/yocto-cache/downloads"
+
+# Fetch robustness (retries + per-try timeout). Increase if your network is flaky.
+BB_FETCH_RETRIES ?= "5"
+BB_FETCH_TIMEOUT ?= "60"
 
 #
 # Where to place shared-state files
@@ -65,6 +73,7 @@ MACHINE ??= "qemux86-64"
 # The default is a sstate-cache directory under TOPDIR.
 #
 #SSTATE_DIR ?= "${TOPDIR}/sstate-cache"
+SSTATE_DIR ?= "/workspaces/yocto-cache/sstate-cache"
 
 #
 # Where to place the build output
@@ -77,6 +86,20 @@ MACHINE ??= "qemux86-64"
 # The default is a tmp directory under TOPDIR.
 #
 #TMPDIR = "${TOPDIR}/tmp"
+
+# Scale parallelism to available CPU (override as needed)
+BB_NUMBER_THREADS ?= "${@oe.utils.cpu_count()}"
+PARALLEL_MAKE ?= "-j ${@oe.utils.cpu_count()}"
+
+# Hash equivalence - local server enables sstate sharing across different build paths
+# This runs a local hashserve (no external network needed)
+BB_HASHSERVE ?= "auto"
+BB_SIGNATURE_HANDLER ?= "OEEquivHash"
+
+# Remove work directories after packaging to save disk space (~50GB savings)
+# Exclude IoT Edge packages for debugging purposes
+INHERIT += "rm_work"
+RM_WORK_EXCLUDE += "iotedge aziot-edged aziotd aziotctl aziot-keys"
 
 #
 # Default policy config
@@ -219,9 +242,11 @@ BB_DISKMON_DIRS = "\
 #file://.* http://someserver.tld/share/sstate/PATH;downloadfilename=PATH \n \
 #file://.* file:///some/local/dir/sstate/PATH"
 
-BB_SIGNATURE_HANDLER = "OEEquivHash"
-BB_HASHSERVE = "auto"
-BB_HASHSERVE_UPSTREAM = "hashserv.yocto.io:8687"
+# Hash equivalence server configuration
+# Disabled in CI/Codespaces environments where hashserv socket may fail
+# Enable for local builds: BB_HASHSERVE = "auto" and BB_SIGNATURE_HANDLER = "OEEquivHash"
+BB_SIGNATURE_HANDLER ?= "OEBasicHash"
+BB_HASHSERVE ?= ""
 SSTATE_MIRRORS ?= "file://.* https://sstate.yoctoproject.org/all/PATH;downloadfilename=PATH"
 
 #
