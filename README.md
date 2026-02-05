@@ -15,7 +15,7 @@ Use the branch of `meta-iotedge` corresponding to your Yocto release:
 
 **Kirkstone (out of support April 2026)**:
 * No dedicated branch or CI runs. Use the templates in `conf/templates/kirkstone` on the main branch.
-* The kirkstone templates and recipes are validated, but ongoing CI coverage is scarthgap only.
+* The Kirkstone templates and recipes are validated, but ongoing CI coverage is Scarthgap only.
 
 
 Run `bitbake-layers add-layer meta-iotedge`
@@ -50,16 +50,16 @@ See the step-by-step guide in [docs/release.md](docs/release.md).
 Reliability defaults
 ====================
 
-The default and kirkstone templates include conservative settings to improve build reliability
+The default and Kirkstone templates include conservative settings to improve build reliability
 across varying machines and networks:
 
 - `BB_FETCH_RETRIES` and `BB_FETCH_TIMEOUT` to retry network fetches.
 - `BB_HASHSERVE = ""` to disable hashserv (avoids socket/connect failures in Codespaces).
 - `DL_DIR`/`SSTATE_DIR` set to `/workspaces/yocto-cache` (override for non-container hosts).
 
-**Kirkstone-specific:** The kirkstone template uses `meta-rust` for Rust 1.78+ (Poky kirkstone only has Rust 1.59)
+**Kirkstone-specific:** The Kirkstone template uses `meta-rust` for Rust 1.78+ (Poky Kirkstone only has Rust 1.59)
 and masks Poky's built-in rust recipes via `BBMASK`. The `fetch.sh` script automatically clones meta-rust
-when fetching kirkstone layers.
+when fetching Kirkstone layers.
 
 Validation helpers
 ==================
