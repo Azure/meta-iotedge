@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "1.5.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g., 1.5.35)"
+        required: true
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  # Call the CI workflow to build and validate
+  build:
+    name: Build and validate
+    uses: ./.github/workflows/ci-build.yml
+    with:
+      ref: ${{ inputs.tag || github.ref_name }}
+      skip_qemu: false
+    secrets: inherit
+
+  # Create release after successful build and validation
+  release:
+    name: Create release
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download RPM packages
+        uses: actions/download-artifact@v4
+        with:
+          name: rpm-packages-scarthgap
+          path: release-artifacts/rpm
+
+      - name: Download QEMU image
+        uses: actions/download-artifact@v4
+        with:
+          name: iotedge-qemu-image-scarthgap
+          path: release-artifacts/qemu
+
+      - name: Prepare release artifacts
+        id: artifacts
+        run: |
+          mkdir -p final-artifacts rpm-staging
+          VERSION="${{ inputs.tag || github.ref_name }}"
+          
+          # Only include IoT Edge specific RPMs (not all dependencies)
+          find release-artifacts/rpm -type f -name "*.rpm" \( \
+            -name "iotedge-*.rpm" -o \
+            -name "aziot-*.rpm" \) \
+            -exec cp {} rpm-staging/ \;
+          
+          echo "IoT Edge RPMs to include:"
+          ls -la rpm-staging/
+          
+          # Create tarball of just the IoT Edge packages
+          tar -czvf "final-artifacts/iotedge-rpms-${VERSION}.tar.gz" -C rpm-staging .
+          
+          # Compress QEMU rootfs
+          if [[ -f release-artifacts/qemu/iotedge-qemu-image-qemux86-64.rootfs.ext4 ]]; then
+            zstd -T0 -19 release-artifacts/qemu/iotedge-qemu-image-qemux86-64.rootfs.ext4 \
+              -o final-artifacts/iotedge-qemu-image-qemux86-64.rootfs.ext4.zst
+          fi
+          
+          # Copy kernel
+          cp release-artifacts/qemu/bzImage final-artifacts/ 2>/dev/null || true
+          
+          echo "Release artifacts:"
+          ls -la final-artifacts/
+          
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          name: IoT Edge Yocto Layer ${{ steps.artifacts.outputs.version }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') }}
+          generate_release_notes: true
+          files: final-artifacts/*
+          body: |
+            ## Azure IoT Edge Yocto Layer Release
+            
+            This release provides Yocto/OpenEmbedded recipes for building Azure IoT Edge on embedded Linux systems.
+            
+            ### For Yocto Users
+            
+            **Most users should build from source using the recipes in this repository.** The pre-built RPMs below are for the `qemux86-64` target and won't work on other hardware. To build for your target:
+            
+            ```bash
+            git clone --branch ${{ steps.artifacts.outputs.version }} https://github.com/${{ github.repository }}.git
+            cd meta-iotedge
+            ./scripts/build.sh scarthgap
+            ```
+            
+            ### Pre-built Artifacts (qemux86-64 only)
+            
+            These artifacts are primarily for CI verification and testing:
+            
+            **RPM Packages** — Built for `qemux86-64`, useful for reference:
+            ```bash
+            tar -xzvf iotedge-rpms-${{ steps.artifacts.outputs.version }}.tar.gz
+            ```
+            
+            Included: iotedge, aziot-edged, aziotd, aziotctl, aziot-keys
+            
+            **QEMU Test Image** — Complete bootable image with IoT Edge pre-installed:
+            ```bash
+            zstd -d iotedge-qemu-image-qemux86-64.rootfs.ext4.zst
+            
+            qemu-system-x86_64 \
+              -kernel bzImage \
+              -drive file=iotedge-qemu-image-qemux86-64.rootfs.ext4,format=raw \
+              -append "root=/dev/sda console=ttyS0" \
+              -nographic -m 512
+            ```
+            
+            ### Documentation
+            See the [README](https://github.com/${{ github.repository }}#readme) for detailed build and integration instructions.

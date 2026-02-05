@@ -1,5 +1,7 @@
-DEPENDS += "openssl virtual/docker aziotctl aziot-keys tpm2-tss clang-native libtss2"
-RDEPENDS:${PN} += "docker libtss2 libtss2-mu libtss2-tcti-device aziot-keys"
+DEPENDS += "openssl aziotctl aziot-keys tpm2-tss clang-native"
+# aziotctl is required for iotedge check to work properly
+# Fixes: https://github.com/Azure/meta-iotedge/issues/134
+RDEPENDS:${PN} += "tpm2-tss libtss2-mu libtss2-tcti-device aziot-keys aziotctl"
 TOOLCHAIN = "clang"
 
 inherit systemd
@@ -79,7 +81,9 @@ USERADD_PACKAGES = "${PN}"
 USERADD_PARAM:${PN} = "-r -g aziotcs -c 'aziot-certd user' -G aziotks -s /sbin/nologin -d ${localstatedir}/lib/aziot/certd aziotcs; "
 USERADD_PARAM:${PN} += "-r -g aziotks -c 'aziot-keyd user' -s /sbin/nologin -d ${localstatedir}/lib/aziot/keyd aziotks; "
 USERADD_PARAM:${PN} += "-r -g aziotid -c 'aziot-identityd user' -G aziotcs,aziotks,aziottpm -s /sbin/nologin -d ${localstatedir}/lib/aziot/identityd aziotid; "
-USERADD_PARAM:${PN} += "-r -g aziottpm -c 'aziot-tpmd user' -s /sbin/nologin -d ${localstatedir}/lib/aziot/tpmd aziottpm; "
+# Add aziottpm to tss group for TPM device access
+# Fixes: https://github.com/Azure/meta-iotedge/issues/132
+USERADD_PARAM:${PN} += "-r -g aziottpm -G tss -c 'aziot-tpmd user' -s /sbin/nologin -d ${localstatedir}/lib/aziot/tpmd aziottpm; "
 
 GROUPADD_PARAM:${PN} = "-r aziotcs; "
 GROUPADD_PARAM:${PN} += "-r aziotks; "
@@ -92,7 +96,9 @@ export USER_AZIOTCS="aziotcs"
 export USER_AZIOTKS="aziotks"
 export USER_AZIOTTPM="aziottpm"
 
-RUSTFLAGS += "-Clink-arg=-Wl,-rpath,${libdir}/rustlib/${RUST_HOST_SYS}/lib"
+# Set rpath to the location where aziot-keys installs libaziot_keys.so
+# Fixes: https://github.com/Azure/meta-iotedge/issues/182
+RUSTFLAGS += "-Clink-arg=-Wl,-rpath,${libdir}/rust"
 FILES:${PN} += " \
     ${systemd_unitdir}/system/* \
     ${bindir}/aziot-* \

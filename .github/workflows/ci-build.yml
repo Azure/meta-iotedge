@@ -1,0 +1,144 @@
+name: Yocto build
+
+on:
+  pull_request:
+    branches:
+      - main
+      - kirkstone
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - 'SECURITY.md'
+      - 'THIRDPARTYNOTICES'
+  push:
+    branches:
+      - main
+      - kirkstone
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - 'SECURITY.md'
+      - 'THIRDPARTYNOTICES'
+  workflow_dispatch:
+    inputs:
+      skip_qemu:
+        description: "Skip QEMU validation (faster, packages only)"
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to checkout (tag or branch)"
+        type: string
+        required: false
+      skip_qemu:
+        description: "Skip QEMU validation"
+        type: boolean
+        default: false
+    outputs:
+      template:
+        description: "Template used for build"
+        value: ${{ jobs.build.outputs.template }}
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: yocto-build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Build and validate
+    runs-on:
+    - self-hosted
+    - 1ES.Pool=meta-iotedge-1es-github-linux-amd64
+    - 1ES.ImageOverride=agent-aziotedge-ubuntu-22.04-msmoby
+    outputs:
+      template: ${{ steps.set-template.outputs.template }}
+    container:
+      image: ghcr.io/azure/meta-iotedge-devcontainer:scarthgap
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root -v ${{ vars.YOCTO_CACHE_PATH || '/var/cache/yocto' }}:/workspaces/yocto-cache
+    env:
+      DEVCONTAINER: "1"
+    steps:
+      - name: Determine template from branch
+        id: set-template
+        run: |
+          case "${{ github.base_ref || github.ref_name }}" in
+            kirkstone) echo "template=kirkstone" >> "$GITHUB_OUTPUT" ;;  
+            *) echo "template=scarthgap" >> "$GITHUB_OUTPUT" ;;  
+          esac
+
+      - name: Create build user
+        run: |
+          useradd -m builder
+          chown -R builder:builder /workspaces/yocto-cache
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Fix permissions
+        run: |
+          chown -R builder:builder "${GITHUB_WORKSPACE}"
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+
+      - name: Show cache status
+        run: |
+          echo "Sstate cache: $(du -sh /workspaces/yocto-cache/sstate-cache 2>/dev/null | cut -f1 || echo 'empty')"
+          echo "Downloads: $(du -sh /workspaces/yocto-cache/downloads 2>/dev/null | cut -f1 || echo 'empty')"
+
+      - name: Fetch layers
+        run: sudo -E -u builder ./scripts/fetch.sh "${{ steps.set-template.outputs.template }}"
+
+      - name: Build
+        env:
+          TEMPLATE: ${{ steps.set-template.outputs.template }}
+        run: |
+          if [[ "${{ inputs.skip_qemu }}" == "true" ]]; then
+            sudo -E -u builder ./scripts/build.sh "${TEMPLATE}"
+          else
+            sudo -E -u builder ./scripts/build.sh "${TEMPLATE}" --with-qemu
+          fi
+
+      - name: Run QEMU validation
+        if: ${{ !inputs.skip_qemu }}
+        run: sudo -E -u builder ./scripts/validate-qemu.sh "${{ steps.set-template.outputs.template }}"
+
+      - name: Collect IoT Edge RPM packages
+        id: collect-rpms
+        run: |
+          mkdir -p rpm-staging
+          find build/tmp/deploy/rpm -type f -name "*.rpm" \( \
+            -name "iotedge-*.rpm" -o \
+            -name "aziot-*.rpm" \) \
+            -exec cp {} rpm-staging/ \;
+          echo "IoT Edge RPMs:"
+          ls -la rpm-staging/
+
+      - name: Upload RPM packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm-packages-${{ steps.set-template.outputs.template }}
+          path: rpm-staging/*.rpm
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Upload QEMU image
+        if: ${{ !inputs.skip_qemu }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: iotedge-qemu-image-${{ steps.set-template.outputs.template }}
+          path: |
+            build/tmp/deploy/images/qemux86-64/iotedge-qemu-image-qemux86-64.rootfs.ext4
+            build/tmp/deploy/images/qemux86-64/bzImage
+          retention-days: 7
+          if-no-files-found: warn
