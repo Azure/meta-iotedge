@@ -19,7 +19,7 @@ branch=${1}
 
 # the repos we want to check out, must setup variables below
 # NOTE: poky must remain first.
-REPOS="poky metaoe metavirt metasecurity metaclang"
+REPOS="poky metaoe metavirt metasecurity metaclang metarust"
 
 POKY_URI="https://git.yoctoproject.org/poky.git"
 POKY_UPSTREAM_URI="${POKY_URI}"
@@ -45,6 +45,13 @@ METACLANG_URI="https://github.com/kraj/meta-clang"
 METACLANG_UPSTREAM_URI="${METACLANG_URI}"
 METACLANG_PATH="poky/meta-clang"
 METACLANG_REV="${METACLANG_REV-refs/remotes/origin/${branch}}"
+
+METARUST_URI="https://github.com/meta-rust/meta-rust"
+METARUST_UPSTREAM_URI="${METARUST_URI}"
+METARUST_PATH="poky/meta-rust"
+# Pin to 1c4ef8c (before f067576 which broke kirkstone compatibility by using undefined RUST_VERSION)  
+# This provides Rust 1.78.0 which is sufficient for IoT Edge
+METARUST_REV="${METARUST_REV-1c4ef8cf7dea391b6a967a13abc61e878a8e778d}"
 
 METAIOTEDGE_URI="."
 METAIOTEDGE_PATH="poky/meta-iotedge"

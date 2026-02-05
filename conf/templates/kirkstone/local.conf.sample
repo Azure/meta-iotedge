@@ -262,6 +262,9 @@ DISTRO_FEATURES:append = " systemd virtualization tpm2 usrmerge"
 VIRTUAL-RUNTIME_init_manager = "systemd"
 VIRTUAL-RUNTIME_initscripts = "systemd-compat-units"
 
+# Disable local hash equivalence server (can be unstable in CI/container environments)
+BB_SIGNATURE_HANDLER = "OEBasicHash"
+
+# Use meta-rust instead of Poky's Rust (kirkstone has 1.59, too old for IoT Edge)
 BBMASK += "poky/meta/recipes-devtools/rust"
 BBMASK += "poky/meta/recipes-devtools/cargo"
-RUSTVERSION = "1.78%"
