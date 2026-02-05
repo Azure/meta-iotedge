@@ -12,7 +12,10 @@ Use the branch of `meta-iotedge` corresponding to your Yocto release:
 
 **Active and maintained**:
 * [Scarthgap](https://github.com/Azure/meta-iotedge/tree/main)  - `git clone -b main https://github.com/Azure/meta-iotedge.git`
-* [Kirkstone](https://github.com/Azure/meta-iotedge/tree/kirkstone) - `git clone -b kirkstone https://github.com/Azure/meta-iotedge.git`
+
+**Kirkstone (out of support April 2026)**:
+* No dedicated branch or CI runs. Use the templates in `conf/templates/kirkstone` on the main branch.
+* The kirkstone templates and recipes are validated, but ongoing CI coverage is scarthgap only.
 
 
 Run `bitbake-layers add-layer meta-iotedge`
@@ -30,8 +33,8 @@ Branching Strategy and Timelines
 | Yocto Release | IoT Edge version | Branch Name | Branch Status |
 | :- | :- | :- | :- |
 | Scarthgap | 1.5.x | main | Active and maintained |
-| Kirkstone | 1.5.x | kirkstone | Active and maintained |
-| Kirkstone | 1.4.x | kirkstone | Out of Support Nov'2024 |
+| Kirkstone | 1.5.x | main (templates only) | Out of Support Apr'2026 |
+| Kirkstone | 1.4.x | main (templates only) | Out of Support Nov'2024 |
 | Dunfell | 1.4.x  | dunfell | Not active and Not maintained |
 | Dunfell | 1.1.x  | dunfell-1.1 | Not active and Not maintained |
 | Sumo | 1.1.x | sumo | Not active and Not maintained |
@@ -54,10 +57,17 @@ across varying machines and networks:
 - `BB_HASHSERVE = ""` to disable hashserv (avoids socket/connect failures in Codespaces).
 - `DL_DIR`/`SSTATE_DIR` set to `/workspaces/yocto-cache` (override for non-container hosts).
 
+**Kirkstone-specific:** The kirkstone template uses `meta-rust` for Rust 1.78+ (Poky kirkstone only has Rust 1.59)
+and masks Poky's built-in rust recipes via `BBMASK`. The `fetch.sh` script automatically clones meta-rust
+when fetching kirkstone layers.
+
 Validation helpers
 ==================
 
-- `scripts/validate-qemu.sh` builds a minimal QEMU image and runs `iotedge --version` over SSH.
+- `scripts/validate-qemu.sh` boots a QEMU image and validates IoT Edge installation:
+  - Checks `iotedge --version` and service status over SSH
+  - Uses mock config by default (all services start, connectivity errors expected)
+  - Use `--no-mock-config` when testing with a real Azure IoT Hub configuration
 
 
 Contributing

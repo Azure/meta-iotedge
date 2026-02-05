@@ -7,7 +7,7 @@ MACHINE=${MACHINE:-qemux86-64}
 SSH_PORT=${SSH_PORT:-2222}
 SSH_HOST=${SSH_HOST:-127.0.0.1}
 SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -o PubkeyAuthentication=no"
-MOCK_IOTEDGE_CONFIG=
+MOCK_IOTEDGE_CONFIG=1  # Default to mock config for CI validation
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -15,8 +15,12 @@ while [[ $# -gt 0 ]]; do
             MOCK_IOTEDGE_CONFIG=1
             shift
             ;;
+        --no-mock-config)
+            MOCK_IOTEDGE_CONFIG=
+            shift
+            ;;
         -h|--help)
-            echo "Usage: $0 [template] [--mock-config]"
+            echo "Usage: $0 [template] [--mock-config|--no-mock-config]"
             exit 0
             ;;
         *)

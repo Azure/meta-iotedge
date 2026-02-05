@@ -1,6 +1,7 @@
 # Yocto + IoT Edge Release Guide
 
-This guide covers the IoT Edge release process for Yocto Scarthgap (main branch) and Kirkstone (kirkstone branch).
+This guide covers the IoT Edge release process for Yocto Scarthgap (main branch). Kirkstone uses templates on main
+and does not have a dedicated branch or CI runs.
 
 ## Release Flow
 
@@ -85,10 +86,10 @@ The workflow uses `scripts/check-upstream.sh` to fetch `product-versions.json` a
 
 ## Branch Mapping
 
-| Branch    | Yocto Release       | Script Parameter |
-| --------- | ------------------- | ---------------- |
-| main      | Scarthgap (5.0 LTS) | `scarthgap`      |
-| kirkstone | Kirkstone           | `kirkstone`      |
+| Branch | Yocto Release | Script Parameter |
+| ------ | ------------- | ---------------- |
+| main   | Scarthgap (5.0 LTS) | `scarthgap` |
+| main (templates only) | Kirkstone (out of support Apr'2026) | `kirkstone` |
 
 ## Manual Recipe Updates
 
@@ -146,6 +147,7 @@ export TEMPLATECONF="meta-iotedge/conf/templates/scarthgap"
 ```
 
 The CI workflow mounts a persistent cache directory at `/workspaces/yocto-cache` for sstate-cache and downloads, enabling fast incremental builds.
+Kirkstone does not run in CI; the templates are validated but builds are manual.
 
 ## QEMU Validation
 
@@ -155,13 +157,21 @@ The `validate-qemu.sh` script boots the QEMU image and checks:
 - `iotedge check --verbose` — Diagnostics
 - Service status — keyd, certd, tpmd, identityd, aziot-edged
 
-**Expected without Azure config:**
+**Mock config (default):**
+
+By default, the script creates a mock IoT Edge configuration with a placeholder hub (`example.azure-devices.net`). This allows all services to start:
+
+- ✅ All services running: keyd, certd, tpmd, identityd, aziot-edged
+- ⚠️ Connectivity errors expected (mock hub doesn't exist)
+- ✅ Confirms packages installed and services functional
+
+Use `--no-mock-config` to skip the mock configuration if testing with a real Azure IoT Hub config.
+
+**Without any config (`--no-mock-config`):**
 
 - ✅ Services running: keyd, certd, tpmd, identityd
 - ⚠️ Configuration warnings (no config.toml)
 - ❌ aziot-edged needs config to fully start
-
-This confirms packages are installed correctly. Full functionality requires Azure IoT Hub provisioning.
 
 ### Manual SSH Access
 
@@ -203,6 +213,5 @@ cd poky && source oe-init-build-env && bitbake -p iotedge aziot-edged
 
 ## Future Work
 
-- **Kirkstone QEMU validation** — Currently only Scarthgap
 - **ARM64 builds** — Raspberry Pi and similar devices
 - **Azure IoT Hub integration tests** — End-to-end connectivity validation
