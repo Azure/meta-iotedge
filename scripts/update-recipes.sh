@@ -7,6 +7,7 @@ Usage: update-recipes.sh [options]
 
 Options:
     --iotedge-version <ver>   IoT Edge version tag (e.g., 1.5.35)
+    --template <name>         Yocto template (kirkstone or scarthgap, default: scarthgap)
     --clean                   Remove old version-specific recipe files before generating
     --skip-validate           Skip bitbake validation (not recommended)
     --workdir <path>          Work directory (default: mktemp)
@@ -16,7 +17,8 @@ Options:
 The IIS version is automatically resolved from the IoT Edge release's product-versions.json.
 
 Examples:
-    ./scripts/update-recipes.sh --iotedge-version 1.5.35 --clean
+    ./scripts/update-recipes.sh --iotedge-version <ver> --clean
+    ./scripts/update-recipes.sh --iotedge-version <ver> --template kirkstone --clean
 EOF
 }
 
@@ -27,10 +29,12 @@ PATCHER="${ROOT_DIR}/scripts/patch-bitbake.py"
 # Defaults
 WORKDIR="" KEEP_WORKDIR=false CLEAN=false SKIP_VALIDATE=false
 IOTEDGE_VERSION=""
+TEMPLATE="scarthgap"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --iotedge-version) IOTEDGE_VERSION="$2"; shift 2;;
+        --template)        TEMPLATE="$2"; shift 2;;
         --clean)           CLEAN=true; shift;;
         --skip-validate)   SKIP_VALIDATE=true; shift;;
         --workdir)         WORKDIR="$2"; shift 2;;
@@ -47,6 +51,13 @@ if [[ -z "${IOTEDGE_VERSION}" ]]; then
     exit 1
 fi
 
+# Validate template
+if [[ "${TEMPLATE}" != "scarthgap" && "${TEMPLATE}" != "kirkstone" ]]; then
+    echo "Error: --template must be 'scarthgap' or 'kirkstone'"
+    exit 1
+fi
+echo "Using template: ${TEMPLATE}"
+
 # Resolve versions from the IoT Edge release's product-versions.json
 echo "Fetching product-versions.json from IoT Edge ${IOTEDGE_VERSION}..."
 PRODUCT_VERSIONS_URL="https://raw.githubusercontent.com/Azure/azure-iotedge/${IOTEDGE_VERSION}/product-versions.json"
@@ -59,11 +70,12 @@ PRODUCT_VERSIONS=$(curl -fsSL "$PRODUCT_VERSIONS_URL") || {
 IIS_VERSION=$(echo "$PRODUCT_VERSIONS" | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
-stable = next((c for c in data['channels'] if c['name'] == 'stable'), None)
-if not stable:
-    print('Error: No stable channel found', file=sys.stderr)
+# Use lts channel (preferred for embedded systems)
+lts = next((c for c in data['channels'] if c['name'] == 'lts'), None)
+if not lts:
+    print('Error: No lts channel found', file=sys.stderr)
     sys.exit(1)
-aziot = next((p for p in stable['products'] if p['id'] == 'aziot-edge'), None)
+aziot = next((p for p in lts['products'] if p['id'] == 'aziot-edge'), None)
 if not aziot:
     print('Error: No aziot-edge product found', file=sys.stderr)
     sys.exit(1)
@@ -263,32 +275,24 @@ done
 
 # Validate recipes with bitbake (skip with --skip-validate)
 if [[ "${SKIP_VALIDATE}" != true ]]; then
-    echo "Validating recipes with bitbake..."
+    echo "Validating recipes with bitbake (template: ${TEMPLATE})..."
     VALIDATE_DIR=$(mktemp -d)
     
-    # Fetch required layers
-    retry "fetch poky" git clone --depth=1 --branch scarthgap git://git.yoctoproject.org/poky "${VALIDATE_DIR}/poky"
-    retry "fetch meta-openembedded" git clone --depth=1 --branch scarthgap git://git.openembedded.org/meta-openembedded "${VALIDATE_DIR}/meta-openembedded"
-    retry "fetch meta-rust-bin" git clone --depth=1 --branch master https://github.com/rust-embedded/meta-rust-bin.git "${VALIDATE_DIR}/meta-rust-bin"
-    retry "fetch meta-virtualization" git clone --depth=1 --branch scarthgap git://git.yoctoproject.org/meta-virtualization "${VALIDATE_DIR}/meta-virtualization"
+    # Fetch required layers and use template configs to avoid drift.
+    retry "fetch layers" bash -c "cd '${VALIDATE_DIR}' && '${ROOT_DIR}/scripts/fetch.sh' '${TEMPLATE}'"
+    rm -rf "${VALIDATE_DIR}/poky/meta-iotedge"
+    ln -sf "${ROOT_DIR}" "${VALIDATE_DIR}/poky/meta-iotedge"
     
-    # Source build environment and set up layers
+    # Source build environment using the template configs.
     pushd "${VALIDATE_DIR}" >/dev/null
     set +u  # oe-init-build-env uses unset variables
-    . poky/oe-init-build-env build >/dev/null
+    TEMPLATECONF="poky/meta-iotedge/conf/templates/${TEMPLATE}" \
+        . poky/oe-init-build-env build >/dev/null
     set -u
     
-    # Allow running as root (CI containers) and silence meta-virtualization warning
+    # Allow running as root (CI containers) and silence meta-virtualization warning.
     echo 'INHERIT:remove = "sanity"' >> conf/local.conf
     echo 'SKIP_META_VIRT_SANITY_CHECK = "1"' >> conf/local.conf
-    
-    bitbake-layers add-layer "${VALIDATE_DIR}/meta-openembedded/meta-oe"
-    bitbake-layers add-layer "${VALIDATE_DIR}/meta-openembedded/meta-python"
-    bitbake-layers add-layer "${VALIDATE_DIR}/meta-openembedded/meta-networking"
-    bitbake-layers add-layer "${VALIDATE_DIR}/meta-openembedded/meta-filesystems"
-    bitbake-layers add-layer "${VALIDATE_DIR}/meta-rust-bin"
-    bitbake-layers add-layer "${VALIDATE_DIR}/meta-virtualization"
-    bitbake-layers add-layer "${ROOT_DIR}"
     
     # Parse recipes
     if bitbake -p; then
