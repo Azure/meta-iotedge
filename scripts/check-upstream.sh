@@ -110,13 +110,14 @@ import sys
 with open("$TEMP_JSON") as f:
     data = json.load(f)
 
-# Find aziot-edge in stable channel
-stable = next((c for c in data.get('channels', []) if c.get('name') == 'stable'), None)
-if not stable:
-    print("error=No stable channel found", file=sys.stderr)
+# Find aziot-edge in lts channel (preferred for embedded systems)
+# During overlap periods with multiple LTS versions, this returns the latest
+lts = next((c for c in data.get('channels', []) if c.get('name') == 'lts'), None)
+if not lts:
+    print("error=No lts channel found", file=sys.stderr)
     sys.exit(1)
 
-aziot_edge = next((p for p in stable.get('products', []) if p.get('id') == 'aziot-edge'), None)
+aziot_edge = next((p for p in lts.get('products', []) if p.get('id') == 'aziot-edge'), None)
 if not aziot_edge:
     print("error=No aziot-edge product found", file=sys.stderr)
     sys.exit(1)
