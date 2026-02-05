@@ -1,12 +1,30 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-TEMPLATE=${1:-scarthgap}
+TEMPLATE=scarthgap
 IMAGE_TARGET=${IMAGE_TARGET:-iotedge-qemu-image}
 MACHINE=${MACHINE:-qemux86-64}
 SSH_PORT=${SSH_PORT:-2222}
 SSH_HOST=${SSH_HOST:-127.0.0.1}
 SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -o PubkeyAuthentication=no"
+MOCK_IOTEDGE_CONFIG=
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --mock-config)
+            MOCK_IOTEDGE_CONFIG=1
+            shift
+            ;;
+        -h|--help)
+            echo "Usage: $0 [template] [--mock-config]"
+            exit 0
+            ;;
+        *)
+            TEMPLATE="$1"
+            shift
+            ;;
+    esac
+done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -80,6 +98,36 @@ for i in $(seq 1 60); do
     sleep 5
 done
 
+if [[ -n "${MOCK_IOTEDGE_CONFIG}" ]]; then
+    echo "Preparing mock IoT Edge config (MOCK_IOTEDGE_CONFIG=1) and applying it..."
+    ssh_cmd "sh -s" <<'EOF'
+set -e
+
+if [ ! -f /etc/aziot/config.toml ]; then
+    mkdir -p /etc/aziot
+    cat >/etc/aziot/config.toml <<'EOC'
+# Minimal mock config for diagnostics.
+hostname = "qemu-iotedge"
+
+[provisioning]
+source = "manual"
+iothub_hostname = "example.azure-devices.net"
+device_id = "qemu-device"
+
+[provisioning.authentication]
+method = "sas"
+device_id_pk = { value = "ZmFrZV9rZXk=" }
+EOC
+fi
+
+if command -v iotedge >/dev/null 2>&1; then
+    iotedge config apply -c /etc/aziot/config.toml || true
+elif command -v aziotctl >/dev/null 2>&1; then
+    aziotctl config apply -c /etc/aziot/config.toml || true
+fi
+EOF
+fi
+
 # Run validation commands
 echo ""
 echo "=== IoT Edge Validation ==="
@@ -89,7 +137,11 @@ echo "1. Checking iotedge version:"
 ssh_cmd "iotedge --version"
 
 echo ""
-echo "2. Running iotedge check (some failures expected without config):"
+if [[ -n "${MOCK_IOTEDGE_CONFIG}" ]]; then
+    echo "2. Running iotedge check (connectivity errors expected with mock config):"
+else
+    echo "2. Running iotedge check (some failures expected without config):"
+fi
 ssh_cmd "iotedge check --verbose 2>&1" || true
 
 echo ""
