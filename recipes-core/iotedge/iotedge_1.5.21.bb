@@ -17,7 +17,7 @@ CARGO_LOCK_SRC_DIR = "${S}/edgelet"
 do_compile[network] = "1"
 
 require ${BPN}-crates.inc
-require iot-identity-service.inc
+require recipes-core/iot-identity-service.inc
 
 include iotedge-${PV}.inc
 include iotedge.inc

@@ -125,7 +125,7 @@ cleanup() {
 trap cleanup EXIT
 
 # Check dependencies
-for cmd in git python3; do
+for cmd in git python3 curl; do
     command -v "$cmd" >/dev/null || { echo "Missing: $cmd"; exit 1; }
 done
 
@@ -181,7 +181,7 @@ CARGO_LOCK_SRC_DIR = "\${S}/edgelet"
 do_compile[network] = "1"
 
 require \${BPN}-crates.inc
-require iot-identity-service.inc
+require recipes-core/iot-identity-service.inc
 
 include ${pkg}-\${PV}.inc
 include ${pkg}.inc
