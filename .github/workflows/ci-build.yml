@@ -65,13 +65,13 @@ jobs:
       - name: Check if only docs changed
         id: docs-only
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
             # For PRs, check files changed in the PR
             git fetch origin ${{ github.base_ref }}
             CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
           else
             # For pushes, check files in the last commit
-            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git diff --name-only --diff-filter=A HEAD)
           fi
           
           echo "Changed files:"
@@ -79,16 +79,23 @@ jobs:
           
           # Check if all changed files are documentation-related
           DOCS_ONLY=true
-          while IFS= read -r file; do
-            if [[ ! "$file" =~ \.(md|MD)$ ]] && \
-               [[ ! "$file" =~ ^docs/ ]] && \
-               [[ "$file" != "LICENSE" ]] && \
-               [[ "$file" != "SECURITY.md" ]] && \
-               [[ "$file" != "THIRDPARTYNOTICES" ]]; then
-              DOCS_ONLY=false
-              break
-            fi
-          done <<< "$CHANGED_FILES"
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No files changed"
+            DOCS_ONLY=false
+          else
+            while IFS= read -r file; do
+              # Skip empty lines
+              [ -z "$file" ] && continue
+              if [[ ! "$file" =~ \.(md|MD)$ ]] && \
+                 [[ ! "$file" =~ ^docs/ ]] && \
+                 [[ "$file" != "LICENSE" ]] && \
+                 [[ "$file" != "SECURITY.md" ]] && \
+                 [[ "$file" != "THIRDPARTYNOTICES" ]]; then
+                DOCS_ONLY=false
+                break
+              fi
+            done <<< "$CHANGED_FILES"
+          fi
           
           echo "docs_only=$DOCS_ONLY" >> "$GITHUB_OUTPUT"
           if [ "$DOCS_ONLY" = "true" ]; then
