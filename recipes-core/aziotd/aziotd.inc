@@ -98,7 +98,7 @@ export USER_AZIOTTPM="aziottpm"
 
 # Set rpath to the location where aziot-keys installs libaziot_keys.so
 # Fixes: https://github.com/Azure/meta-iotedge/issues/182
-RUSTFLAGS += "-Clink-arg=-Wl,-rpath,${libdir}/rust"
+RUSTFLAGS += "-Clink-arg=-Wl,-rpath,${rustlibdir}"
 FILES:${PN} += " \
     ${systemd_unitdir}/system/* \
     ${bindir}/aziot-* \
