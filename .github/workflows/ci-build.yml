@@ -5,22 +5,10 @@ on:
     branches:
       - main
       - kirkstone
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - 'SECURITY.md'
-      - 'THIRDPARTYNOTICES'
   push:
     branches:
       - main
       - kirkstone
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - 'SECURITY.md'
-      - 'THIRDPARTYNOTICES'
   workflow_dispatch:
     inputs:
       skip_qemu:
@@ -40,7 +28,7 @@ on:
     outputs:
       template:
         description: "Template used for build"
-        value: ${{ jobs.build.outputs.template }}
+        value: ${{ jobs.check-changes.outputs.template }}
 
 permissions:
   contents: read
@@ -51,14 +39,79 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  check-changes:
+    name: Check if only docs changed
+    runs-on: ubuntu-22.04
+    outputs:
+      docs_only: ${{ steps.docs-only.outputs.docs_only }}
+      template: ${{ steps.set-template.outputs.template }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || '' }}
+          fetch-depth: 0
+
+      - name: Check if only docs changed
+        id: docs-only
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            # For PRs, check files changed in the PR
+            git fetch origin ${{ github.base_ref }}
+            CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          else
+            # For pushes, check files in the last commit
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git diff --name-only --diff-filter=A HEAD)
+          fi
+          
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+          
+          # Check if all changed files are documentation-related
+          DOCS_ONLY=true
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No files changed"
+            DOCS_ONLY=false
+          else
+            while IFS= read -r file; do
+              # Skip empty lines
+              [ -z "$file" ] && continue
+              if [[ ! "$file" =~ \.(md|MD)$ ]] && \
+                 [[ ! "$file" =~ ^docs/ ]] && \
+                 [[ "$file" != "LICENSE" ]] && \
+                 [[ "$file" != "SECURITY.md" ]] && \
+                 [[ "$file" != "THIRDPARTYNOTICES" ]]; then
+                DOCS_ONLY=false
+                break
+              fi
+            done <<< "$CHANGED_FILES"
+          fi
+          
+          echo "docs_only=$DOCS_ONLY" >> "$GITHUB_OUTPUT"
+          if [ "$DOCS_ONLY" = "true" ]; then
+            echo "Only documentation files changed - skipping build"
+          else
+            echo "Code files changed - running full build"
+          fi
+
+      - name: Determine template from branch
+        id: set-template
+        run: |
+          case "${{ github.base_ref || github.ref_name }}" in
+            kirkstone) echo "template=kirkstone" >> "$GITHUB_OUTPUT" ;;  
+            *) echo "template=scarthgap" >> "$GITHUB_OUTPUT" ;;  
+          esac
+
   build:
     name: Build and validate
+    needs: check-changes
+    if: needs.check-changes.outputs.docs_only != 'true'
     runs-on:
     - self-hosted
     - 1ES.Pool=meta-iotedge-1es-github-linux-amd64
     - 1ES.ImageOverride=agent-aziotedge-ubuntu-22.04-msmoby
     outputs:
-      template: ${{ steps.set-template.outputs.template }}
+      template: ${{ needs.check-changes.outputs.template }}
     container:
       image: ghcr.io/azure/meta-iotedge-devcontainer:scarthgap
       credentials:
@@ -68,28 +121,21 @@ jobs:
     env:
       DEVCONTAINER: "1"
     steps:
-      - name: Determine template from branch
-        id: set-template
-        run: |
-          case "${{ github.base_ref || github.ref_name }}" in
-            kirkstone) echo "template=kirkstone" >> "$GITHUB_OUTPUT" ;;  
-            *) echo "template=scarthgap" >> "$GITHUB_OUTPUT" ;;  
-          esac
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Configure git safe directory
+        run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Create build user
         run: |
           useradd -m builder
           chown -R builder:builder /workspaces/yocto-cache
 
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || '' }}
-
       - name: Fix permissions
-        run: |
-          chown -R builder:builder "${GITHUB_WORKSPACE}"
-          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+        run: chown -R builder:builder "${GITHUB_WORKSPACE}"
 
       - name: Show cache status
         run: |
@@ -97,11 +143,11 @@ jobs:
           echo "Downloads: $(du -sh /workspaces/yocto-cache/downloads 2>/dev/null | cut -f1 || echo 'empty')"
 
       - name: Fetch layers
-        run: sudo -E -u builder ./scripts/fetch.sh "${{ steps.set-template.outputs.template }}"
+        run: sudo -E -u builder ./scripts/fetch.sh "${{ needs.check-changes.outputs.template }}"
 
       - name: Build
         env:
-          TEMPLATE: ${{ steps.set-template.outputs.template }}
+          TEMPLATE: ${{ needs.check-changes.outputs.template }}
         run: |
           if [[ "${{ inputs.skip_qemu }}" == "true" ]]; then
             sudo -E -u builder ./scripts/build.sh "${TEMPLATE}"
@@ -111,7 +157,7 @@ jobs:
 
       - name: Run QEMU validation
         if: ${{ !inputs.skip_qemu }}
-        run: sudo -E -u builder ./scripts/validate-qemu.sh "${{ steps.set-template.outputs.template }}"
+        run: sudo -E -u builder ./scripts/validate-qemu.sh "${{ needs.check-changes.outputs.template }}"
 
       - name: Collect IoT Edge RPM packages
         id: collect-rpms
@@ -127,7 +173,7 @@ jobs:
       - name: Upload RPM packages
         uses: actions/upload-artifact@v4
         with:
-          name: rpm-packages-${{ steps.set-template.outputs.template }}
+          name: rpm-packages-${{ needs.check-changes.outputs.template }}
           path: rpm-staging/*.rpm
           retention-days: 7
           if-no-files-found: warn
@@ -136,9 +182,28 @@ jobs:
         if: ${{ !inputs.skip_qemu }}
         uses: actions/upload-artifact@v4
         with:
-          name: iotedge-qemu-image-${{ steps.set-template.outputs.template }}
+          name: iotedge-qemu-image-${{ needs.check-changes.outputs.template }}
           path: |
             build/tmp/deploy/images/qemux86-64/iotedge-qemu-image-qemux86-64.rootfs.ext4
             build/tmp/deploy/images/qemux86-64/bzImage
           retention-days: 7
           if-no-files-found: warn
+
+  status-check:
+    name: Status check
+    runs-on: ubuntu-22.04
+    needs: [check-changes, build]
+    if: always()
+    steps:
+      - name: Determine overall status
+        run: |
+          if [ "${{ needs.check-changes.outputs.docs_only }}" == "true" ]; then
+            echo "✓ Docs-only change - no build required"
+            exit 0
+          elif [ "${{ needs.build.result }}" == "success" ]; then
+            echo "✓ Build succeeded"
+            exit 0
+          else
+            echo "✗ Build failed or was cancelled"
+            exit 1
+          fi
