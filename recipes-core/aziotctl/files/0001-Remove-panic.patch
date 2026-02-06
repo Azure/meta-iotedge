@@ -11,7 +11,6 @@ profile sections for compatibility with the Yocto-provided Rust sysroot.
  1 file changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/Cargo.toml b/Cargo.toml
-index d43311c..a1b2c3d 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
 @@ -55,10 +55,10 @@ resolver = "2"

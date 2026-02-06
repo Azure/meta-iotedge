@@ -104,6 +104,8 @@ jobs:
 
   check-recipes:
     name: Recipe consistency check
+    needs: check-changes
+    if: needs.check-changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -237,12 +239,12 @@ jobs:
     steps:
       - name: Determine overall status
         run: |
-          if [ "${{ needs.check-recipes.result }}" != "success" ]; then
-            echo "✗ Recipe consistency check failed"
-            exit 1
-          elif [ "${{ needs.check-changes.outputs.docs_only }}" == "true" ]; then
+          if [ "${{ needs.check-changes.outputs.docs_only }}" == "true" ]; then
             echo "✓ Docs-only change - no build required"
             exit 0
+          elif [ "${{ needs.check-recipes.result }}" != "success" ]; then
+            echo "✗ Recipe consistency check failed"
+            exit 1
           elif [ "${{ needs.build.result }}" == "success" ]; then
             echo "✓ Build succeeded"
             exit 0
