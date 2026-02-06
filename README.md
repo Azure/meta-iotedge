@@ -92,14 +92,6 @@ On 32-bit ARM targets where OpenSSL is compiled with `_TIME_BITS=64`, the Rust `
 remove `-D_TIME_BITS=64` from OpenSSL flags. Fix: update the vendored `libc` crate to >= 0.2.179
 and set `RUST_LIBC_UNSTABLE_GNU_TIME_BITS=64`. See [#187](https://github.com/Azure/meta-iotedge/issues/187).
 
-**Migrating from IoT Edge 1.4 to 1.5**
-
-IoT Edge 1.5 uses a different config schema. After upgrading recipes, run `iotedge config migrate`
-to convert your existing `/etc/aziot/config.toml`. If the command does not produce output, manually
-create the config using `iotedge config mp --force` (manual provisioning) or the appropriate
-provisioning command. See the
-[Azure IoT Edge migration guide](https://learn.microsoft.com/en-us/azure/iot-edge/how-to-update-iot-edge).
-
 **Static UIDs for aziotd users**
 
 The recipes currently create system users with dynamic UIDs via `useradd`. If you need static UIDs
