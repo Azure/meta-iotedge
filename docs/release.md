@@ -215,3 +215,6 @@ cd poky && source oe-init-build-env && bitbake -p iotedge aziot-edged
 
 - **ARM64 builds** — Raspberry Pi and similar devices
 - **Azure IoT Hub integration tests** — End-to-end connectivity validation
+- **Modern crate management** — Adopt `bitbake -c update_crates` (see [#192](https://github.com/Azure/meta-iotedge/issues/192))
+- **Static UIDs** — Assign fixed UIDs to aziotd users for A/B partition schemes (see [#130](https://github.com/Azure/meta-iotedge/issues/130))
+- **TPM-optional builds** — MACHINE_FEATURES-based toggle (see [#149](https://github.com/Azure/meta-iotedge/issues/149))
