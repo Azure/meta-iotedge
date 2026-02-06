@@ -95,12 +95,6 @@ The workflow uses `scripts/check-upstream.sh` to fetch `product-versions.json` a
 
 When automation fails or you need manual control:
 
-### Prerequisites
-
-```bash
-cargo install --locked cargo-bitbake
-```
-
 ### Update Recipes
 
 ```bash
@@ -110,8 +104,12 @@ cargo install --locked cargo-bitbake
 The script:
 1. Fetches `product-versions.json` from the specified IoT Edge release tag
 2. Resolves git SHAs from version tags
-3. Generates `*.bb` and `*.inc` files via cargo-bitbake
-4. Normalizes cargo sources and fixes license checksums
+3. Generates `*.bb` and `*.inc` template files
+4. Parses `Cargo.lock` files to generate `*-crates.inc` (crate SRC_URI + sha256sums)
+
+Recipes inherit `cargo-update-recipe-crates` from OE-Core, which enables the
+`bitbake -c update_crates <recipe>` task. Crate data is stored in dedicated
+`-crates.inc` files rather than inlined in `.bb` files.
 
 Use `--keep-workdir` to debug generated files.
 

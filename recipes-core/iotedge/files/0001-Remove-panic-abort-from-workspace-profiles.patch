@@ -1,29 +1,34 @@
-From 632c35def622cffd758cbd4415447ac88af1bc44 Mon Sep 17 00:00:00 2001
-Date: Thu, 1 Aug 2024 00:53:48 +0000
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: meta-iotedge <meta-iotedge@users.noreply.github.com>
+Date: Thu, 01 Jan 2024 00:00:00 +0000
 Subject: [PATCH] Use panic unwind for cross-compilation compatibility
 
 The Yocto Rust toolchain's sysroot does not include panic_abort compiled
 with the abort strategy. Explicitly set panic = 'unwind' in the workspace
 profile sections for compatibility with the Yocto-provided Rust sysroot.
 
+Based on the approach by Pete Davidson in PR #184.
+
+Upstream-Status: Inappropriate [oe-specific]
+Signed-off-by: meta-iotedge <meta-iotedge@users.noreply.github.com>
 ---
- Cargo.toml | 4 ++--
+ edgelet/Cargo.toml | 4 ++--
  1 file changed, 2 insertions(+), 2 deletions(-)
 
-diff --git a/Cargo.toml b/Cargo.toml
-index d43311c..a1b2c3d 100644
---- a/Cargo.toml
-+++ b/Cargo.toml
-@@ -55,10 +55,10 @@ resolver = "2"
- # Don't let panics from callbacks cross FFI boundary
+diff --git a/edgelet/Cargo.toml b/edgelet/Cargo.toml
+index d0fdba5..fd7a84b 100644
+--- a/edgelet/Cargo.toml
++++ b/edgelet/Cargo.toml
+@@ -16,10 +16,10 @@ members = [
+ resolver = "2"
  
  [profile.dev]
--panic = "abort"
-+panic = "unwind"
+-panic = 'abort'
++panic = 'unwind'
  
  [profile.release]
--panic = "abort"
-+panic = "unwind"
+-panic = 'abort'
++panic = 'unwind'
  # Release builds will have full symbols. The packaging phase will strip symbols from binaries and
  # make them available in a separate package.
  # Notes: Snaps don't have a good story for debug symbols, so for now we'll override this setting in
