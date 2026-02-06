@@ -62,6 +62,9 @@ jobs:
           ref: ${{ inputs.ref || '' }}
           fetch-depth: 0
 
+      - name: Configure git safe directory
+        run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+
       - name: Check if only docs changed
         id: docs-only
         run: |
@@ -120,9 +123,7 @@ jobs:
 
       - name: Fix permissions
         if: steps.docs-only.outputs.docs_only != 'true'
-        run: |
-          chown -R builder:builder "${GITHUB_WORKSPACE}"
-          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+        run: chown -R builder:builder "${GITHUB_WORKSPACE}"
 
       - name: Show cache status
         if: steps.docs-only.outputs.docs_only != 'true'
