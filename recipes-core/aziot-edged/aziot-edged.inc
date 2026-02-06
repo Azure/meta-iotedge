@@ -11,7 +11,7 @@ SYSTEMD_SERVICE:${PN} = "aziot-edged.service"
 
 SRC_URI += "file://aziot-edged.service \
             file://iotedge.conf \
-            file://0001-Remove-git-from-Cargo.patch \
+            file://0001-Remove-panic-abort-from-workspace-profiles.patch \
             file://0002-Work-around-Rust-1.78-dead_code-lint-issues.patch \
 "
 
