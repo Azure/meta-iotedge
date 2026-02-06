@@ -94,9 +94,23 @@ and set `RUST_LIBC_UNSTABLE_GNU_TIME_BITS=64`. See [#187](https://github.com/Azu
 
 **Static UIDs for aziotd users**
 
-The recipes currently create system users with dynamic UIDs via `useradd`. If you need static UIDs
-(e.g. for A/B partition schemes or `[[principal]]` config references), override `USERADD_PARAM` in
-a `.bbappend` with explicit `-u <uid>` flags. See [#130](https://github.com/Azure/meta-iotedge/issues/130).
+All IoT Edge system users and groups are assigned static UIDs/GIDs so they remain
+consistent across builds (important for A/B partition schemes and `[[principal]]`
+config references):
+
+| User / Group | UID / GID |
+| :----------- | --------: |
+| `iotedge` | 13620 |
+| `edgeagentuser` | 13622 |
+| `edgehubuser` | 13623 |
+| `aziotcs` | 13624 |
+| `aziotks` | 13625 |
+| `aziotid` | 13626 |
+| `aziottpm` | 13627 |
+
+The `docker` group is left dynamic because other layers may also create it.
+To override any ID, use a `.bbappend` with your own `USERADD_PARAM`/`GROUPADD_PARAM`.
+See [#130](https://github.com/Azure/meta-iotedge/issues/130).
 
 **Overriding `do_install:append` in recipes**
 
