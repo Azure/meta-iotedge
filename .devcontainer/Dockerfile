@@ -13,9 +13,6 @@ RUN apt-get update \
         openssh-client \
         python3 \
         python3-pip \
-        build-essential \
-        pkg-config \
-        libssl-dev \
         qemu-system-x86 \
         qemu-utils \
         sshpass \
@@ -25,14 +22,11 @@ RUN apt-get update \
     && if command -v sudo >/dev/null 2>&1; then echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/${USERNAME}" && chmod 0440 "/etc/sudoers.d/${USERNAME}"; fi
 USER ${USERNAME}
 
-ENV CARGO_HOME=/home/${USERNAME}/.cargo
-ENV RUSTUP_HOME=/home/${USERNAME}/.rustup
-ENV PATH=/home/${USERNAME}/.cargo/bin:${PATH}
-
 # Environment for Yocto/BitBake builds
 ENV BB_SERVER_TIMEOUT=600
 ENV BB_COMMAND_TIMEOUT=300
 ENV DEVCONTAINER=1
 
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain stable \
-    && cargo install cargo-bitbake --version 0.3.16
+# Rust toolchain is no longer needed in the dev container since we
+# adopted cargo-update-recipe-crates (crates.inc files are generated
+# by scripts/recipe_helpers.py from Cargo.lock without cargo-bitbake).
