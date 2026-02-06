@@ -5,22 +5,10 @@ on:
     branches:
       - main
       - kirkstone
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - 'SECURITY.md'
-      - 'THIRDPARTYNOTICES'
   push:
     branches:
       - main
       - kirkstone
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - 'SECURITY.md'
-      - 'THIRDPARTYNOTICES'
   workflow_dispatch:
     inputs:
       skip_qemu:
@@ -68,6 +56,47 @@ jobs:
     env:
       DEVCONTAINER: "1"
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || '' }}
+          fetch-depth: 0
+
+      - name: Check if only docs changed
+        id: docs-only
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # For PRs, check files changed in the PR
+            git fetch origin ${{ github.base_ref }}
+            CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          else
+            # For pushes, check files in the last commit
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          fi
+          
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+          
+          # Check if all changed files are documentation-related
+          DOCS_ONLY=true
+          while IFS= read -r file; do
+            if [[ ! "$file" =~ \.(md|MD)$ ]] && \
+               [[ ! "$file" =~ ^docs/ ]] && \
+               [[ "$file" != "LICENSE" ]] && \
+               [[ "$file" != "SECURITY.md" ]] && \
+               [[ "$file" != "THIRDPARTYNOTICES" ]]; then
+              DOCS_ONLY=false
+              break
+            fi
+          done <<< "$CHANGED_FILES"
+          
+          echo "docs_only=$DOCS_ONLY" >> "$GITHUB_OUTPUT"
+          if [ "$DOCS_ONLY" = "true" ]; then
+            echo "Only documentation files changed - skipping build"
+          else
+            echo "Code files changed - running full build"
+          fi
+
       - name: Determine template from branch
         id: set-template
         run: |
@@ -77,29 +106,29 @@ jobs:
           esac
 
       - name: Create build user
+        if: steps.docs-only.outputs.docs_only != 'true'
         run: |
           useradd -m builder
           chown -R builder:builder /workspaces/yocto-cache
 
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || '' }}
-
       - name: Fix permissions
+        if: steps.docs-only.outputs.docs_only != 'true'
         run: |
           chown -R builder:builder "${GITHUB_WORKSPACE}"
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Show cache status
+        if: steps.docs-only.outputs.docs_only != 'true'
         run: |
           echo "Sstate cache: $(du -sh /workspaces/yocto-cache/sstate-cache 2>/dev/null | cut -f1 || echo 'empty')"
           echo "Downloads: $(du -sh /workspaces/yocto-cache/downloads 2>/dev/null | cut -f1 || echo 'empty')"
 
       - name: Fetch layers
+        if: steps.docs-only.outputs.docs_only != 'true'
         run: sudo -E -u builder ./scripts/fetch.sh "${{ steps.set-template.outputs.template }}"
 
       - name: Build
+        if: steps.docs-only.outputs.docs_only != 'true'
         env:
           TEMPLATE: ${{ steps.set-template.outputs.template }}
         run: |
@@ -110,10 +139,11 @@ jobs:
           fi
 
       - name: Run QEMU validation
-        if: ${{ !inputs.skip_qemu }}
+        if: ${{ !inputs.skip_qemu && steps.docs-only.outputs.docs_only != 'true' }}
         run: sudo -E -u builder ./scripts/validate-qemu.sh "${{ steps.set-template.outputs.template }}"
 
       - name: Collect IoT Edge RPM packages
+        if: steps.docs-only.outputs.docs_only != 'true'
         id: collect-rpms
         run: |
           mkdir -p rpm-staging
@@ -125,6 +155,7 @@ jobs:
           ls -la rpm-staging/
 
       - name: Upload RPM packages
+        if: steps.docs-only.outputs.docs_only != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: rpm-packages-${{ steps.set-template.outputs.template }}
@@ -133,7 +164,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload QEMU image
-        if: ${{ !inputs.skip_qemu }}
+        if: ${{ !inputs.skip_qemu && steps.docs-only.outputs.docs_only != 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: iotedge-qemu-image-${{ steps.set-template.outputs.template }}
