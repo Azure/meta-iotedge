@@ -61,6 +61,11 @@ if [[ "${TEMPLATE}" != "scarthgap" && "${TEMPLATE}" != "kirkstone" ]]; then
 fi
 echo "Using template: ${TEMPLATE}"
 
+# Check dependencies early (before first use of curl/git/python3)
+for cmd in git python3 curl; do
+    command -v "$cmd" >/dev/null || { echo "Missing: $cmd"; exit 1; }
+done
+
 # Resolve versions from the IoT Edge release's product-versions.json
 echo "Fetching product-versions.json from IoT Edge ${IOTEDGE_VERSION}..."
 PRODUCT_VERSIONS_URL="https://raw.githubusercontent.com/Azure/azure-iotedge/${IOTEDGE_VERSION}/product-versions.json"
@@ -123,11 +128,6 @@ cleanup() {
     [[ "${KEEP_WORKDIR}" != true ]] && rm -rf "${WORKDIR}"
 }
 trap cleanup EXIT
-
-# Check dependencies
-for cmd in git python3 curl; do
-    command -v "$cmd" >/dev/null || { echo "Missing: $cmd"; exit 1; }
-done
 
 # Retry helper for flaky networks
 retry() {
