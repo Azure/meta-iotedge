@@ -113,14 +113,14 @@ fi
 # Use the daemon version tag for SRCREV (not the release tag) so the
 # built binary version matches the source it was compiled from.
 echo "Resolving git SHAs..."
-IOTEDGE_REV=$(git ls-remote --tags https://github.com/Azure/iotedge.git "refs/tags/${IOTEDGE_DAEMON_VERSION}" | cut -f1)
+IOTEDGE_REV=$(git ls-remote --tags https://github.com/Azure/iotedge.git "refs/tags/${IOTEDGE_DAEMON_VERSION}^{}" "refs/tags/${IOTEDGE_DAEMON_VERSION}" | head -1 | cut -f1)
 if [[ -z "${IOTEDGE_REV}" ]]; then
     echo "Error: Could not resolve SHA for tag ${IOTEDGE_DAEMON_VERSION} in Azure/iotedge"
     exit 1
 fi
 echo "  IoT Edge SHA: ${IOTEDGE_REV} (tag ${IOTEDGE_DAEMON_VERSION})"
 
-IIS_REV=$(git ls-remote --tags https://github.com/Azure/iot-identity-service.git "refs/tags/${IIS_VERSION}" | cut -f1)
+IIS_REV=$(git ls-remote --tags https://github.com/Azure/iot-identity-service.git "refs/tags/${IIS_VERSION}^{}" "refs/tags/${IIS_VERSION}" | head -1 | cut -f1)
 if [[ -z "${IIS_REV}" ]]; then
     echo "Error: Could not resolve SHA for tag ${IIS_VERSION} in Azure/iot-identity-service"
     exit 1

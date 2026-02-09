@@ -83,7 +83,7 @@ jobs:
             ### Versions
             | Component | Current | New |
             |-----------|---------|-----|
-            | Release | ${{ needs.check-upstream.outputs.current_recipe }} | ${{ needs.check-upstream.outputs.release_version }} |
+            | Release | ${{ needs.check-upstream.outputs.current_release }} | ${{ needs.check-upstream.outputs.release_version }} |
             | Daemon | - | ${{ needs.check-upstream.outputs.daemon_version }} |
             
             ### Validation Checklist

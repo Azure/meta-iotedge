@@ -31,7 +31,10 @@ rm -f ${DIR}/poky/bitbake/lib/bb/server/__pycache__/process.*.pyc 2>/dev/null ||
 # This catches syntax errors and dependency issues cheaply (~1-2 min)
 # before committing to an expensive full build.
 echo "Validating recipes (bitbake -p)..."
-bitbake -p
+if ! bitbake -p; then
+    echo "✗ Recipe parse validation failed"
+    exit 1
+fi
 echo "✓ Recipe parse validation passed"
 
 bitbake -T "${BB_SERVER_TIMEOUT}" ${targets}
