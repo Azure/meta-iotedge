@@ -17,9 +17,11 @@ jobs:
     outputs:
       release_version: ${{ steps.check.outputs.release_version }}  # Latest overall release (e.g., 1.5.35)
       daemon_version: ${{ steps.check.outputs.daemon_version }}    # Daemon binary version (e.g., 1.5.21)
-      current_recipe: ${{ steps.check.outputs.current_recipe }}    # Current recipe version
+      current_recipe: ${{ steps.check.outputs.current_recipe }}    # Current recipe version (daemon)
+      current_release: ${{ steps.check.outputs.current_release }}  # Tracked release version (from IOTEDGE_RELEASE)
       needs_update: ${{ steps.check.outputs.needs_update }}        # Whether recipe update is needed
       is_significant: ${{ steps.check.outputs.is_significant }}    # Whether this is a daemon update (not Docker-only)
+      update_type: ${{ steps.check.outputs.update_type }}          # none, significant, or docker-only
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -104,11 +106,9 @@ jobs:
   notify-docker-only:
     name: Notify Docker-only update
     needs: check-upstream
-    # Notify if: no significant update needed AND recipe is behind release version
-    # This means only Docker images changed, not the daemon binaries
-    if: |
-      needs.check-upstream.outputs.is_significant != 'true' &&
-      needs.check-upstream.outputs.current_recipe != needs.check-upstream.outputs.release_version
+    # Notify only when the upstream release is a Docker-only update that
+    # we haven't already tracked via IOTEDGE_RELEASE.
+    if: needs.check-upstream.outputs.update_type == 'docker-only'
     runs-on: ubuntu-22.04
     permissions:
       issues: write

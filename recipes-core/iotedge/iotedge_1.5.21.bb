@@ -9,7 +9,7 @@ LIC_FILES_CHKSUM = " \
 inherit cargo cargo-update-recipe-crates
 
 SRC_URI += "git://github.com/Azure/iotedge.git;protocol=https;nobranch=1"
-SRCREV = "2dfe54c62398403cf4d7c908625196b4a1834385"
+SRCREV = "306856cf3082ec6951e651d504e8e04c1f837902"
 S = "${WORKDIR}/git"
 CARGO_SRC_DIR = "edgelet"
 CARGO_BUILD_FLAGS += "-p iotedge"

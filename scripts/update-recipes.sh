@@ -74,8 +74,13 @@ PRODUCT_VERSIONS=$(curl -fsSL "$PRODUCT_VERSIONS_URL") || {
     exit 1
 }
 
-# Extract IIS version from product-versions.json
-IIS_VERSION=$(echo "$PRODUCT_VERSIONS" | python3 -c "
+# Extract daemon version and IIS version from product-versions.json
+#
+# The release tag (e.g. 1.5.35) may only update Docker images while the
+# daemon binaries (aziot-edged, iotedge) stay at an earlier version
+# (e.g. 1.5.21).  Recipes must use the daemon version so the built
+# binaries reference matching container image tags.
+read -r IOTEDGE_DAEMON_VERSION IIS_VERSION < <(echo "$PRODUCT_VERSIONS" | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
 # Use lts channel (preferred for embedded systems)
@@ -87,23 +92,33 @@ aziot = next((p for p in lts['products'] if p['id'] == 'aziot-edge'), None)
 if not aziot:
     print('Error: No aziot-edge product found', file=sys.stderr)
     sys.exit(1)
+daemon = next((c['version'] for c in aziot['components'] if c['name'] == 'aziot-edge'), '')
+if not daemon:
+    print('Error: No aziot-edge daemon version found', file=sys.stderr)
+    sys.exit(1)
 iis = next((c['version'] for c in aziot['components'] if c['name'] == 'aziot-identity-service'), '')
 if not iis:
     print('Error: No IIS version found', file=sys.stderr)
     sys.exit(1)
-print(iis)
+print(f'{daemon} {iis}')
 ")
-echo "  IoT Edge version: ${IOTEDGE_VERSION}"
+echo "  IoT Edge release tag: ${IOTEDGE_VERSION}"
+echo "  IoT Edge daemon version: ${IOTEDGE_DAEMON_VERSION}"
 echo "  IIS version: ${IIS_VERSION}"
+if [[ "${IOTEDGE_DAEMON_VERSION}" != "${IOTEDGE_VERSION}" ]]; then
+    echo "  Note: Release ${IOTEDGE_VERSION} is a Docker-image-only update; daemon stays at ${IOTEDGE_DAEMON_VERSION}"
+fi
 
 # Resolve SHAs from version tags
+# Use the daemon version tag for SRCREV (not the release tag) so the
+# built binary version matches the source it was compiled from.
 echo "Resolving git SHAs..."
-IOTEDGE_REV=$(git ls-remote --tags https://github.com/Azure/iotedge.git "refs/tags/${IOTEDGE_VERSION}" | cut -f1)
+IOTEDGE_REV=$(git ls-remote --tags https://github.com/Azure/iotedge.git "refs/tags/${IOTEDGE_DAEMON_VERSION}" | cut -f1)
 if [[ -z "${IOTEDGE_REV}" ]]; then
-    echo "Error: Could not resolve SHA for tag ${IOTEDGE_VERSION} in Azure/iotedge"
+    echo "Error: Could not resolve SHA for tag ${IOTEDGE_DAEMON_VERSION} in Azure/iotedge"
     exit 1
 fi
-echo "  IoT Edge SHA: ${IOTEDGE_REV}"
+echo "  IoT Edge SHA: ${IOTEDGE_REV} (tag ${IOTEDGE_DAEMON_VERSION})"
 
 IIS_REV=$(git ls-remote --tags https://github.com/Azure/iot-identity-service.git "refs/tags/${IIS_VERSION}" | cut -f1)
 if [[ -z "${IIS_REV}" ]]; then
@@ -149,15 +164,15 @@ prepare_repo() {
 
 # --- Generate IoT Edge recipes ---
 
-echo "Updating IoT Edge to ${IOTEDGE_VERSION} (${IOTEDGE_REV:0:8})"
+echo "Updating IoT Edge to ${IOTEDGE_DAEMON_VERSION} (${IOTEDGE_REV:0:8})"
 
 IOTEDGE_DIR="${WORKDIR}/iotedge"
 prepare_repo "https://github.com/Azure/iotedge.git" "${IOTEDGE_DIR}" "${IOTEDGE_REV}"
 
 for pkg in aziot-edged iotedge; do
     recipe_dir="${ROOT_DIR}/recipes-core/${pkg}"
-    bb="${recipe_dir}/${pkg}_${IOTEDGE_VERSION}.bb"
-    ver_inc="${recipe_dir}/${pkg}-${IOTEDGE_VERSION}.inc"
+    bb="${recipe_dir}/${pkg}_${IOTEDGE_DAEMON_VERSION}.bb"
+    ver_inc="${recipe_dir}/${pkg}-${IOTEDGE_DAEMON_VERSION}.inc"
     crates_inc="${recipe_dir}/${pkg}-crates.inc"
 
     # Generate .bb (template — only metadata + SRCREV change between versions)
@@ -190,7 +205,8 @@ BBEOF
 
     # Generate version-specific .inc
     cat > "${ver_inc}" <<INCEOF
-export VERSION = "${IOTEDGE_VERSION}"
+export VERSION = "${IOTEDGE_DAEMON_VERSION}"
+IOTEDGE_RELEASE = "${IOTEDGE_VERSION}"
 IIS_SRCREV = "${IIS_REV}"
 INCEOF
     echo "  Generated ${ver_inc}"
