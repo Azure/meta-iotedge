@@ -102,9 +102,61 @@ jobs:
             *) echo "template=scarthgap" >> "$GITHUB_OUTPUT" ;;  
           esac
 
+  check-recipes:
+    name: Recipe consistency check
+    needs: check-changes
+    if: needs.check-changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || '' }}
+
+      - name: Extract IoT Edge release version from committed recipes
+        id: version
+        run: |
+          # Find the version-specific .inc file (excludes -crates.inc)
+          inc_file=$(ls recipes-core/iotedge/iotedge-[0-9]*.inc 2>/dev/null | head -1)
+          if [[ -z "${inc_file}" ]]; then
+            echo "No iotedge version .inc found — skipping idempotency check"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Extract the release tag (IOTEDGE_RELEASE) from the .inc file.
+          # This may differ from the recipe filename version when a release
+          # only updates Docker images (e.g. release 1.5.35, daemon 1.5.21).
+          ver=$(grep 'IOTEDGE_RELEASE' "${inc_file}" | sed 's/.*= *"//;s/".*//' || true)
+          if [[ -z "${ver}" ]]; then
+            # Fallback for older recipes without IOTEDGE_RELEASE:
+            # use the recipe filename version (same as release when daemon == release)
+            bb_file=$(ls recipes-core/iotedge/iotedge_*.bb 2>/dev/null | head -1)
+            ver=$(basename "${bb_file}" | sed 's/^iotedge_//;s/\.bb$//')
+          fi
+          echo "iotedge_version=${ver}" >> "$GITHUB_OUTPUT"
+          echo "Detected IoT Edge release version: ${ver}"
+
+      - name: Regenerate recipes
+        if: ${{ steps.version.outputs.skip != 'true' }}
+        run: |
+          ./scripts/update-recipes.sh \
+            --iotedge-version "${{ steps.version.outputs.iotedge_version }}" \
+            --skip-validate
+
+      - name: Check for drift between generated and committed recipes
+        if: ${{ steps.version.outputs.skip != 'true' }}
+        run: |
+          if ! git diff --exit-code recipes-core/; then
+            echo ""
+            echo "::error::Generated recipes differ from committed files."
+            echo "Run './scripts/update-recipes.sh --iotedge-version ${{ steps.version.outputs.iotedge_version }}' and commit the results."
+            exit 1
+          fi
+          echo "✓ Committed recipes match generated output"
+
   build:
     name: Build and validate
-    needs: check-changes
+    needs: [check-changes, check-recipes]
     if: needs.check-changes.outputs.docs_only != 'true'
     runs-on:
     - self-hosted
@@ -192,7 +244,7 @@ jobs:
   status-check:
     name: Status check
     runs-on: ubuntu-22.04
-    needs: [check-changes, build]
+    needs: [check-changes, check-recipes, build]
     if: always()
     steps:
       - name: Determine overall status
@@ -200,6 +252,9 @@ jobs:
           if [ "${{ needs.check-changes.outputs.docs_only }}" == "true" ]; then
             echo "✓ Docs-only change - no build required"
             exit 0
+          elif [ "${{ needs.check-recipes.result }}" != "success" ]; then
+            echo "✗ Recipe consistency check failed"
+            exit 1
           elif [ "${{ needs.build.result }}" == "success" ]; then
             echo "✓ Build succeeded"
             exit 0

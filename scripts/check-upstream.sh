@@ -59,6 +59,23 @@ get_recipe_version() {
     printf '%s\n' "${versions[@]}" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1
 }
 
+# Get IOTEDGE_RELEASE from the version-specific .inc file.
+# This tracks the upstream release tag, which may differ from the recipe
+# filename version when a release only updates Docker images.
+get_recipe_release() {
+    local recipe_dir="$1"
+    local prefix="$2"
+    local full_path="${REPO_ROOT}/${recipe_dir}"
+    
+    # Find the version .inc file (excludes -crates.inc via glob)
+    local inc_file
+    inc_file=$(ls "${full_path}/${prefix}"-[0-9]*.inc 2>/dev/null | sort -V | tail -1 || true)
+    [[ -n "${inc_file}" ]] || return
+    
+    # Extract IOTEDGE_RELEASE value
+    grep 'IOTEDGE_RELEASE' "${inc_file}" 2>/dev/null | sed 's/.*= *"//;s/".*//' || true
+}
+
 # Compare two semver versions
 # Returns: -1 if a < b, 0 if a == b, 1 if a > b
 compare_versions() {
@@ -144,9 +161,15 @@ log "📦 Upstream versions from product-versions.json:"
 log "   Release version: ${RELEASE_VERSION}"
 log "   Daemon (aziot-edge) version: ${DAEMON_VERSION}"
 
-# Get current recipe version
+# Get current recipe version (daemon version from filename)
 CURRENT_RECIPE=$(get_recipe_version "recipes-core/iotedge" "iotedge")
+# Get tracked release version from .inc (may differ from recipe version
+# when a release only updates Docker images, not daemon binaries)
+CURRENT_RELEASE=$(get_recipe_release "recipes-core/iotedge" "iotedge")
+# Fall back to recipe version if IOTEDGE_RELEASE is not set (older recipes)
+: "${CURRENT_RELEASE:=${CURRENT_RECIPE}}"
 log "📋 Current recipe version: ${CURRENT_RECIPE:-not found}"
+log "   Tracked release: ${CURRENT_RELEASE:-not found}"
 
 # Determine update status
 NEEDS_UPDATE=false
@@ -154,24 +177,24 @@ IS_SIGNIFICANT=false
 UPDATE_TYPE="none"
 
 if [[ -n "$CURRENT_RECIPE" ]]; then
-    recipe_vs_release=$(compare_versions "$CURRENT_RECIPE" "$RELEASE_VERSION")
+    # Compare the tracked release against the upstream release to decide
+    # whether we've already handled this release.
+    release_vs_upstream=$(compare_versions "$CURRENT_RELEASE" "$RELEASE_VERSION")
     recipe_vs_daemon=$(compare_versions "$CURRENT_RECIPE" "$DAEMON_VERSION")
     
-    if [[ "$recipe_vs_release" == "-1" ]]; then
-        # Recipe is behind release version
-        if [[ "$recipe_vs_daemon" == "-1" ]]; then
-            # Daemon changed → significant update needed
-            NEEDS_UPDATE=true
-            IS_SIGNIFICANT=true
-            UPDATE_TYPE="significant"
-            log "   ⚠️ Significant update needed: ${CURRENT_RECIPE} → ${RELEASE_VERSION} (daemon: ${DAEMON_VERSION})"
-        else
-            # Daemon unchanged → Docker-only
-            UPDATE_TYPE="docker-only"
-            log "   ℹ️ Docker-only update available: ${CURRENT_RECIPE} → ${RELEASE_VERSION} (daemon unchanged at ${DAEMON_VERSION})"
-        fi
-    else
+    if [[ "$release_vs_upstream" != "-1" ]]; then
+        # Already tracking this (or newer) release
         log "✅ Already at latest release version"
+    elif [[ "$recipe_vs_daemon" == "-1" ]]; then
+        # Daemon changed → significant update needed
+        NEEDS_UPDATE=true
+        IS_SIGNIFICANT=true
+        UPDATE_TYPE="significant"
+        log "   ⚠️ Significant update needed: ${CURRENT_RECIPE} → ${DAEMON_VERSION} (release: ${RELEASE_VERSION})"
+    else
+        # Daemon unchanged → Docker-only
+        UPDATE_TYPE="docker-only"
+        log "   ℹ️ Docker-only update available: release ${RELEASE_VERSION} (daemon unchanged at ${DAEMON_VERSION})"
     fi
 else
     log "⚠️ No current recipe found"
@@ -194,6 +217,7 @@ print(json.dumps({
     "release_version": "${RELEASE_VERSION}",
     "daemon_version": "${DAEMON_VERSION}",
     "current_recipe": "${CURRENT_RECIPE}",
+    "current_release": "${CURRENT_RELEASE}",
     "needs_update": ${PY_NEEDS_UPDATE},
     "is_significant": ${PY_IS_SIGNIFICANT},
     "update_type": "${UPDATE_TYPE}"
@@ -204,6 +228,7 @@ else
     echo "release_version=${RELEASE_VERSION}"
     echo "daemon_version=${DAEMON_VERSION}"
     echo "current_recipe=${CURRENT_RECIPE}"
+    echo "current_release=${CURRENT_RELEASE}"
     echo "needs_update=${NEEDS_UPDATE}"
     echo "is_significant=${IS_SIGNIFICANT}"
     echo "update_type=${UPDATE_TYPE}"

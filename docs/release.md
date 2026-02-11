@@ -42,13 +42,17 @@ flowchart TD
 1. **Wait for automated PR** — `watch-upstream.yml` creates it daily at 6:00 UTC
 2. **Check CI status** — Both "Build packages" and "QEMU validation" must pass
 3. **Merge the PR**
-4. **Tag the release** (PR description includes exact commands):
+4. **Tag the release** with the upstream release version (not the daemon version):
 
    ```bash
    git pull origin main
    git tag 1.5.35
    git push origin 1.5.35
    ```
+
+   > **Note:** The tag matches the upstream release (e.g., `1.5.35`) even if the recipe
+   > filenames use the daemon version (e.g., `1.5.21`). The `.inc` file stores
+   > `IOTEDGE_RELEASE = "1.5.35"` for traceability.
 
 5. **Verify** — Check [GitHub Releases](https://github.com/Azure/meta-iotedge/releases)
 
@@ -57,9 +61,13 @@ flowchart TD
 ### Version Detection
 
 - **Source**: [product-versions.json](https://github.com/Azure/azure-iotedge/blob/main/product-versions.json) in Azure/azure-iotedge
-- **Release version**: The overall product version (e.g., `1.5.35`) — used for recipe versioning and tags
-- **Daemon version**: The `aziot-edge` component version (e.g., `1.5.21`) — determines if update is needed
+- **Release version**: The overall product version (e.g., `1.5.35`) — used for git tags and stored as `IOTEDGE_RELEASE` in the version `.inc` file
+- **Daemon version**: The `aziot-edge` component version (e.g., `1.5.21`) — used for recipe filenames, `VERSION` export, and `SRCREV` (the actual source that gets compiled)
 - **Significant vs Docker-only**: If daemon version changed → update recipes; Docker-only → info issue
+
+Some releases only update Docker images (e.g., agent, hub, diagnostics) while the daemon binaries stay
+at an earlier version. Recipes must use the daemon version so the built binaries reference matching
+container image tags. The `IOTEDGE_RELEASE` field tracks which upstream release the recipes correspond to.
 
 The workflow uses `scripts/check-upstream.sh` to fetch `product-versions.json` and compare versions. You can run this locally to test:
 
@@ -95,12 +103,6 @@ The workflow uses `scripts/check-upstream.sh` to fetch `product-versions.json` a
 
 When automation fails or you need manual control:
 
-### Prerequisites
-
-```bash
-cargo install --locked cargo-bitbake
-```
-
 ### Update Recipes
 
 ```bash
@@ -110,8 +112,12 @@ cargo install --locked cargo-bitbake
 The script:
 1. Fetches `product-versions.json` from the specified IoT Edge release tag
 2. Resolves git SHAs from version tags
-3. Generates `*.bb` and `*.inc` files via cargo-bitbake
-4. Normalizes cargo sources and fixes license checksums
+3. Generates `*.bb` and `*.inc` template files
+4. Parses `Cargo.lock` files to generate `*-crates.inc` (crate SRC_URI + sha256sums)
+
+Recipes inherit `cargo-update-recipe-crates` from OE-Core, which enables the
+`bitbake -c update_crates <recipe>` task. Crate data is stored in dedicated
+`-crates.inc` files rather than inlined in `.bb` files.
 
 Use `--keep-workdir` to debug generated files.
 
@@ -215,6 +221,4 @@ cd poky && source oe-init-build-env && bitbake -p iotedge aziot-edged
 
 - **ARM64 builds** — Raspberry Pi and similar devices
 - **Azure IoT Hub integration tests** — End-to-end connectivity validation
-- **Modern crate management** — Adopt `bitbake -c update_crates` (see [#192](https://github.com/Azure/meta-iotedge/issues/192))
-- **Static UIDs** — Assign fixed UIDs to aziotd users for A/B partition schemes (see [#130](https://github.com/Azure/meta-iotedge/issues/130))
 - **TPM-optional builds** — MACHINE_FEATURES-based toggle (see [#149](https://github.com/Azure/meta-iotedge/issues/149))

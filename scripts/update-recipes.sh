@@ -16,6 +16,10 @@ Options:
 
 The IIS version is automatically resolved from the IoT Edge release's product-versions.json.
 
+Recipes use `inherit cargo-update-recipe-crates` and split crate data into
+*-crates.inc files.  This script generates those files from Cargo.lock and can
+also be refreshed later via `bitbake <recipe> -c update_crates`.
+
 Examples:
     ./scripts/update-recipes.sh --iotedge-version <ver> --clean
     ./scripts/update-recipes.sh --iotedge-version <ver> --template kirkstone --clean
@@ -24,7 +28,6 @@ EOF
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 HELPERS="${ROOT_DIR}/scripts/recipe_helpers.py"
-PATCHER="${ROOT_DIR}/scripts/patch-bitbake.py"
 
 # Defaults
 WORKDIR="" KEEP_WORKDIR=false CLEAN=false SKIP_VALIDATE=false
@@ -58,6 +61,11 @@ if [[ "${TEMPLATE}" != "scarthgap" && "${TEMPLATE}" != "kirkstone" ]]; then
 fi
 echo "Using template: ${TEMPLATE}"
 
+# Check dependencies early (before first use of curl/git/python3)
+for cmd in git python3 curl; do
+    command -v "$cmd" >/dev/null || { echo "Missing: $cmd"; exit 1; }
+done
+
 # Resolve versions from the IoT Edge release's product-versions.json
 echo "Fetching product-versions.json from IoT Edge ${IOTEDGE_VERSION}..."
 PRODUCT_VERSIONS_URL="https://raw.githubusercontent.com/Azure/azure-iotedge/${IOTEDGE_VERSION}/product-versions.json"
@@ -66,8 +74,13 @@ PRODUCT_VERSIONS=$(curl -fsSL "$PRODUCT_VERSIONS_URL") || {
     exit 1
 }
 
-# Extract IIS version from product-versions.json
-IIS_VERSION=$(echo "$PRODUCT_VERSIONS" | python3 -c "
+# Extract daemon version and IIS version from product-versions.json
+#
+# The release tag (e.g. 1.5.35) may only update Docker images while the
+# daemon binaries (aziot-edged, iotedge) stay at an earlier version
+# (e.g. 1.5.21).  Recipes must use the daemon version so the built
+# binaries reference matching container image tags.
+read -r IOTEDGE_DAEMON_VERSION IIS_VERSION < <(echo "$PRODUCT_VERSIONS" | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
 # Use lts channel (preferred for embedded systems)
@@ -79,25 +92,35 @@ aziot = next((p for p in lts['products'] if p['id'] == 'aziot-edge'), None)
 if not aziot:
     print('Error: No aziot-edge product found', file=sys.stderr)
     sys.exit(1)
+daemon = next((c['version'] for c in aziot['components'] if c['name'] == 'aziot-edge'), '')
+if not daemon:
+    print('Error: No aziot-edge daemon version found', file=sys.stderr)
+    sys.exit(1)
 iis = next((c['version'] for c in aziot['components'] if c['name'] == 'aziot-identity-service'), '')
 if not iis:
     print('Error: No IIS version found', file=sys.stderr)
     sys.exit(1)
-print(iis)
+print(f'{daemon} {iis}')
 ")
-echo "  IoT Edge version: ${IOTEDGE_VERSION}"
+echo "  IoT Edge release tag: ${IOTEDGE_VERSION}"
+echo "  IoT Edge daemon version: ${IOTEDGE_DAEMON_VERSION}"
 echo "  IIS version: ${IIS_VERSION}"
+if [[ "${IOTEDGE_DAEMON_VERSION}" != "${IOTEDGE_VERSION}" ]]; then
+    echo "  Note: Release ${IOTEDGE_VERSION} is a Docker-image-only update; daemon stays at ${IOTEDGE_DAEMON_VERSION}"
+fi
 
 # Resolve SHAs from version tags
+# Use the daemon version tag for SRCREV (not the release tag) so the
+# built binary version matches the source it was compiled from.
 echo "Resolving git SHAs..."
-IOTEDGE_REV=$(git ls-remote --tags https://github.com/Azure/iotedge.git "refs/tags/${IOTEDGE_VERSION}" | cut -f1)
+IOTEDGE_REV=$(git ls-remote --tags https://github.com/Azure/iotedge.git "refs/tags/${IOTEDGE_DAEMON_VERSION}^{}" "refs/tags/${IOTEDGE_DAEMON_VERSION}" | head -1 | cut -f1)
 if [[ -z "${IOTEDGE_REV}" ]]; then
-    echo "Error: Could not resolve SHA for tag ${IOTEDGE_VERSION} in Azure/iotedge"
+    echo "Error: Could not resolve SHA for tag ${IOTEDGE_DAEMON_VERSION} in Azure/iotedge"
     exit 1
 fi
-echo "  IoT Edge SHA: ${IOTEDGE_REV}"
+echo "  IoT Edge SHA: ${IOTEDGE_REV} (tag ${IOTEDGE_DAEMON_VERSION})"
 
-IIS_REV=$(git ls-remote --tags https://github.com/Azure/iot-identity-service.git "refs/tags/${IIS_VERSION}" | cut -f1)
+IIS_REV=$(git ls-remote --tags https://github.com/Azure/iot-identity-service.git "refs/tags/${IIS_VERSION}^{}" "refs/tags/${IIS_VERSION}" | head -1 | cut -f1)
 if [[ -z "${IIS_REV}" ]]; then
     echo "Error: Could not resolve SHA for tag ${IIS_VERSION} in Azure/iot-identity-service"
     exit 1
@@ -115,18 +138,11 @@ fi
 
 # Setup directories
 [[ -z "${WORKDIR}" ]] && WORKDIR=$(mktemp -d)
-CARGO_HOME_DIR=$(mktemp -d)
 
 cleanup() {
     [[ "${KEEP_WORKDIR}" != true ]] && rm -rf "${WORKDIR}"
-    rm -rf "${CARGO_HOME_DIR}"
 }
 trap cleanup EXIT
-
-# Check dependencies
-for cmd in git cargo python3; do
-    command -v "$cmd" >/dev/null || { echo "Missing: $cmd"; exit 1; }
-done
 
 # Retry helper for flaky networks
 retry() {
@@ -138,11 +154,6 @@ retry() {
     done
 }
 
-# Git helpers using Python script
-resolve_latest() { python3 "${HELPERS}" latest-release "$1"; }
-resolve_tag_sha() { python3 "${HELPERS}" tag-sha "$1" "$2"; }
-resolve_version() { python3 "${HELPERS}" version-from-rev "$1" "$2"; }
-
 # Prepare a git repo at specific revision
 prepare_repo() {
     local url="$1" dir="$2" rev="$3"
@@ -151,126 +162,125 @@ prepare_repo() {
     retry "checkout ${rev}" git -C "${dir}" checkout "${rev}"
 }
 
-# Normalize .cargo/config.toml to use standard crates.io
-normalize_cargo_config() {
-    local cargo_dir="$1"
-    [[ -d "${cargo_dir}" ]] || return 0
-    rm -f "${cargo_dir}/config.toml" "${cargo_dir}/config"
-    cat > "${cargo_dir}/config.toml" <<'EOF'
-[source.crates-io]
-registry = "https://github.com/rust-lang/crates.io-index"
+# --- Generate IoT Edge recipes ---
 
-[net]
-git-fetch-with-cli = true
-EOF
-}
-
-# Copy and transform recipe
-copy_recipe() {
-    local component="$1" src="$2" dest_dir="$3" version="$4"
-    local dest_bb="${dest_dir}/${component}_${version}.bb"
-    local dest_inc="${dest_dir}/${component}-${version}.inc"
-
-    # Remove any existing files (--clean already handled cleanup of other versions)
-    rm -f "${dest_bb}" "${dest_inc}"
-
-    python3 "${PATCHER}" --component "${component}" --input "${src}" --output "${dest_bb}"
-    printf 'export VERSION = "%s"\n' "${version}" > "${dest_inc}"
-}
-
-# Fix SRCREV entries with "main" to actual SHA
-fix_srcrev() {
-    local recipe="$1" sha="$2"
-    [[ -f "${recipe}" && -n "${sha}" ]] || return 0
-    sed -i -E "s/^(SRCREV_[a-zA-Z0-9_-]+) = \"main\"$/\1 = \"${sha}\"/" "${recipe}"
-}
-
-# Generate patch to remove git deps
-generate_patch() {
-    local repo_dir="$1" dest_patch="$2" lock_target="$3"
-    local tmpdir; tmpdir=$(mktemp -d)
-    
-    mkdir -p "${tmpdir}"/{orig,mod}/edgelet "${tmpdir}/mod/edgelet/${lock_target}"
-    cp "${repo_dir}/edgelet/Cargo."{lock,toml} "${tmpdir}/orig/edgelet/"
-    cp "${tmpdir}/orig/edgelet/Cargo."{lock,toml} "${tmpdir}/mod/edgelet/"
-    
-    python3 "${HELPERS}" strip-git-deps "${tmpdir}/mod/edgelet/Cargo.lock" "${tmpdir}/mod/edgelet/Cargo.toml"
-    cp "${tmpdir}/mod/edgelet/Cargo.lock" "${tmpdir}/mod/edgelet/${lock_target}/"
-    
-    mkdir -p "$(dirname "${dest_patch}")"
-    git -C "${tmpdir}" diff --no-index --binary orig mod > "${dest_patch}" || true
-    python3 "${HELPERS}" fix-patch-paths "${dest_patch}"
-    rm -rf "${tmpdir}"
-}
-
-# Sync checksums from Cargo.lock and previous recipes
-sync_checksums() {
-    local component="$1" version="$2" lockfile="$3"
-    local recipe="${ROOT_DIR}/recipes-core/${component}/${component}_${version}.bb"
-    local recipe_dir="${ROOT_DIR}/recipes-core/${component}"
-    
-    [[ -f "${recipe}" ]] || return 0
-    [[ -f "${lockfile}" ]] && python3 "${HELPERS}" add-checksums "${recipe}" "${lockfile}"
-    
-    # Add known checksums (e.g., wasi crates that bitbake complains about)
-    python3 "${HELPERS}" add-known-checksums "${recipe}"
-    
-    # Copy checksums from previous version
-    local prev; prev=$(ls "${recipe_dir}/${component}_"*.bb 2>/dev/null | sort -V | grep -v "_${version}.bb$" | tail -1 || true)
-    [[ -n "${prev}" ]] || return 0
-    
-    while IFS= read -r line; do
-        local key; key=$(echo "${line}" | cut -d= -f1)
-        grep -qF "${key}" "${recipe}" || echo "${line}" >> "${recipe}"
-    done < <(grep -E '^SRC_URI\[.*\.sha256sum\] = ' "${prev}" 2>/dev/null || true)
-}
-
-# --- Main ---
-
-IOTEDGE_REPO="https://github.com/Azure/iotedge.git"
-IIS_REPO="https://github.com/Azure/iot-identity-service.git"
-
-echo "Updating IoT Edge to ${IOTEDGE_VERSION} (${IOTEDGE_REV:0:8})"
+echo "Updating IoT Edge to ${IOTEDGE_DAEMON_VERSION} (${IOTEDGE_REV:0:8})"
 
 IOTEDGE_DIR="${WORKDIR}/iotedge"
-prepare_repo "${IOTEDGE_REPO}" "${IOTEDGE_DIR}" "${IOTEDGE_REV}"
-normalize_cargo_config "${IOTEDGE_DIR}/edgelet/.cargo"
+prepare_repo "https://github.com/Azure/iotedge.git" "${IOTEDGE_DIR}" "${IOTEDGE_REV}"
 
-# Generate IoT Edge recipes
 for pkg in aziot-edged iotedge; do
-    pushd "${IOTEDGE_DIR}/edgelet/${pkg}" >/dev/null
-    retry "cargo bitbake (${pkg})" env CARGO_HOME="${CARGO_HOME_DIR}" cargo bitbake
-    bb_file=$(ls "${pkg}_"*.bb | head -1)
-    popd >/dev/null
-    copy_recipe "${pkg}" "${IOTEDGE_DIR}/edgelet/${pkg}/${bb_file}" \
-        "${ROOT_DIR}/recipes-core/${pkg}" "${IOTEDGE_VERSION}"
+    recipe_dir="${ROOT_DIR}/recipes-core/${pkg}"
+    bb="${recipe_dir}/${pkg}_${IOTEDGE_DAEMON_VERSION}.bb"
+    ver_inc="${recipe_dir}/${pkg}-${IOTEDGE_DAEMON_VERSION}.inc"
+    crates_inc="${recipe_dir}/${pkg}-crates.inc"
+
+    # Generate .bb (template — only metadata + SRCREV change between versions)
+    cat > "${bb}" <<BBEOF
+SUMMARY = "$(if [[ "${pkg}" == "aziot-edged" ]]; then echo "The aziot-edged is the main binary for the IoT Edge daemon."; else echo "The iotedge tool is used to manage the IoT Edge runtime."; fi)"
+HOMEPAGE = "https://aka.ms/iotedge"
+LICENSE = "MIT"
+LIC_FILES_CHKSUM = " \\
+    file://LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \\
+    file://THIRDPARTYNOTICES;md5=11604c6170b98c376be25d0ca6989d9b \\
+"
+
+inherit cargo cargo-update-recipe-crates$(if [[ "${pkg}" == "aziot-edged" ]]; then echo " pkgconfig"; fi)
+
+SRC_URI += "git://github.com/Azure/iotedge.git;protocol=https;nobranch=1"
+SRCREV = "${IOTEDGE_REV}"
+S = "\${WORKDIR}/git"
+CARGO_SRC_DIR = "edgelet"
+CARGO_BUILD_FLAGS += "-p ${pkg}"
+CARGO_LOCK_SRC_DIR = "\${S}/edgelet"
+do_compile[network] = "1"
+
+require \${BPN}-crates.inc
+require recipes-core/iot-identity-service.inc
+
+include ${pkg}-\${PV}.inc
+include ${pkg}.inc
+BBEOF
+    echo "  Generated ${bb}"
+
+    # Generate version-specific .inc
+    cat > "${ver_inc}" <<INCEOF
+export VERSION = "${IOTEDGE_DAEMON_VERSION}"
+IOTEDGE_RELEASE = "${IOTEDGE_VERSION}"
+IIS_SRCREV = "${IIS_REV}"
+INCEOF
+    echo "  Generated ${ver_inc}"
+
+    # Generate crates.inc from Cargo.lock
+    python3 "${HELPERS}" generate-crates-inc "${IOTEDGE_DIR}/edgelet/Cargo.lock" "${crates_inc}"
 done
 
-# Clone IIS repo for fixing IoT Edge recipes and generating IIS recipes
+# --- Generate IIS recipes ---
+
 echo "Updating IIS to ${IIS_VERSION} (${IIS_REV:0:8})"
+
 IIS_DIR="${WORKDIR}/iot-identity-service"
-prepare_repo "${IIS_REPO}" "${IIS_DIR}" "${IIS_REV}"
-normalize_cargo_config "${IIS_DIR}/.cargo"
+prepare_repo "https://github.com/Azure/iot-identity-service.git" "${IIS_DIR}" "${IIS_REV}"
 
-# Fix IoT Edge recipes with IIS paths
-for pkg in aziot-edged iotedge; do
-    recipe="${ROOT_DIR}/recipes-core/${pkg}/${pkg}_${IOTEDGE_VERSION}.bb"
-    python3 "${HELPERS}" fix-cargo-paths "${IIS_DIR}" "${recipe}"
-    fix_srcrev "${recipe}" "${IIS_REV}"
-    generate_patch "${IOTEDGE_DIR}" "${ROOT_DIR}/recipes-core/${pkg}/files/0001-Remove-git-from-Cargo.patch" "${pkg}"
-    sync_checksums "${pkg}" "${IOTEDGE_VERSION}" "${IOTEDGE_DIR}/edgelet/Cargo.lock"
-done
+declare -A IIS_PKGS=(
+    [aziotd]="aziotd"
+    [aziotctl]="aziotctl"
+    [aziot-keys]="key/aziot-keys"
+)
+declare -A IIS_SUMMARIES=(
+    [aziotd]="aziotd is the main binary for the IoT Identity Service and related services."
+    [aziotctl]="aziotctl is the CLI tool for the IoT Identity Service."
+    [aziot-keys]="aziot-keys is the keys library for the IoT Identity Service."
+)
+declare -A IIS_INHERIT=(
+    [aziotd]="cargo cargo-update-recipe-crates pkgconfig"
+    [aziotctl]="cargo cargo-update-recipe-crates"
+    [aziot-keys]="cargo cargo-update-recipe-crates pkgconfig"
+)
+declare -A IIS_PROTO=(
+    [aziotd]="gitsm"
+    [aziotctl]="gitsm"
+    [aziot-keys]="gitsm"
+)
 
-# Generate IIS recipes
-declare -A IIS_PATHS=([aziot-keys]="key/aziot-keys" [aziotd]="aziotd" [aziotctl]="aziotctl")
-for pkg in aziot-keys aziotd aziotctl; do
-    pushd "${IIS_DIR}/${IIS_PATHS[$pkg]}" >/dev/null
-    retry "cargo bitbake (${pkg})" env CARGO_HOME="${CARGO_HOME_DIR}" cargo bitbake
-    bb_file=$(ls "${pkg}_"*.bb | head -1)
-    popd >/dev/null
-    copy_recipe "${pkg}" "${IIS_DIR}/${IIS_PATHS[$pkg]}/${bb_file}" \
-        "${ROOT_DIR}/recipes-core/${pkg}" "${IIS_VERSION}"
-    sync_checksums "${pkg}" "${IIS_VERSION}" "${IIS_DIR}/Cargo.lock"
+for pkg in aziotd aziotctl aziot-keys; do
+    recipe_dir="${ROOT_DIR}/recipes-core/${pkg}"
+    bb="${recipe_dir}/${pkg}_${IIS_VERSION}.bb"
+    ver_inc="${recipe_dir}/${pkg}-${IIS_VERSION}.inc"
+    crates_inc="${recipe_dir}/${pkg}-crates.inc"
+    cargo_src="${IIS_PKGS[$pkg]}"
+
+    # Generate .bb
+    cat > "${bb}" <<BBEOF
+SUMMARY = "${IIS_SUMMARIES[$pkg]}"
+HOMEPAGE = "https://azure.github.io/iot-identity-service/"
+LICENSE = "MIT"
+LIC_FILES_CHKSUM = " \\
+    file://LICENSE;md5=4f9c2c296f77b3096b6c11a16fa7c66e \\
+"
+
+inherit ${IIS_INHERIT[$pkg]}
+
+SRC_URI += "${IIS_PROTO[$pkg]}://github.com/Azure/iot-identity-service.git;protocol=https;nobranch=1"
+SRCREV = "${IIS_REV}"
+S = "\${WORKDIR}/git"
+CARGO_SRC_DIR = "${cargo_src}"
+
+require \${BPN}-crates.inc
+
+include ${pkg}-\${PV}.inc
+include ${pkg}.inc
+BBEOF
+    echo "  Generated ${bb}"
+
+    # Generate version-specific .inc
+    cat > "${ver_inc}" <<INCEOF
+export VERSION = "${IIS_VERSION}"
+INCEOF
+    echo "  Generated ${ver_inc}"
+
+    # Generate crates.inc from Cargo.lock
+    python3 "${HELPERS}" generate-crates-inc "${IIS_DIR}/Cargo.lock" "${crates_inc}"
 done
 
 # Validate recipes with bitbake (skip with --skip-validate)
