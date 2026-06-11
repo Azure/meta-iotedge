@@ -90,11 +90,11 @@ GROUPADD_PARAM:${PN} += "-r -g 13625 aziotks; "
 GROUPADD_PARAM:${PN} += "-r -g 13626 aziotid; "
 GROUPADD_PARAM:${PN} += "-r -g 13627 aziottpm; "
 
-export SOCKET_DIR="/run/aziot"
-export USER_AZIOTID="aziotid"
-export USER_AZIOTCS="aziotcs"
-export USER_AZIOTKS="aziotks"
-export USER_AZIOTTPM="aziottpm"
+export SOCKET_DIR = "/run/aziot"
+export USER_AZIOTID = "aziotid"
+export USER_AZIOTCS = "aziotcs"
+export USER_AZIOTKS = "aziotks"
+export USER_AZIOTTPM = "aziottpm"
 
 # Set rpath to the location where aziot-keys installs libaziot_keys.so
 # Fixes: https://github.com/Azure/meta-iotedge/issues/182
