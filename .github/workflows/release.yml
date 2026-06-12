@@ -32,13 +32,13 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Download RPM packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: rpm-packages-${{ needs.build.outputs.template }}
           path: release-artifacts/rpm
 
       - name: Download QEMU image
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: iotedge-qemu-image-${{ needs.build.outputs.template }}
           path: release-artifacts/qemu
