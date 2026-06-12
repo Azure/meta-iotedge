@@ -1,0 +1,32 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: meta-iotedge <meta-iotedge@users.noreply.github.com>
+Date: Thu, 01 Jan 2024 00:00:00 +0000
+Subject: [PATCH] Use panic unwind for cross-compilation compatibility
+
+The Yocto Rust toolchain's sysroot does not include panic_abort compiled
+with the abort strategy. Explicitly set panic = 'unwind' in the workspace
+profile sections for compatibility with the Yocto-provided Rust sysroot.
+
+Upstream-Status: Inappropriate [oe-specific]
+Signed-off-by: meta-iotedge <meta-iotedge@users.noreply.github.com>
+---
+ Cargo.toml | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Cargo.toml b/Cargo.toml
+index c36564f..e9556cc 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -179,10 +179,10 @@ type_complexity = "allow"
+ # Don't let panics from callbacks cross FFI boundary
+ 
+ [profile.dev]
+-panic = "abort"
++panic = "unwind"
+ 
+ [profile.release]
+-panic = "abort"
++panic = "unwind"
+ # Release builds will have full symbols. The packaging phase will strip symbols from binaries and
+ # make them available in a separate package.
+ # Notes: Snaps don't have a good story for debug symbols, so for now we'll override this setting in
