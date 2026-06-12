@@ -40,12 +40,17 @@ jobs:
           context: .devcontainer
           file: .devcontainer/Dockerfile
           push: true
-          # The devcontainer image is Yocto-release-agnostic (it only provides
-          # host build tools; OE-core fetches its own uninative + cross
-          # toolchain). Publish one image under both LTS tags so the Yocto
-          # build workflow can reference a per-template tag.
+          # The devcontainer image is Yocto-release-agnostic: it only provides
+          # host build tools, and OE-core fetches its own uninative + cross
+          # toolchain per template at build time. So it carries ONE neutral
+          # :latest tag rather than per-release tags. The build and
+          # upstream-update workflows reference :latest for every Yocto line.
+          #
+          # :scarthgap is kept as a transitional alias for one publish cycle
+          # so refs that still point at it during the rename keep working. It
+          # can be dropped after this image is published once under :latest.
           tags: |
+            ghcr.io/${{ env.REPO_OWNER_LC }}/meta-iotedge-devcontainer:latest
             ghcr.io/${{ env.REPO_OWNER_LC }}/meta-iotedge-devcontainer:scarthgap
-            ghcr.io/${{ env.REPO_OWNER_LC }}/meta-iotedge-devcontainer:wrynose
-          cache-from: type=registry,ref=ghcr.io/${{ env.REPO_OWNER_LC }}/meta-iotedge-devcontainer:scarthgap
+          cache-from: type=registry,ref=ghcr.io/${{ env.REPO_OWNER_LC }}/meta-iotedge-devcontainer:latest
           cache-to: type=inline
