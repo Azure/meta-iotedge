@@ -55,7 +55,6 @@ SRC_URI += " \
     crate://crates.io/deranged/0.5.8 \
     crate://crates.io/digest/0.10.7 \
     crate://crates.io/digest/0.11.3 \
-    crate://crates.io/dispatch2/0.3.1 \
     crate://crates.io/displaydoc/0.2.6 \
     crate://crates.io/dyn-clone/1.0.20 \
     crate://crates.io/env_filter/1.0.1 \
@@ -137,12 +136,8 @@ SRC_URI += " \
     crate://crates.io/num-conv/0.2.2 \
     crate://crates.io/num-traits/0.2.19 \
     crate://crates.io/num_cpus/1.17.0 \
-    crate://crates.io/objc2/0.6.4 \
     crate://crates.io/objc2-core-foundation/0.3.2 \
-    crate://crates.io/objc2-encode/4.1.0 \
-    crate://crates.io/objc2-foundation/0.3.2 \
     crate://crates.io/objc2-io-kit/0.3.2 \
-    crate://crates.io/objc2-open-directory/0.3.2 \
     crate://crates.io/once_cell/1.21.4 \
     crate://crates.io/once_cell_polyfill/1.70.2 \
     crate://crates.io/openssl/0.10.80 \
@@ -363,7 +358,6 @@ SRC_URI[darling_macro-0.23.0.sha256sum] = "ac3984ec7bd6cfa798e62b4a642426a5be0e6
 SRC_URI[deranged-0.5.8.sha256sum] = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
 SRC_URI[digest-0.10.7.sha256sum] = "9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292"
 SRC_URI[digest-0.11.3.sha256sum] = "f1dd6dbb5841937940781866fa1281a1ff7bd3bf827091440879f9994983d5c2"
-SRC_URI[dispatch2-0.3.1.sha256sum] = "1e0e367e4e7da84520dedcac1901e4da967309406d1e51017ae1abfb97adbd38"
 SRC_URI[displaydoc-0.2.6.sha256sum] = "1ac70aa55017e108007fbaf5aa0f54b021c98f92ff8af59d42eda9da96e3dd4f"
 SRC_URI[dyn-clone-1.0.20.sha256sum] = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 SRC_URI[env_filter-1.0.1.sha256sum] = "32e90c2accc4b07a8456ea0debdc2e7587bdd890680d71173a15d4ae604f6eef"
@@ -445,12 +439,8 @@ SRC_URI[ntapi-0.4.3.sha256sum] = "c3b335231dfd352ffb0f8017f3b6027a4917f7df785ea2
 SRC_URI[num-conv-0.2.2.sha256sum] = "521739c6d2bac4aa25192232afe6841231376b2b26d4d9fae5ecf8ca5772e441"
 SRC_URI[num-traits-0.2.19.sha256sum] = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 SRC_URI[num_cpus-1.17.0.sha256sum] = "91df4bbde75afed763b708b7eee1e8e7651e02d97f6d5dd763e89367e957b23b"
-SRC_URI[objc2-0.6.4.sha256sum] = "3a12a8ed07aefc768292f076dc3ac8c48f3781c8f2d5851dd3d98950e8c5a89f"
 SRC_URI[objc2-core-foundation-0.3.2.sha256sum] = "2a180dd8642fa45cdb7dd721cd4c11b1cadd4929ce112ebd8b9f5803cc79d536"
-SRC_URI[objc2-encode-4.1.0.sha256sum] = "ef25abbcd74fb2609453eb695bd2f860d389e457f67dc17cafc8b8cbc89d0c33"
-SRC_URI[objc2-foundation-0.3.2.sha256sum] = "e3e0adef53c21f888deb4fa59fc59f7eb17404926ee8a6f59f5df0fd7f9f3272"
 SRC_URI[objc2-io-kit-0.3.2.sha256sum] = "33fafba39597d6dc1fb709123dfa8289d39406734be322956a69f0931c73bb15"
-SRC_URI[objc2-open-directory-0.3.2.sha256sum] = "bb82bed227edf5201dfedf072bba4015a33d3d4a98519837295a90f0a23f676d"
 SRC_URI[once_cell-1.21.4.sha256sum] = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 SRC_URI[once_cell_polyfill-1.70.2.sha256sum] = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 SRC_URI[openssl-0.10.80.sha256sum] = "a45fa2aa886c42762255da344f0a0d313e254066c46aad76f300c3d3da62d967"
