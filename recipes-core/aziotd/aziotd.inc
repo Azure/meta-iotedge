@@ -4,6 +4,12 @@ DEPENDS += "openssl aziotctl aziot-keys tpm2-tss clang-native"
 RDEPENDS:${PN} += "tpm2-tss libtss2-mu libtss2-tcti-device aziot-keys aziotctl"
 TOOLCHAIN = "clang"
 
+# file:// SRC_URI assets unpack into the recipe's unpack root, which differs by
+# Yocto release: Scarthgap unpacks to ${WORKDIR}, Wrynose (6.0) to ${UNPACKDIR}
+# (= ${WORKDIR}/sources). Resolve to whichever applies. (Defined locally here
+# because aziotd does not require iot-identity-service.inc.)
+UNPACK_ROOT ??= "${@d.getVar('UNPACKDIR') or d.getVar('WORKDIR')}"
+
 # clang (set above) treats unused command-line args as errors under -Werror,
 # whereas gcc silently ignores them. cc-rs builds C build-scripts (e.g.
 # openssl-sys2, aziot-key-openssl-engine) with -c (compile-only) but the OE
@@ -68,13 +74,12 @@ do_install:append  () {
 
 
     # Install all required services
-    # Wrynose (Yocto 6.0) unpacks file:// SRC_URI entries to ${UNPACKDIR}
-    # (= ${WORKDIR}/sources), not ${WORKDIR}. Reference the .service files
-    # there (same migration as keys.generated.rs in aziotd-${PV}.inc).
-    install -m 644 ${UNPACKDIR}/aziot-certd.service ${D}${systemd_unitdir}/system
-    install -m 644 ${UNPACKDIR}/aziot-identityd.service ${D}${systemd_unitdir}/system
-    install -m 644 ${UNPACKDIR}/aziot-keyd.service ${D}${systemd_unitdir}/system
-    install -m 644 ${UNPACKDIR}/aziot-tpmd.service ${D}${systemd_unitdir}/system
+    # file:// .service assets live in the recipe's unpack root; see UNPACK_ROOT
+    # above (Scarthgap -> ${WORKDIR}, Wrynose/6.0 -> ${UNPACKDIR}).
+    install -m 644 ${UNPACK_ROOT}/aziot-certd.service ${D}${systemd_unitdir}/system
+    install -m 644 ${UNPACK_ROOT}/aziot-identityd.service ${D}${systemd_unitdir}/system
+    install -m 644 ${UNPACK_ROOT}/aziot-keyd.service ${D}${systemd_unitdir}/system
+    install -m 644 ${UNPACK_ROOT}/aziot-tpmd.service ${D}${systemd_unitdir}/system
 
     install -m 644 ${S}/cert/aziot-certd/aziot-certd.socket.in ${D}${systemd_unitdir}/system/aziot-certd.socket
     install -m 644 ${S}/identity/aziot-identityd/aziot-identityd.socket.in ${D}${systemd_unitdir}/system/aziot-identityd.socket

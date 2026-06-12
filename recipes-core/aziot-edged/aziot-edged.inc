@@ -34,15 +34,18 @@ do_install:append () {
     install -d -m 755 -o iotedge -g iotedge ${D}${localstatedir}/lib/aziot/edged
 
     install -d ${D}${systemd_unitdir}/system
-    # Wrynose (Yocto 6.0) unpacks file:// SRC_URI entries to ${UNPACKDIR}
-    # (= ${WORKDIR}/sources), not ${WORKDIR}.
-    install -m 644 ${UNPACKDIR}/aziot-edged.service ${D}${systemd_unitdir}/system
+    # file:// SRC_URI assets unpack into the recipe's unpack root, which differs
+    # by Yocto release: Scarthgap unpacks to ${WORKDIR}, Wrynose (6.0) to
+    # ${UNPACKDIR} (= ${WORKDIR}/sources). ${UNPACK_ROOT} (defined in the shared
+    # iot-identity-service.inc, required by this recipe) resolves to whichever
+    # one applies.
+    install -m 644 ${UNPACK_ROOT}/aziot-edged.service ${D}${systemd_unitdir}/system
     install -m 644 ${S}/edgelet/contrib/systemd/debian/aziot-edged.workload.socket ${D}${systemd_unitdir}/system
     install -m 644 ${S}/edgelet/contrib/systemd/debian/aziot-edged.mgmt.socket ${D}${systemd_unitdir}/system
 
     #Creates /var/run/iotedge as 755, iotedge:iotedge via systemd-tmpfiles.setup.service
     install -d ${D}${sysconfdir}/tmpfiles.d
-    install -m 644 ${UNPACKDIR}/iotedge.conf ${D}${sysconfdir}/tmpfiles.d/iotedge.conf
+    install -m 644 ${UNPACK_ROOT}/iotedge.conf ${D}${sysconfdir}/tmpfiles.d/iotedge.conf
 }
 
 inherit useradd
