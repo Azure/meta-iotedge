@@ -40,6 +40,14 @@ SRC_URI += "file://aziot-certd.service \
             file://0001-Remove-panic.patch \
 "
 
+# Copy the pre-generated bindgen output into the source tree before building.
+# keys.generated.rs is a file:// SRC_URI asset, so it unpacks into the recipe's
+# unpack root; ${UNPACK_ROOT} (set above) resolves to ${WORKDIR} on Scarthgap
+# and ${UNPACKDIR} on Wrynose (6.0). Shared by all aziotd versions.
+do_compile:prepend () {
+    install -m 644 ${UNPACK_ROOT}/keys.generated.rs ${S}/key/aziot-keyd/src/keys.generated.rs
+}
+
 
 do_install:append  () {
     install -d ${D}${systemd_unitdir}/system
