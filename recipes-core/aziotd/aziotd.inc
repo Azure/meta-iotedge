@@ -4,6 +4,20 @@ DEPENDS += "openssl aziotctl aziot-keys tpm2-tss clang-native"
 RDEPENDS:${PN} += "tpm2-tss libtss2-mu libtss2-tcti-device aziot-keys aziotctl"
 TOOLCHAIN = "clang"
 
+# clang (set above) treats unused command-line args as errors under -Werror,
+# whereas gcc silently ignores them. cc-rs builds C build-scripts (e.g.
+# openssl-sys2, aziot-key-openssl-engine) with -c (compile-only) but the OE
+# rust-cc wrapper bakes OE LDFLAGS (-Wl,-O1 -Wl,--hash-style=gnu
+# -Wl,--as-needed -Wl,-z,relro,-z,now) into the base CC string. On a -c
+# compile those linker flags are unused, so clang fails with:
+#   error: -Wl,-O1: 'linker' input unused [-Werror,-Wunused-command-line-argument]
+# aziot-keys builds the IDENTICAL crate fine because its TOOLCHAIN defaults to
+# gcc. Mirror gcc's tolerance for clang by disabling ONLY that one diagnostic.
+# This is scoped to aziotd, flows into cc-rs via cargo_common's CFLAGS/
+# TARGET_CFLAGS export, and does NOT weaken -Werror=format-security or any
+# other real warning. Ref: Azure/meta-iotedge wrynose iotedge 1.6 rc1.
+CFLAGS:append = " -Wno-unused-command-line-argument"
+
 inherit systemd
 
 SYSTEMD_AUTO_ENABLE:${PN} = "enable"
@@ -38,11 +52,11 @@ do_install:append  () {
     install -d -m 700 -o aziottpm -g aziottpm ${D}${sysconfdir}/aziot/tpmd/config.d
 
     # Configuration files
-    install -m 644 ${WORKDIR}/git/cert/aziot-certd/config/unix/default.toml ${D}${sysconfdir}/aziot/certd/config.toml.default
-    install -m 644 ${WORKDIR}/git/identity/aziot-identityd/config/unix/default.toml ${D}${sysconfdir}/aziot/identityd/config.toml.default
-    install -m 644 ${WORKDIR}/git/key/aziot-keyd/config/unix/default.toml ${D}${sysconfdir}/aziot/keyd/config.toml.default
-    install -m 644 ${WORKDIR}/git/tpm/aziot-tpmd/config/unix/default.toml ${D}${sysconfdir}/aziot/tpmd/config.toml.default
-    install -m 644 ${WORKDIR}/git/aziotctl/config/unix/template.toml ${D}${sysconfdir}/aziot/config.toml.template
+    install -m 644 ${S}/cert/aziot-certd/config/unix/default.toml ${D}${sysconfdir}/aziot/certd/config.toml.default
+    install -m 644 ${S}/identity/aziot-identityd/config/unix/default.toml ${D}${sysconfdir}/aziot/identityd/config.toml.default
+    install -m 644 ${S}/key/aziot-keyd/config/unix/default.toml ${D}${sysconfdir}/aziot/keyd/config.toml.default
+    install -m 644 ${S}/tpm/aziot-tpmd/config/unix/default.toml ${D}${sysconfdir}/aziot/tpmd/config.toml.default
+    install -m 644 ${S}/aziotctl/config/unix/template.toml ${D}${sysconfdir}/aziot/config.toml.template
 
     # Data dir
     install -d ${D}${localstatedir}/lib
@@ -54,15 +68,18 @@ do_install:append  () {
 
 
     # Install all required services
-    install -m 644 ${WORKDIR}/aziot-certd.service ${D}${systemd_unitdir}/system
-    install -m 644 ${WORKDIR}/aziot-identityd.service ${D}${systemd_unitdir}/system
-    install -m 644 ${WORKDIR}/aziot-keyd.service ${D}${systemd_unitdir}/system
-    install -m 644 ${WORKDIR}/aziot-tpmd.service ${D}${systemd_unitdir}/system
+    # Wrynose (Yocto 6.0) unpacks file:// SRC_URI entries to ${UNPACKDIR}
+    # (= ${WORKDIR}/sources), not ${WORKDIR}. Reference the .service files
+    # there (same migration as keys.generated.rs in aziotd-${PV}.inc).
+    install -m 644 ${UNPACKDIR}/aziot-certd.service ${D}${systemd_unitdir}/system
+    install -m 644 ${UNPACKDIR}/aziot-identityd.service ${D}${systemd_unitdir}/system
+    install -m 644 ${UNPACKDIR}/aziot-keyd.service ${D}${systemd_unitdir}/system
+    install -m 644 ${UNPACKDIR}/aziot-tpmd.service ${D}${systemd_unitdir}/system
 
-    install -m 644 ${WORKDIR}/git/cert/aziot-certd/aziot-certd.socket.in ${D}${systemd_unitdir}/system/aziot-certd.socket
-    install -m 644 ${WORKDIR}/git/identity/aziot-identityd/aziot-identityd.socket.in ${D}${systemd_unitdir}/system/aziot-identityd.socket
-    install -m 644 ${WORKDIR}/git/key/aziot-keyd/aziot-keyd.socket.in ${D}${systemd_unitdir}/system/aziot-keyd.socket
-    install -m 644 ${WORKDIR}/git/tpm/aziot-tpmd/aziot-tpmd.socket.in ${D}${systemd_unitdir}/system/aziot-tpmd.socket
+    install -m 644 ${S}/cert/aziot-certd/aziot-certd.socket.in ${D}${systemd_unitdir}/system/aziot-certd.socket
+    install -m 644 ${S}/identity/aziot-identityd/aziot-identityd.socket.in ${D}${systemd_unitdir}/system/aziot-identityd.socket
+    install -m 644 ${S}/key/aziot-keyd/aziot-keyd.socket.in ${D}${systemd_unitdir}/system/aziot-keyd.socket
+    install -m 644 ${S}/tpm/aziot-tpmd/aziot-tpmd.socket.in ${D}${systemd_unitdir}/system/aziot-tpmd.socket
 
     sed -i \
         -e "s|@user_aziotid@|${USER_AZIOTID}|" \

@@ -216,7 +216,7 @@ SRC_URI += " \
     crate://crates.io/syn/1.0.109 \
     crate://crates.io/syn/2.0.117 \
     crate://crates.io/synstructure/0.13.2 \
-    crate://crates.io/sysinfo/0.39.3 \
+    crate://crates.io/sysinfo/0.38.4 \
     crate://crates.io/tabwriter/1.4.1 \
     crate://crates.io/tap/1.0.1 \
     crate://crates.io/termcolor/1.4.1 \
@@ -524,7 +524,7 @@ SRC_URI[strsim-0.11.1.sha256sum] = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70
 SRC_URI[syn-1.0.109.sha256sum] = "72b64191b275b66ffe2469e8af2c1cfe3bafa67b529ead792a6d0160888b4237"
 SRC_URI[syn-2.0.117.sha256sum] = "e665b8803e7b1d2a727f4023456bbbbe74da67099c585258af0ad9c5013b9b99"
 SRC_URI[synstructure-0.13.2.sha256sum] = "728a70f3dbaf5bab7f0c4b1ac8d7ae5ea60a4b5549c8a5914361c99147a709d2"
-SRC_URI[sysinfo-0.39.3.sha256sum] = "21d0d938c10fcda3e897e28aaddf4ab462375d411f4378cd63b1c945f69aba96"
+SRC_URI[sysinfo-0.38.4.sha256sum] = "92ab6a2f8bfe508deb3c6406578252e491d299cbbf3bc0529ecc3313aee4a52f"
 SRC_URI[tabwriter-1.4.1.sha256sum] = "fce91f2f0ec87dff7e6bcbbeb267439aa1188703003c6055193c821487400432"
 SRC_URI[tap-1.0.1.sha256sum] = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 SRC_URI[termcolor-1.4.1.sha256sum] = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
