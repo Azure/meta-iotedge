@@ -40,6 +40,12 @@ jobs:
           context: .devcontainer
           file: .devcontainer/Dockerfile
           push: true
-          tags: ghcr.io/${{ env.REPO_OWNER_LC }}/meta-iotedge-devcontainer:scarthgap
+          # The devcontainer image is Yocto-release-agnostic (it only provides
+          # host build tools; OE-core fetches its own uninative + cross
+          # toolchain). Publish one image under both LTS tags so the Yocto
+          # build workflow can reference a per-template tag.
+          tags: |
+            ghcr.io/${{ env.REPO_OWNER_LC }}/meta-iotedge-devcontainer:scarthgap
+            ghcr.io/${{ env.REPO_OWNER_LC }}/meta-iotedge-devcontainer:wrynose
           cache-from: type=registry,ref=ghcr.io/${{ env.REPO_OWNER_LC }}/meta-iotedge-devcontainer:scarthgap
           cache-to: type=inline

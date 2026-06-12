@@ -4,10 +4,11 @@ on:
   push:
     tags:
       - "1.5.*"
+      - "1.6.*"
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to release (e.g., 1.5.35)"
+        description: "Tag to release (e.g., 1.5.40 or 1.6.0-rc.1)"
         required: true
 
 permissions:
@@ -33,13 +34,13 @@ jobs:
       - name: Download RPM packages
         uses: actions/download-artifact@v4
         with:
-          name: rpm-packages-scarthgap
+          name: rpm-packages-${{ needs.build.outputs.template }}
           path: release-artifacts/rpm
 
       - name: Download QEMU image
         uses: actions/download-artifact@v4
         with:
-          name: iotedge-qemu-image-scarthgap
+          name: iotedge-qemu-image-${{ needs.build.outputs.template }}
           path: release-artifacts/qemu
 
       - name: Prepare release artifacts
@@ -95,7 +96,7 @@ jobs:
             ```bash
             git clone --branch ${{ steps.artifacts.outputs.version }} https://github.com/${{ github.repository }}.git
             cd meta-iotedge
-            ./scripts/build.sh scarthgap
+            ./scripts/build.sh ${{ needs.build.outputs.template }}
             ```
             
             ### Pre-built Artifacts (qemux86-64 only)
