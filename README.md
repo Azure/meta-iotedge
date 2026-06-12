@@ -8,15 +8,18 @@ Please see the corresponding sections below for details.
 Adding the meta-iotedge layer to your build
 =================================================
 
-Use the branch of `meta-iotedge` corresponding to your Yocto release:
+Use the templates in `conf/templates/<release>` on the **main** branch for your Yocto release. The `main` branch supports two Yocto LTSes side by side, with the matching IoT Edge version selected by the template:
 
-**Active and maintained**:
-* [Scarthgap](https://github.com/Azure/meta-iotedge/tree/main)  - `git clone -b main https://github.com/Azure/meta-iotedge.git`
+**Active and maintained (main branch)**:
+* **Wrynose (Yocto 6.0)** - IoT Edge 1.6.x. `git clone -b main https://github.com/Azure/meta-iotedge.git`, then build with `./scripts/build.sh wrynose`.
+* **Scarthgap (Yocto 5.0)** - IoT Edge 1.5.x. `git clone -b main https://github.com/Azure/meta-iotedge.git`, then build with `./scripts/build.sh scarthgap`.
+
+The recipes for both IoT Edge versions live on `main` at the same time; each template pins the matching `PREFERRED_VERSION_*` so a Wrynose build produces 1.6.x and a Scarthgap build produces 1.5.x.
 
 **Kirkstone (out of support April 2026)**:
 * The `kirkstone` branch is frozen at IoT Edge 1.4.27 and will not receive further updates.
 * Use the templates in `conf/templates/kirkstone` on the **main** branch for IoT Edge 1.5.x on Kirkstone.
-* The Kirkstone templates and recipes are validated, but ongoing CI coverage is Scarthgap only.
+* The Kirkstone templates and recipes are validated, but ongoing CI coverage is Scarthgap and Wrynose only.
 
 
 Run `bitbake-layers add-layer meta-iotedge`
@@ -33,6 +36,7 @@ Branching Strategy and Timelines
 
 | Yocto Release | IoT Edge version | Branch Name | Branch Status |
 | :- | :- | :- | :- |
+| Wrynose | 1.6.x | main | Active and maintained |
 | Scarthgap | 1.5.x | main | Active and maintained |
 | Kirkstone | 1.5.x | main (templates only) | Out of Support Apr'2026 |
 | Kirkstone | 1.4.x | kirkstone (frozen) | Not active and Not maintained |
@@ -61,6 +65,14 @@ across varying machines and networks:
 **Kirkstone-specific:** The Kirkstone template uses `meta-rust` for Rust 1.78+ (Poky Kirkstone only has Rust 1.59)
 and masks Poky's built-in rust recipes via `BBMASK`. The `fetch.sh` script automatically clones meta-rust
 when fetching Kirkstone layers.
+
+**Wrynose-specific:** Yocto 6.0 deprecated the combined `poky` repository, so `fetch.sh wrynose` assembles the
+layer tree from the split upstream repos: `openembedded-core` (provides `poky/meta` + `oe-init-build-env`),
+`bitbake` (2.18, at `poky/bitbake`), and `meta-yocto` (provides `poky/meta-poky` + `poky/meta-yocto-bsp`),
+plus `meta-openembedded`, `meta-clang`, `meta-virtualization`, and `meta-security` at their `wrynose` branches.
+Rust 1.94.1 and `bindgen-cli` 0.72.1 ship in OE-core, so `meta-rust` is not used. The Wrynose template also sets
+`INIT_MANAGER = "systemd"` because the Wrynose `systemd` recipe now conflicts with the `sysvinit` distro feature
+(simply appending `systemd` alongside Poky's default `sysvinit`, as on Scarthgap, no longer works).
 
 Validation helpers
 ==================
