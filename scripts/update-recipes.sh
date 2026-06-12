@@ -162,12 +162,28 @@ if [[ -z "${IIS_REV}" ]]; then
 fi
 echo "  IIS SHA: ${IIS_REV}"
 
-# Clean old recipes if requested
+# Clean old recipes if requested.
+#
+# Scope the clean to the major.minor LINE being regenerated. During 1.5/1.6
+# LTS overlap, recipes-core/ holds both lines at once; an unscoped clean would
+# delete the OTHER line's .bb/.inc files (the ones this run does not
+# regenerate), silently dropping a shipped LTS line. We derive the line from
+# the daemon and IIS versions (same major.minor) and only remove files that
+# belong to it, so regenerating 1.5 never touches 1.6 and vice versa.
 if [[ "${CLEAN}" == true ]]; then
-    echo "Cleaning old recipe files..."
-    for dir in iotedge aziot-edged aziotd aziotctl aziot-keys; do
-        find "${ROOT_DIR}/recipes-core/${dir}" -name "*_*.bb" -type f -delete 2>/dev/null || true
-        find "${ROOT_DIR}/recipes-core/${dir}" -name "*-[0-9]*.inc" -type f -delete 2>/dev/null || true
+    EDGE_MM=$(echo "${IOTEDGE_DAEMON_VERSION}" | cut -d. -f1,2)
+    IIS_MM=$(echo "${IIS_VERSION}" | cut -d. -f1,2)
+    echo "Cleaning old recipe files for the ${EDGE_MM}.x / ${IIS_MM}.x line..."
+    # iotedge + aziot-edged track the edgelet daemon version; the IIS tools
+    # track the IIS version. Both belong to the same product line but can
+    # carry different patch numbers, so scope each set to its own version.
+    for dir in iotedge aziot-edged; do
+        find "${ROOT_DIR}/recipes-core/${dir}" -name "*_${EDGE_MM}.*.bb" -type f -delete 2>/dev/null || true
+        find "${ROOT_DIR}/recipes-core/${dir}" -name "*-${EDGE_MM}.*.inc" -type f -delete 2>/dev/null || true
+    done
+    for dir in aziotd aziotctl aziot-keys; do
+        find "${ROOT_DIR}/recipes-core/${dir}" -name "*_${IIS_MM}.*.bb" -type f -delete 2>/dev/null || true
+        find "${ROOT_DIR}/recipes-core/${dir}" -name "*-${IIS_MM}.*.inc" -type f -delete 2>/dev/null || true
     done
 fi
 

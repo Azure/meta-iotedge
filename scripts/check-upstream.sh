@@ -28,10 +28,17 @@ log() {
     echo "$@" >&2
 }
 
-# Get current recipe version from recipe files
+# Get current recipe version from recipe files, scoped to a major.minor line.
+#
+# During 1.5/1.6 LTS overlap, recipes-core/ holds both lines at once. The bot
+# must compare against the line that matches the channel it is updating (the
+# lts channel's daemon major.minor), not just the highest recipe on disk.
+# Pass a major.minor like "1.5" to restrict the match; pass "" to fall back to
+# the highest version across all lines (legacy behavior).
 get_recipe_version() {
     local recipe_dir="$1"
     local prefix="$2"
+    local mm="${3:-}"
     local full_path="${REPO_ROOT}/${recipe_dir}"
     
     if [[ ! -d "$full_path" ]]; then
@@ -47,6 +54,10 @@ get_recipe_version() {
         basename=$(basename "$file")
         local version="${basename#${prefix}_}"
         version="${version%.bb}"
+        # Restrict to the requested major.minor line when one is given.
+        if [[ -n "$mm" && "$version" != "${mm}."* ]]; then
+            continue
+        fi
         versions+=("$version")
     done
     
@@ -55,29 +66,61 @@ get_recipe_version() {
         return
     fi
     
-    # Sort versions and return highest
-    printf '%s\n' "${versions[@]}" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1
+    # Sort versions (version-aware, RC-safe) and return highest
+    printf '%s\n' "${versions[@]}" | sort -V | tail -1
 }
 
-# Get IOTEDGE_RELEASE from the version-specific .inc file.
+# Get IOTEDGE_RELEASE from the version-specific .inc file, scoped to a line.
 # This tracks the upstream release tag, which may differ from the recipe
 # filename version when a release only updates Docker images.
+# Pass a major.minor like "1.5" to pick the .inc for that line; pass "" to use
+# the highest .inc across all lines (legacy behavior).
 get_recipe_release() {
     local recipe_dir="$1"
     local prefix="$2"
+    local mm="${3:-}"
     local full_path="${REPO_ROOT}/${recipe_dir}"
     
-    # Find the version .inc file (excludes -crates.inc via glob)
-    local inc_file
-    inc_file=$(ls "${full_path}/${prefix}"-[0-9]*.inc 2>/dev/null | sort -V | tail -1 || true)
+    # Find the version .inc file (excluding the -crates.inc sibling). When a
+    # major.minor is given, match only that line's .inc; otherwise take the
+    # highest across all lines. A glob + loop avoids ls|grep and stays robust
+    # to filenames (recipe names are controlled, but this is cleaner).
+    local candidates=()
+    local f
+    if [[ -n "$mm" ]]; then
+        for f in "${full_path}/${prefix}-${mm}."*.inc; do
+            [[ -e "$f" ]] || continue
+            [[ "$f" == *-crates.inc ]] && continue
+            candidates+=("$f")
+        done
+    else
+        for f in "${full_path}/${prefix}"-[0-9]*.inc; do
+            [[ -e "$f" ]] || continue
+            [[ "$f" == *-crates.inc ]] && continue
+            candidates+=("$f")
+        done
+    fi
+    local inc_file=""
+    if [[ ${#candidates[@]} -gt 0 ]]; then
+        inc_file=$(printf '%s\n' "${candidates[@]}" | sort -V | tail -1)
+    fi
     [[ -n "${inc_file}" ]] || return
     
     # Extract IOTEDGE_RELEASE value
     grep 'IOTEDGE_RELEASE' "${inc_file}" 2>/dev/null | sed 's/.*= *"//;s/".*//' || true
 }
 
-# Compare two semver versions
-# Returns: -1 if a < b, 0 if a == b, 1 if a > b
+# Compare two semver-ish versions, prerelease/suffix-safe.
+# Returns: -1 if a < b, 0 if a == b, 1 if a > b.
+#
+# The old IFS='.' parse crashed on "1.6.0-rc.1" (a_patch became "0-rc.1", and
+# (( ... )) raised an arithmetic syntax error that, under set -e, killed the
+# job). This delegates to a tiny dependency-free Python comparator that orders
+# by the numeric release first, then applies the semver rule that a prerelease
+# sorts BELOW its final release (1.6.0-rc.1 < 1.6.0) and rc.1 < rc.2. Pure
+# numeric 1.5.x comparisons are unchanged. We avoid `sort -V` here because GNU
+# sort orders a prerelease ABOVE its final release, which would make the bot
+# miss an rc -> final upgrade.
 compare_versions() {
     local a="$1"
     local b="$2"
@@ -87,22 +130,45 @@ compare_versions() {
         return
     fi
     
-    IFS='.' read -r a_maj a_min a_patch <<< "$a"
-    IFS='.' read -r b_maj b_min b_patch <<< "$b"
+    if [[ "$a" == "$b" ]]; then
+        echo "0"
+        return
+    fi
     
-    # Compare major
-    if (( a_maj < b_maj )); then echo "-1"; return; fi
-    if (( a_maj > b_maj )); then echo "1"; return; fi
-    
-    # Compare minor
-    if (( a_min < b_min )); then echo "-1"; return; fi
-    if (( a_min > b_min )); then echo "1"; return; fi
-    
-    # Compare patch
-    if (( a_patch < b_patch )); then echo "-1"; return; fi
-    if (( a_patch > b_patch )); then echo "1"; return; fi
-    
-    echo "0"
+    A="$a" B="$b" python3 -c '
+import os, re, sys
+
+def parse(v):
+    # Split "1.6.0-rc.1" into release tuple (1,6,0) and prerelease key.
+    # A missing prerelease ranks ABOVE any prerelease for the same release.
+    m = re.match(r"^(\d+(?:\.\d+)*)(?:[-.]?(?:rc|alpha|beta|pre)[.]?(\d+)?.*)?$", v, re.I)
+    if not m:
+        # Unrecognized shape: fall back to a numeric-prefix parse so we never
+        # crash; trailing junk sorts low.
+        nums = re.findall(r"\d+", v)
+        return ([int(n) for n in nums] or [0], (1,))
+    rel = [int(x) for x in m.group(1).split(".")]
+    has_pre = bool(re.search(r"(rc|alpha|beta|pre)", v, re.I))
+    if has_pre:
+        pre_num = int(m.group(2)) if m.group(2) else 0
+        # (0, pre_num) sorts below (1,) used for final releases.
+        pre_key = (0, pre_num)
+    else:
+        pre_key = (1,)
+    return (rel, pre_key)
+
+def norm(rel_a, rel_b):
+    # Pad release tuples to equal length for comparison.
+    n = max(len(rel_a), len(rel_b))
+    return rel_a + [0] * (n - len(rel_a)), rel_b + [0] * (n - len(rel_b))
+
+ra, ka = parse(os.environ["A"])
+rb, kb = parse(os.environ["B"])
+ra, rb = norm(ra, rb)
+ka_full = (ra, ka)
+kb_full = (rb, kb)
+print(-1 if ka_full < kb_full else (1 if ka_full > kb_full else 0))
+'
 }
 
 # Fetch product-versions.json
@@ -161,14 +227,31 @@ log "📦 Upstream versions from product-versions.json:"
 log "   Release version: ${RELEASE_VERSION}"
 log "   Daemon (aziot-edge) version: ${DAEMON_VERSION}"
 
-# Get current recipe version (daemon version from filename)
-CURRENT_RECIPE=$(get_recipe_version "recipes-core/iotedge" "iotedge")
+# Scope the recipe comparison to the LTS channel's line. During 1.5/1.6 LTS
+# overlap, recipes-core/ holds both lines; the bot must update the line that
+# matches the channel it is tracking (the lts daemon's major.minor), not the
+# highest recipe on disk. Derive the major.minor from the daemon version so a
+# 1.5.x channel compares against the 1.5 recipe and a future 1.6.x channel
+# compares against the 1.6 recipe.
+CHANNEL_MM=$(echo "$DAEMON_VERSION" | cut -d. -f1,2)
+log "   Tracking LTS line: ${CHANNEL_MM}.x"
+
+# Derive the Yocto template for this line so the workflow can pass --template
+# to update-recipes.sh (1.6.* -> wrynose, otherwise scarthgap). The container
+# image is release-neutral, so only the template argument changes.
+case "$CHANNEL_MM" in
+    1.6) TEMPLATE="wrynose" ;;
+    *)   TEMPLATE="scarthgap" ;;
+esac
+
+# Get current recipe version (daemon version from filename) for THIS line.
+CURRENT_RECIPE=$(get_recipe_version "recipes-core/iotedge" "iotedge" "${CHANNEL_MM}")
 # Get tracked release version from .inc (may differ from recipe version
-# when a release only updates Docker images, not daemon binaries)
-CURRENT_RELEASE=$(get_recipe_release "recipes-core/iotedge" "iotedge")
+# when a release only updates Docker images, not daemon binaries) for THIS line.
+CURRENT_RELEASE=$(get_recipe_release "recipes-core/iotedge" "iotedge" "${CHANNEL_MM}")
 # Fall back to recipe version if IOTEDGE_RELEASE is not set (older recipes)
 : "${CURRENT_RELEASE:=${CURRENT_RECIPE}}"
-log "📋 Current recipe version: ${CURRENT_RECIPE:-not found}"
+log "📋 Current recipe version (${CHANNEL_MM}.x line): ${CURRENT_RECIPE:-not found}"
 log "   Tracked release: ${CURRENT_RELEASE:-not found}"
 
 # Determine update status
@@ -218,6 +301,7 @@ print(json.dumps({
     "daemon_version": "${DAEMON_VERSION}",
     "current_recipe": "${CURRENT_RECIPE}",
     "current_release": "${CURRENT_RELEASE}",
+    "template": "${TEMPLATE}",
     "needs_update": ${PY_NEEDS_UPDATE},
     "is_significant": ${PY_IS_SIGNIFICANT},
     "update_type": "${UPDATE_TYPE}"
@@ -229,6 +313,7 @@ else
     echo "daemon_version=${DAEMON_VERSION}"
     echo "current_recipe=${CURRENT_RECIPE}"
     echo "current_release=${CURRENT_RELEASE}"
+    echo "template=${TEMPLATE}"
     echo "needs_update=${NEEDS_UPDATE}"
     echo "is_significant=${IS_SIGNIFICANT}"
     echo "update_type=${UPDATE_TYPE}"
