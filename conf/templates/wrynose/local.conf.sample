@@ -155,8 +155,10 @@ PACKAGE_CLASSES ?= "package_rpm"
 #                     e.g. ssh root access has a blank password
 # There are other application targets that can be used here too, see
 # meta/classes/image.bbclass and meta/classes/core-image.bbclass for more details.
-# We default to enabling the debugging tweaks.
-EXTRA_IMAGE_FEATURES ?= "debug-tweaks"
+# Yocto 6.0 (Wrynose) removed the "debug-tweaks" meta-feature and split it into
+# the individual features below. We list them explicitly so the QEMU validation
+# image keeps blank-password root SSH (used by scripts/validate-qemu.sh).
+EXTRA_IMAGE_FEATURES ?= "allow-empty-password allow-root-login empty-root-password post-install-logging"
 
 #
 # Additional image features
