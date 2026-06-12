@@ -94,12 +94,18 @@ jobs:
             echo "Code files changed - running full build"
           fi
 
-      - name: Determine template from branch
+      - name: Determine template from branch or tag
         id: set-template
         run: |
-          case "${{ github.base_ref || github.ref_name }}" in
-            kirkstone) echo "template=kirkstone" >> "$GITHUB_OUTPUT" ;;  
-            *) echo "template=scarthgap" >> "$GITHUB_OUTPUT" ;;  
+          # Tag-triggered builds (releases) pick the Yocto template from the
+          # IoT Edge version: 1.6.x -> Wrynose, 1.5.x -> Scarthgap. Branch
+          # builds map kirkstone -> kirkstone, everything else -> scarthgap.
+          REF="${{ inputs.ref || github.base_ref || github.ref_name }}"
+          case "$REF" in
+            1.6.*) echo "template=wrynose" >> "$GITHUB_OUTPUT" ;;
+            1.5.*) echo "template=scarthgap" >> "$GITHUB_OUTPUT" ;;
+            kirkstone) echo "template=kirkstone" >> "$GITHUB_OUTPUT" ;;
+            *) echo "template=scarthgap" >> "$GITHUB_OUTPUT" ;;
           esac
 
   check-recipes:
@@ -165,7 +171,7 @@ jobs:
     outputs:
       template: ${{ needs.check-changes.outputs.template }}
     container:
-      image: ghcr.io/azure/meta-iotedge-devcontainer:scarthgap
+      image: ghcr.io/azure/meta-iotedge-devcontainer:${{ needs.check-changes.outputs.template }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
