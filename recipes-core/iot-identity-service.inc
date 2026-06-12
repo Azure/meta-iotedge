@@ -2,15 +2,21 @@
 # These are the IIS library crates needed by IoT Edge recipes
 # IIS_SRCREV must be defined by the version-specific .inc file
 #
-# NOTE (Wrynose/Yocto 6.0): EXTRA_OECARGO_PATHS below use ${UNPACKDIR}, not
-# ${WORKDIR}. Modern poky sets UNPACKDIR=${WORKDIR}/sources and unpacks fetched
-# crates there, so the cargo path overrides (and the synthetic workspace root)
-# must be rooted at ${UNPACKDIR}. ${WORKDIR}/... pointed at non-existent dirs
-# and made cargo fail do_compile with "failed to read directory".
-#
+# NOTE (shared by 1.5/Scarthgap and 1.6/Wrynose): the IIS crates are unpacked
+# into the consuming recipe's unpack root. That location moved between Yocto
+# releases: Scarthgap (5.0) unpacks fetched crates directly under ${WORKDIR},
+# while Wrynose (6.0) introduced UNPACKDIR=${WORKDIR}/sources and unpacks them
+# there instead. EXTRA_OECARGO_PATHS (and the synthetic workspace root) must
+# point at whichever one this release uses, otherwise cargo fails do_compile
+# with "failed to read directory". We therefore root those paths at
+# ${UNPACK_ROOT}, which resolves to UNPACKDIR when defined (Wrynose) and falls
+# back to WORKDIR when it is not (Scarthgap, where UNPACKDIR is undefined and
+# would otherwise expand empty -> /cert/..., /key/..., breaking the 1.5 build).
+UNPACK_ROOT ??= "${@d.getVar('UNPACKDIR') or d.getVar('WORKDIR')}"
+
 # Debug buildpaths (Wrynose): the IIS crates above are fetched as siblings of
-# the consuming recipe's ${S} (e.g. edgelet at ${UNPACKDIR}/aziot-edged-<ver>,
-# IIS crates at ${UNPACKDIR}/key/..., ${UNPACKDIR}/openssl-sys2, ...). cc-rs
+# the consuming recipe's ${S} (e.g. edgelet at ${UNPACK_ROOT}/aziot-edged-<ver>,
+# IIS crates at ${UNPACK_ROOT}/key/..., ${UNPACK_ROOT}/openssl-sys2, ...). cc-rs
 # compiles the C build-scripts of openssl-sys2 / aziot-key-openssl-engine with
 # -g, embedding their ${UNPACKDIR}/<crate> source path into DWARF. OE's stock
 # DEBUG_PREFIX_MAP only remaps ${S} and ${B}, so those sibling-crate paths are
@@ -20,8 +26,11 @@
 # ${S}, which IS remapped.) Remap the ${UNPACKDIR} prefix too. This is safe
 # alongside the existing more-specific ${S} entry: -ffile-prefix-map uses
 # longest-prefix-match (verified), so files under ${S} keep the ${S} mapping
-# while only the sibling crates pick up this ${UNPACKDIR} one.
-DEBUG_PREFIX_MAP:append = " -ffile-prefix-map=${UNPACKDIR}=${TARGET_DBGSRC_DIR}"
+# while only the sibling crates pick up this ${UNPACKDIR} one. Only appended
+# when UNPACKDIR is set (Wrynose); on Scarthgap UNPACKDIR is undefined, the
+# sibling-crate layout does not apply, and an empty prefix would map "" ->
+# dbgsrc, so the entry is omitted entirely.
+DEBUG_PREFIX_MAP:append = "${@(' -ffile-prefix-map=%s=%s' % (d.getVar('UNPACKDIR'), d.getVar('TARGET_DBGSRC_DIR'))) if d.getVar('UNPACKDIR') else ''}"
 
 IIS_GIT_URI ?= "git://github.com/Azure/iot-identity-service;protocol=https;nobranch=1;"
 
@@ -56,82 +65,82 @@ SRC_URI += " \
 
 SRCREV_FORMAT .= "_aziot-cert-client-async"
 SRCREV_aziot-cert-client-async = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/cert/aziot-cert-client-async"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/cert/aziot-cert-client-async"
 SRCREV_FORMAT .= "_aziot-cert-common-http"
 SRCREV_aziot-cert-common-http = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/cert/aziot-cert-common-http"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/cert/aziot-cert-common-http"
 SRCREV_FORMAT .= "_aziot-certd-config"
 SRCREV_aziot-certd-config = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/cert/aziot-certd-config"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/cert/aziot-certd-config"
 SRCREV_FORMAT .= "_aziot-identity-client-async"
 SRCREV_aziot-identity-client-async = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/identity/aziot-identity-client-async"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/identity/aziot-identity-client-async"
 SRCREV_FORMAT .= "_aziot-identity-common"
 SRCREV_aziot-identity-common = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/identity/aziot-identity-common"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/identity/aziot-identity-common"
 SRCREV_FORMAT .= "_aziot-identity-common-http"
 SRCREV_aziot-identity-common-http = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/identity/aziot-identity-common-http"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/identity/aziot-identity-common-http"
 SRCREV_FORMAT .= "_aziot-identityd-config"
 SRCREV_aziot-identityd-config = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/identity/aziot-identityd-config"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/identity/aziot-identityd-config"
 SRCREV_FORMAT .= "_aziot-key-client"
 SRCREV_aziot-key-client = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/key/aziot-key-client"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/key/aziot-key-client"
 SRCREV_FORMAT .= "_aziot-key-client-async"
 SRCREV_aziot-key-client-async = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/key/aziot-key-client-async"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/key/aziot-key-client-async"
 SRCREV_FORMAT .= "_aziot-key-common"
 SRCREV_aziot-key-common = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/key/aziot-key-common"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/key/aziot-key-common"
 SRCREV_FORMAT .= "_aziot-key-common-http"
 SRCREV_aziot-key-common-http = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/key/aziot-key-common-http"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/key/aziot-key-common-http"
 SRCREV_FORMAT .= "_aziot-key-openssl-engine"
 SRCREV_aziot-key-openssl-engine = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/key/aziot-key-openssl-engine"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/key/aziot-key-openssl-engine"
 SRCREV_FORMAT .= "_aziot-keyd-config"
 SRCREV_aziot-keyd-config = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/key/aziot-keyd-config"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/key/aziot-keyd-config"
 SRCREV_FORMAT .= "_aziot-keys-common"
 SRCREV_aziot-keys-common = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/key/aziot-keys-common"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/key/aziot-keys-common"
 SRCREV_FORMAT .= "_aziot-tpmd-config"
 SRCREV_aziot-tpmd-config = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/tpm/aziot-tpmd-config"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/tpm/aziot-tpmd-config"
 SRCREV_FORMAT .= "_aziotctl-common"
 SRCREV_aziotctl-common = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/aziotctl/aziotctl-common"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/aziotctl/aziotctl-common"
 SRCREV_FORMAT .= "_cert-renewal"
 SRCREV_cert-renewal = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/cert/cert-renewal"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/cert/cert-renewal"
 SRCREV_FORMAT .= "_config-common"
 SRCREV_config-common = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/config-common"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/config-common"
 SRCREV_FORMAT .= "_http-common"
 SRCREV_http-common = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/http-common"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/http-common"
 SRCREV_FORMAT .= "_logger"
 SRCREV_logger = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/logger"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/logger"
 SRCREV_FORMAT .= "_openssl-build"
 SRCREV_openssl-build = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/openssl-build"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/openssl-build"
 SRCREV_FORMAT .= "_openssl-sys2"
 SRCREV_openssl-sys2 = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/openssl-sys2"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/openssl-sys2"
 SRCREV_FORMAT .= "_openssl2"
 SRCREV_openssl2 = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/openssl2"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/openssl2"
 SRCREV_FORMAT .= "_pkcs11"
 SRCREV_pkcs11 = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/pkcs11/pkcs11"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/pkcs11/pkcs11"
 SRCREV_FORMAT .= "_pkcs11-sys"
 SRCREV_pkcs11-sys = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/pkcs11/pkcs11-sys"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/pkcs11/pkcs11-sys"
 SRCREV_FORMAT .= "_test-common"
 SRCREV_test-common = "${IIS_SRCREV}"
-EXTRA_OECARGO_PATHS += "${UNPACKDIR}/test-common"
+EXTRA_OECARGO_PATHS += "${UNPACK_ROOT}/test-common"
 
 # --- IIS workspace root for the 1.6 split-crate layout -----------------------
 #
