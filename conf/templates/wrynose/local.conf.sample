@@ -160,6 +160,15 @@ PACKAGE_CLASSES ?= "package_rpm"
 # image keeps blank-password root SSH (used by scripts/validate-qemu.sh).
 EXTRA_IMAGE_FEATURES ?= "allow-empty-password allow-root-login empty-root-password post-install-logging"
 
+# Yocto 6.0 (Wrynose) changed the qemux86-64 default IMAGE_FSTYPES to
+# "tar.zst ext4.zst". runqemu refuses to boot a .zst rootfs without "snapshot",
+# and `runqemu qemux86-64` infers the rootfs from this GLOBAL IMAGE_FSTYPES (not
+# the per-image value), so it looked for a .ext4.zst that no longer exists and
+# failed ("Failed to find rootfs ... .ext4.zst"). Pin the global default to a
+# plain uncompressed ext4 so the build, runqemu, the CI upload, and release.yml
+# all agree on *.rootfs.ext4. (Scarthgap's poky defaulted to ext4 already.)
+IMAGE_FSTYPES = "ext4"
+
 #
 # Additional image features
 #
