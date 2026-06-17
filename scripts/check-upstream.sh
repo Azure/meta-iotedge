@@ -28,6 +28,44 @@ log() {
     echo "$@" >&2
 }
 
+# Pick the highest version from stdin (one per line), prerelease-aware.
+#
+# GNU `sort -V` orders a prerelease ABOVE its final release (1.6.0-rc.1 sorts
+# after 1.6.0), which is wrong for picking the "current" recipe during an
+# rc -> final overlap. This uses the same semver rule as compare_versions: a
+# prerelease sorts BELOW its final release, and rc.1 < rc.2. Pure numeric
+# (1.5.x) ordering is unchanged. Empty input yields empty output.
+version_max() {
+    python3 -c '
+import sys, re
+
+def key(v):
+    # Split "1.6.0-rc.1" into a release tuple plus a prerelease key where a
+    # final release ((1,)) ranks above any prerelease ((0, n)) for the same
+    # release. Unrecognized shapes fall back to a numeric-prefix parse so we
+    # never crash; trailing junk sorts low.
+    m = re.match(r"^(\d+(?:\.\d+)*)(?:[-.]?(?:rc|alpha|beta|pre)[.]?(\d+)?.*)?$", v, re.I)
+    if not m:
+        nums = re.findall(r"\d+", v)
+        return ([int(n) for n in nums] or [0], (1,))
+    rel = [int(x) for x in m.group(1).split(".")]
+    if re.search(r"(rc|alpha|beta|pre)", v, re.I):
+        pre = (0, int(m.group(2)) if m.group(2) else 0)
+    else:
+        pre = (1,)
+    return (rel, pre)
+
+vals = [l.strip() for l in sys.stdin if l.strip()]
+if vals:
+    # Pad release tuples to equal length so comparisons are well-defined.
+    width = max(len(key(v)[0]) for v in vals)
+    def padded(v):
+        rel, pre = key(v)
+        return (rel + [0] * (width - len(rel)), pre)
+    print(max(vals, key=padded))
+'
+}
+
 # Get current recipe version from recipe files, scoped to a major.minor line.
 #
 # During 1.5/1.6 LTS overlap, recipes-core/ holds both lines at once. The bot
@@ -66,8 +104,8 @@ get_recipe_version() {
         return
     fi
     
-    # Sort versions (version-aware, RC-safe) and return highest
-    printf '%s\n' "${versions[@]}" | sort -V | tail -1
+    # Return the highest version (prerelease-aware: rc sorts below final).
+    printf '%s\n' "${versions[@]}" | version_max
 }
 
 # Get IOTEDGE_RELEASE from the version-specific .inc file, scoped to a line.
@@ -102,7 +140,23 @@ get_recipe_release() {
     fi
     local inc_file=""
     if [[ ${#candidates[@]} -gt 0 ]]; then
-        inc_file=$(printf '%s\n' "${candidates[@]}" | sort -V | tail -1)
+        # Pick the candidate with the highest version (prerelease-aware: rc
+        # sorts below final). Map each .inc path to its version, choose the
+        # max, then resolve back to the file. `sort -V` is wrong here because
+        # it orders an rc above its final release.
+        local best_ver
+        best_ver=$(
+            for f in "${candidates[@]}"; do
+                local b="${f##*/}"; b="${b%.inc}"; echo "${b#${prefix}-}"
+            done | version_max
+        )
+        for f in "${candidates[@]}"; do
+            local b="${f##*/}"; b="${b%.inc}"
+            if [[ "${b#${prefix}-}" == "${best_ver}" ]]; then
+                inc_file="$f"
+                break
+            fi
+        done
     fi
     [[ -n "${inc_file}" ]] || return
     
