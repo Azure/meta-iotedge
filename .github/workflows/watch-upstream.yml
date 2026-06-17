@@ -25,7 +25,7 @@ jobs:
       update_type: ${{ steps.check.outputs.update_type }}          # none, significant, or docker-only
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Check upstream releases
         id: check
@@ -54,7 +54,7 @@ jobs:
       options: --user root
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Fix git permissions
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
@@ -122,7 +122,7 @@ jobs:
       issues: write
     steps:
       - name: Create issue for Docker-only update
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const releaseVersion = '${{ needs.check-upstream.outputs.release_version }}';

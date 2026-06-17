@@ -48,7 +48,7 @@ jobs:
       templates: ${{ steps.set-matrix.outputs.templates }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || '' }}
           fetch-depth: 0
@@ -152,7 +152,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || '' }}
 
@@ -229,7 +229,7 @@ jobs:
       DEVCONTAINER: "1"
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || '' }}
 
@@ -278,7 +278,7 @@ jobs:
           ls -la rpm-staging/
 
       - name: Upload RPM packages
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: rpm-packages-${{ matrix.template }}
           path: rpm-staging/*.rpm
@@ -287,7 +287,7 @@ jobs:
 
       - name: Upload QEMU image
         if: ${{ !inputs.skip_qemu }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: iotedge-qemu-image-${{ matrix.template }}
           path: |
