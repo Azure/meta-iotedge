@@ -6,7 +6,7 @@ BINDGEN_EXTRA_CLANG_ARGS = "${@bb.utils.contains('target', 'arm', \
 export BINDGEN_EXTRA_CLANG_ARGS
 
 # The pre-generated keys.generated.rs (bindgen output) is copied into the
-# source tree by a do_compile:prepend defined in the version-specific .inc
-# file, because the unpack location of file:// SRC_URI entries differs between
-# Yocto releases (Scarthgap unpacks to ${WORKDIR}; Wrynose/6.0 unpacks to
-# ${UNPACKDIR} = ${WORKDIR}/sources).
+# source tree by a do_compile:prepend defined in the shared aziotd.inc. The
+# unpack location of file:// SRC_URI entries differs between Yocto releases
+# (Scarthgap unpacks to ${WORKDIR}; Wrynose/6.0 unpacks to ${UNPACKDIR} =
+# ${WORKDIR}/sources), which aziotd.inc handles via ${UNPACK_ROOT}.
