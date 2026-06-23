@@ -91,8 +91,13 @@ source ./poky/oe-init-build-env build >/dev/null 2>&1
 set -u
 
 # Start QEMU with slirp networking (automatically forwards host:2222 -> guest:22)
+# Bump guest RAM well above the qemux86-64 default (256 MB, no swap). The default
+# is too tight to run containerd + the container engine + `iotedge check`
+# together: the kernel thrashes in reclaim and GFP_ATOMIC allocations in the
+# network RX path start failing, which makes `iotedge check` crawl past its
+# 240s bound. Override with QEMU_MEM_MB if needed.
 echo "Starting QEMU with slirp networking (SSH on localhost:${SSH_PORT})..."
-runqemu "${MACHINE}" nographic slirp &
+runqemu "${MACHINE}" nographic slirp qemuparams="-m ${QEMU_MEM_MB:-1024}" &
 RUNQEMU_PID=$!
 
 # Wait for SSH to become available
