@@ -19,12 +19,13 @@ jobs:
       daemon_version: ${{ steps.check.outputs.daemon_version }}    # Daemon binary version (e.g., 1.5.21)
       current_recipe: ${{ steps.check.outputs.current_recipe }}    # Current recipe version (daemon)
       current_release: ${{ steps.check.outputs.current_release }}  # Tracked release version (from IOTEDGE_RELEASE)
+      template: ${{ steps.check.outputs.template }}                 # Yocto template for the tracked LTS line (scarthgap/wrynose)
       needs_update: ${{ steps.check.outputs.needs_update }}        # Whether recipe update is needed
       is_significant: ${{ steps.check.outputs.is_significant }}    # Whether this is a daemon update (not Docker-only)
       update_type: ${{ steps.check.outputs.update_type }}          # none, significant, or docker-only
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Check upstream releases
         id: check
@@ -44,22 +45,29 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     container:
-      image: ghcr.io/azure/meta-iotedge-devcontainer:scarthgap
+      # Release-neutral devcontainer (host tools only; OE fetches the per-
+      # template toolchain). The Yocto line comes from --template below.
+      image: ghcr.io/azure/meta-iotedge-devcontainer:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
       options: --user root
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Fix git permissions
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       - name: Update and validate recipes
         run: |
+          # Pass the template for the LTS line being updated (1.6.* -> wrynose,
+          # 1.5.* -> scarthgap), derived by check-upstream from the lts
+          # channel's daemon version. --clean is scoped to that line, so the
+          # other LTS line's recipes are left untouched during overlap.
           ./scripts/update-recipes.sh \
             --iotedge-version "${{ needs.check-upstream.outputs.release_version }}" \
+            --template "${{ needs.check-upstream.outputs.template }}" \
             --clean
 
       - name: Create pull request
@@ -114,7 +122,7 @@ jobs:
       issues: write
     steps:
       - name: Create issue for Docker-only update
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const releaseVersion = '${{ needs.check-upstream.outputs.release_version }}';

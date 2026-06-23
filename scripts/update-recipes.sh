@@ -7,7 +7,7 @@ Usage: update-recipes.sh [options]
 
 Options:
     --iotedge-version <ver>   IoT Edge version tag (e.g., 1.5.35)
-    --template <name>         Yocto template (kirkstone or scarthgap, default: scarthgap)
+    --template <name>         Yocto template (kirkstone, scarthgap, or wrynose, default: scarthgap)
     --clean                   Remove old version-specific recipe files before generating
     --skip-validate           Skip bitbake validation (not recommended)
     --workdir <path>          Work directory (default: mktemp)
@@ -23,6 +23,7 @@ also be refreshed later via `bitbake <recipe> -c update_crates`.
 Examples:
     ./scripts/update-recipes.sh --iotedge-version <ver> --clean
     ./scripts/update-recipes.sh --iotedge-version <ver> --template kirkstone --clean
+    ./scripts/update-recipes.sh --iotedge-version 1.6.0-rc.1 --template wrynose
 EOF
 }
 
@@ -55,11 +56,30 @@ if [[ -z "${IOTEDGE_VERSION}" ]]; then
 fi
 
 # Validate template
-if [[ "${TEMPLATE}" != "scarthgap" && "${TEMPLATE}" != "kirkstone" ]]; then
-    echo "Error: --template must be 'scarthgap' or 'kirkstone'"
+if [[ "${TEMPLATE}" != "scarthgap" && "${TEMPLATE}" != "kirkstone" && "${TEMPLATE}" != "wrynose" ]]; then
+    echo "Error: --template must be 'scarthgap', 'kirkstone', or 'wrynose'"
     exit 1
 fi
 echo "Using template: ${TEMPLATE}"
+
+# Recipe shape depends on the Yocto series.
+#
+# Wrynose (Yocto 6.0) changed two things that the recipe text must follow:
+#   1. The default S is now ${UNPACKDIR}/${BP}, and the old explicit
+#      S = "${WORKDIR}/git" hard-errors. So on wrynose we omit the S line and
+#      let the default apply. On scarthgap/kirkstone we still emit it.
+#   2. We carry per-version crates.inc files (<pkg>-<ver>-crates.inc) so the
+#      1.5 (scarthgap) and 1.6 (wrynose) recipes can live in the same recipe
+#      dir at once. scarthgap/kirkstone keep the legacy shared <pkg>-crates.inc
+#      name they have always used.
+# Keep both shapes byte-identical to what already ships for each series.
+if [[ "${TEMPLATE}" == "wrynose" ]]; then
+    PER_VERSION_CRATES=true
+    EMIT_S_GIT=false
+else
+    PER_VERSION_CRATES=false
+    EMIT_S_GIT=true
+fi
 
 # Check dependencies early (before first use of curl/git/python3)
 for cmd in git python3 curl; do
@@ -80,15 +100,30 @@ PRODUCT_VERSIONS=$(curl -fsSL "$PRODUCT_VERSIONS_URL") || {
 # daemon binaries (aziot-edged, iotedge) stay at an earlier version
 # (e.g. 1.5.21).  Recipes must use the daemon version so the built
 # binaries reference matching container image tags.
-read -r IOTEDGE_DAEMON_VERSION IIS_VERSION < <(echo "$PRODUCT_VERSIONS" | python3 -c "
-import json, sys
+read -r IOTEDGE_DAEMON_VERSION IIS_VERSION < <(echo "$PRODUCT_VERSIONS" | IOTEDGE_VERSION="${IOTEDGE_VERSION}" python3 -c "
+import json, os, sys
 data = json.load(sys.stdin)
-# Use lts channel (preferred for embedded systems)
-lts = next((c for c in data['channels'] if c['name'] == 'lts'), None)
-if not lts:
-    print('Error: No lts channel found', file=sys.stderr)
+release = os.environ['IOTEDGE_VERSION']
+channels = data['channels']
+
+def aziot_of(channel):
+    return next((p for p in channel['products'] if p['id'] == 'aziot-edge'), None)
+
+# Pick the channel that ships this exact release. Each channel's aziot-edge
+# product carries a 'version' field that is the release tag (e.g. 1.5.35 in
+# lts, 1.6.0-rc.1 in prerelease). Match on that so a release tag resolves to
+# the channel that actually contains it. If several channels match, prefer
+# lts (the embedded default). If none match (older product-versions.json that
+# predates the version field, or an unexpected layout), fall back to lts so
+# existing 1.5 behavior is unchanged.
+matches = [c for c in channels if (aziot_of(c) or {}).get('version') == release]
+chosen = next((c for c in matches if c['name'] == 'lts'), None) or (matches[0] if matches else None)
+if chosen is None:
+    chosen = next((c for c in channels if c['name'] == 'lts'), None)
+if not chosen:
+    print('Error: No matching channel and no lts channel found', file=sys.stderr)
     sys.exit(1)
-aziot = next((p for p in lts['products'] if p['id'] == 'aziot-edge'), None)
+aziot = aziot_of(chosen)
 if not aziot:
     print('Error: No aziot-edge product found', file=sys.stderr)
     sys.exit(1)
@@ -127,12 +162,28 @@ if [[ -z "${IIS_REV}" ]]; then
 fi
 echo "  IIS SHA: ${IIS_REV}"
 
-# Clean old recipes if requested
+# Clean old recipes if requested.
+#
+# Scope the clean to the major.minor LINE being regenerated. During 1.5/1.6
+# LTS overlap, recipes-core/ holds both lines at once; an unscoped clean would
+# delete the OTHER line's .bb/.inc files (the ones this run does not
+# regenerate), silently dropping a shipped LTS line. We derive the line from
+# the daemon and IIS versions (same major.minor) and only remove files that
+# belong to it, so regenerating 1.5 never touches 1.6 and vice versa.
 if [[ "${CLEAN}" == true ]]; then
-    echo "Cleaning old recipe files..."
-    for dir in iotedge aziot-edged aziotd aziotctl aziot-keys; do
-        find "${ROOT_DIR}/recipes-core/${dir}" -name "*_*.bb" -type f -delete 2>/dev/null || true
-        find "${ROOT_DIR}/recipes-core/${dir}" -name "*-[0-9]*.inc" -type f -delete 2>/dev/null || true
+    EDGE_MM=$(echo "${IOTEDGE_DAEMON_VERSION}" | cut -d. -f1,2)
+    IIS_MM=$(echo "${IIS_VERSION}" | cut -d. -f1,2)
+    echo "Cleaning old recipe files for the ${EDGE_MM}.x / ${IIS_MM}.x line..."
+    # iotedge + aziot-edged track the edgelet daemon version; the IIS tools
+    # track the IIS version. Both belong to the same product line but can
+    # carry different patch numbers, so scope each set to its own version.
+    for dir in iotedge aziot-edged; do
+        find "${ROOT_DIR}/recipes-core/${dir}" -name "*_${EDGE_MM}.*.bb" -type f -delete 2>/dev/null || true
+        find "${ROOT_DIR}/recipes-core/${dir}" -name "*-${EDGE_MM}.*.inc" -type f -delete 2>/dev/null || true
+    done
+    for dir in aziotd aziotctl aziot-keys; do
+        find "${ROOT_DIR}/recipes-core/${dir}" -name "*_${IIS_MM}.*.bb" -type f -delete 2>/dev/null || true
+        find "${ROOT_DIR}/recipes-core/${dir}" -name "*-${IIS_MM}.*.inc" -type f -delete 2>/dev/null || true
     done
 fi
 
@@ -162,6 +213,105 @@ prepare_repo() {
     retry "checkout ${rev}" git -C "${dir}" checkout "${rev}"
 }
 
+# Resolve the patch dir for a package version, mirroring bitbake FILESPATH
+# precedence: prefer the version-specific dir recipes-core/<pkg>/<pkg>-<ver>/,
+# fall back to the shared recipes-core/<pkg>/files/ dir. Prints the dir on
+# stdout, or nothing if neither has .patch files. This is the same order the
+# build uses to resolve file://, so the patches we wire and apply match what
+# the build picks up. Today 1.5.x patches live in files/ and 1.6.x patches
+# live in the version dir.
+resolve_patch_dir() {
+    local recipe_dir="$1" pkg="$2" ver="$3"
+    if compgen -G "${recipe_dir}/${pkg}-${ver}/*.patch" >/dev/null; then
+        echo "${recipe_dir}/${pkg}-${ver}"
+    elif compgen -G "${recipe_dir}/files/*.patch" >/dev/null; then
+        echo "${recipe_dir}/files"
+    fi
+}
+
+# Apply a package version's source-compatibility patches to a checked-out source
+# tree before reading its Cargo.lock for crates.inc generation.
+#
+# Some patches pin a crate version in Cargo.lock (e.g. the 1.6 sysinfo-0.38 pin
+# for the Wrynose Rust toolchain). The cargo build runs with --frozen, so the
+# crate set it fetches is the one in the PATCHED lock. The generated crates.inc
+# must match that, so we apply the same patches here, then generate crates.inc
+# from the resulting lock. Patches that only touch Cargo.toml or source files
+# (the 1.5 set) leave the lock unchanged, so 1.5 crates.inc output is identical.
+#
+# The patch FILES stay hand-crafted on disk; this only applies them to a throw
+# away checkout in the work dir. It is called once per source tree, before the
+# per-package loop, so a shared workspace lock is patched exactly once.
+apply_recipe_patches() {
+    local src_dir="$1" recipe_dir="$2" pkg="$3" ver="$4"
+    local patch_dir
+    patch_dir=$(resolve_patch_dir "${recipe_dir}" "${pkg}" "${ver}")
+    [[ -z "${patch_dir}" ]] && return 0
+
+    local p
+    for p in $(cd "${patch_dir}" && ls -1 *.patch | sort); do
+        if git -C "${src_dir}" apply "${patch_dir}/${p}"; then
+            echo "  Applied ${pkg} patch to source: ${p}"
+        else
+            echo "Error: failed to apply ${patch_dir}/${p} to ${src_dir}" >&2
+            return 1
+        fi
+    done
+}
+
+# Append the source-compatibility patch SRC_URI for a package version to its
+# version-specific .inc.
+#
+# The patches an edgelet release needs depend on its upstream Cargo.toml and
+# source layout, so they are version-specific. We do not hardcode the list:
+# we wire up whatever .patch files already live in the recipe's patch dir for
+# this version, and let bitbake resolve each file:// at build time.
+#
+# Patch FILES are kept by hand in version dirs (the patches themselves are
+# crafted per release). This function only writes the SRC_URI wiring, so the
+# generated .inc always matches the patch files on disk and the consistency
+# check stays green.
+#
+# Directory lookup mirrors bitbake FILESPATH precedence via resolve_patch_dir:
+# the version-specific dir recipes-core/<pkg>/<pkg>-<ver>/ first, then the
+# shared recipes-core/<pkg>/files/ dir.
+append_patch_src_uri() {
+    local recipe_dir="$1" pkg="$2" ver="$3" ver_inc="$4"
+    local patch_dir
+    patch_dir=$(resolve_patch_dir "${recipe_dir}" "${pkg}" "${ver}")
+    [[ -z "${patch_dir}" ]] && return 0
+
+    # Sort by filename for deterministic output (0001 before 0002, ...).
+    local patches=()
+    local p
+    for p in $(cd "${patch_dir}" && ls -1 *.patch | sort); do
+        patches+=("${p}")
+    done
+    [[ ${#patches[@]} -eq 0 ]] && return 0
+
+    {
+        echo ""
+        echo "# Source-compatibility patches for the ${ver} edgelet workspace. The set is"
+        echo "# version-specific (the upstream Cargo.toml and source layout differ by"
+        echo "# release), so it is wired here rather than in the shared ${pkg}.inc. This"
+        echo "# lets 1.5.x and 1.6.x recipes coexist on the same branch. Generated by"
+        echo "# scripts/update-recipes.sh from the patch files in the recipe's patch dir."
+        if [[ ${#patches[@]} -eq 1 ]]; then
+            echo "SRC_URI += \"file://${patches[0]}\""
+        else
+            local i
+            for i in "${!patches[@]}"; do
+                if [[ $i -eq 0 ]]; then
+                    echo "SRC_URI += \"file://${patches[$i]} \\"
+                else
+                    echo "            file://${patches[$i]} \\"
+                fi
+            done
+            echo "\""
+        fi
+    } >> "${ver_inc}"
+}
+
 # --- Generate IoT Edge recipes ---
 
 echo "Updating IoT Edge to ${IOTEDGE_DAEMON_VERSION} (${IOTEDGE_REV:0:8})"
@@ -169,11 +319,40 @@ echo "Updating IoT Edge to ${IOTEDGE_DAEMON_VERSION} (${IOTEDGE_REV:0:8})"
 IOTEDGE_DIR="${WORKDIR}/iotedge"
 prepare_repo "https://github.com/Azure/iotedge.git" "${IOTEDGE_DIR}" "${IOTEDGE_REV}"
 
+# Compute LIC_FILES_CHKSUM md5s from the fetched source. THIRDPARTYNOTICES is
+# regenerated each release (the dependency set changes), so its md5 differs by
+# version. Read it from the checked-out tree instead of hardcoding, so the
+# generated recipe always matches what bitbake checksums at build time. LICENSE
+# is stable across releases but we compute it the same way for consistency.
+IOTEDGE_LICENSE_MD5=$(md5sum "${IOTEDGE_DIR}/LICENSE" | cut -d' ' -f1)
+IOTEDGE_TPN_MD5=$(md5sum "${IOTEDGE_DIR}/THIRDPARTYNOTICES" | cut -d' ' -f1)
+
+# Apply the edgelet source-compatibility patches before reading Cargo.lock.
+# aziot-edged and iotedge share the edgelet workspace and wire identical patch
+# sets, so apply once from the iotedge patch dir. On wrynose this pins sysinfo
+# in the lock; on scarthgap the 1.5 patches do not touch the lock, so crates.inc
+# is unchanged.
+apply_recipe_patches "${IOTEDGE_DIR}" "${ROOT_DIR}/recipes-core/iotedge" "iotedge" "${IOTEDGE_DAEMON_VERSION}"
+
 for pkg in aziot-edged iotedge; do
     recipe_dir="${ROOT_DIR}/recipes-core/${pkg}"
     bb="${recipe_dir}/${pkg}_${IOTEDGE_DAEMON_VERSION}.bb"
     ver_inc="${recipe_dir}/${pkg}-${IOTEDGE_DAEMON_VERSION}.inc"
-    crates_inc="${recipe_dir}/${pkg}-crates.inc"
+    # Per-version crates.inc on wrynose so 1.5 and 1.6 coexist; shared name on
+    # scarthgap/kirkstone (see template switch above).
+    if [[ "${PER_VERSION_CRATES}" == true ]]; then
+        crates_inc="${recipe_dir}/${pkg}-${IOTEDGE_DAEMON_VERSION}-crates.inc"
+        crates_require="\${BPN}-\${PV}-crates.inc"
+    else
+        crates_inc="${recipe_dir}/${pkg}-crates.inc"
+        crates_require="\${BPN}-crates.inc"
+    fi
+    # wrynose (Yocto 6.0) sets S by default and rejects the old explicit value.
+    if [[ "${EMIT_S_GIT}" == true ]]; then
+        s_line='S = "${WORKDIR}/git"'$'\n'
+    else
+        s_line=""
+    fi
 
     # Generate .bb (template — only metadata + SRCREV change between versions)
     cat > "${bb}" <<BBEOF
@@ -181,21 +360,20 @@ SUMMARY = "$(if [[ "${pkg}" == "aziot-edged" ]]; then echo "The aziot-edged is t
 HOMEPAGE = "https://aka.ms/iotedge"
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = " \\
-    file://LICENSE;md5=0f7e3b1308cb5c00b372a6e78835732d \\
-    file://THIRDPARTYNOTICES;md5=11604c6170b98c376be25d0ca6989d9b \\
+    file://LICENSE;md5=${IOTEDGE_LICENSE_MD5} \\
+    file://THIRDPARTYNOTICES;md5=${IOTEDGE_TPN_MD5} \\
 "
 
 inherit cargo cargo-update-recipe-crates$(if [[ "${pkg}" == "aziot-edged" ]]; then echo " pkgconfig"; fi)
 
 SRC_URI += "git://github.com/Azure/iotedge.git;protocol=https;nobranch=1"
 SRCREV = "${IOTEDGE_REV}"
-S = "\${WORKDIR}/git"
-CARGO_SRC_DIR = "edgelet"
+${s_line}CARGO_SRC_DIR = "edgelet"
 CARGO_BUILD_FLAGS += "-p ${pkg}"
 CARGO_LOCK_SRC_DIR = "\${S}/edgelet"
 do_compile[network] = "1"
 
-require \${BPN}-crates.inc
+require ${crates_require}
 require recipes-core/iot-identity-service.inc
 
 include ${pkg}-\${PV}.inc
@@ -209,6 +387,8 @@ export VERSION = "${IOTEDGE_DAEMON_VERSION}"
 IOTEDGE_RELEASE = "${IOTEDGE_VERSION}"
 IIS_SRCREV = "${IIS_REV}"
 INCEOF
+    # Wire the version's source-compatibility patches (kept on disk per version).
+    append_patch_src_uri "${recipe_dir}" "${pkg}" "${IOTEDGE_DAEMON_VERSION}" "${ver_inc}"
     echo "  Generated ${ver_inc}"
 
     # Generate crates.inc from Cargo.lock
@@ -221,6 +401,13 @@ echo "Updating IIS to ${IIS_VERSION} (${IIS_REV:0:8})"
 
 IIS_DIR="${WORKDIR}/iot-identity-service"
 prepare_repo "https://github.com/Azure/iot-identity-service.git" "${IIS_DIR}" "${IIS_REV}"
+
+# Apply the IIS source-compatibility patches before reading Cargo.lock. aziotd,
+# aziotctl and aziot-keys share the IIS workspace and wire identical patch sets,
+# so apply once from the aziotd patch dir. The current IIS patches only touch
+# Cargo.toml, so crates.inc is unchanged; applying keeps crates.inc honest if a
+# future IIS patch pins a crate in the lock.
+apply_recipe_patches "${IIS_DIR}" "${ROOT_DIR}/recipes-core/aziotd" "aziotd" "${IIS_VERSION}"
 
 declare -A IIS_PKGS=(
     [aziotd]="aziotd"
@@ -247,8 +434,31 @@ for pkg in aziotd aziotctl aziot-keys; do
     recipe_dir="${ROOT_DIR}/recipes-core/${pkg}"
     bb="${recipe_dir}/${pkg}_${IIS_VERSION}.bb"
     ver_inc="${recipe_dir}/${pkg}-${IIS_VERSION}.inc"
-    crates_inc="${recipe_dir}/${pkg}-crates.inc"
     cargo_src="${IIS_PKGS[$pkg]}"
+    # Per-version crates.inc on wrynose so 1.5 and 1.6 coexist; shared name on
+    # scarthgap/kirkstone (see template switch above).
+    if [[ "${PER_VERSION_CRATES}" == true ]]; then
+        crates_inc="${recipe_dir}/${pkg}-${IIS_VERSION}-crates.inc"
+        crates_require="\${BPN}-\${PV}-crates.inc"
+    else
+        crates_inc="${recipe_dir}/${pkg}-crates.inc"
+        crates_require="\${BPN}-crates.inc"
+    fi
+    # wrynose (Yocto 6.0) sets S by default and rejects the old explicit value.
+    if [[ "${EMIT_S_GIT}" == true ]]; then
+        s_line='S = "${WORKDIR}/git"'$'\n'
+    else
+        s_line=""
+    fi
+
+    # aziot-keys builds a cdylib (no binary). On wrynose (Yocto 6.0) the cargo
+    # bbclass only installs the .so when CARGO_INSTALL_LIBRARIES is set, so wire
+    # that for the wrynose shape only. scarthgap/kirkstone install it without
+    # the flag, so their recipe stays as-is.
+    keys_block=""
+    if [[ "${pkg}" == "aziot-keys" && "${PER_VERSION_CRATES}" == true ]]; then
+        keys_block=$'\n# aziot-keys builds libaziot_keys.so as a cdylib (no binary). The Yocto 6.0\n# (Wrynose) cargo.bbclass only installs *.so / *.rlib to ${rustlibdir} when\n# CARGO_INSTALL_LIBRARIES is set; otherwise cargo_do_install finds nothing and\n# fails with "Did not find anything to install". ${rustlibdir} is exactly where\n# aziotd/aziot-edged expect it (RUSTFLAGS rpath, see aziotd.inc / issue #182).\nCARGO_INSTALL_LIBRARIES = "1"\n'
+    fi
 
     # Generate .bb
     cat > "${bb}" <<BBEOF
@@ -260,13 +470,12 @@ LIC_FILES_CHKSUM = " \\
 "
 
 inherit ${IIS_INHERIT[$pkg]}
-
+${keys_block}
 SRC_URI += "${IIS_PROTO[$pkg]}://github.com/Azure/iot-identity-service.git;protocol=https;nobranch=1"
 SRCREV = "${IIS_REV}"
-S = "\${WORKDIR}/git"
-CARGO_SRC_DIR = "${cargo_src}"
+${s_line}CARGO_SRC_DIR = "${cargo_src}"
 
-require \${BPN}-crates.inc
+require ${crates_require}
 
 include ${pkg}-\${PV}.inc
 include ${pkg}.inc

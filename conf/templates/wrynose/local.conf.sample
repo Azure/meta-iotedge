@@ -155,8 +155,19 @@ PACKAGE_CLASSES ?= "package_rpm"
 #                     e.g. ssh root access has a blank password
 # There are other application targets that can be used here too, see
 # meta/classes/image.bbclass and meta/classes/core-image.bbclass for more details.
-# We default to enabling the debugging tweaks.
-EXTRA_IMAGE_FEATURES ?= "debug-tweaks"
+# Yocto 6.0 (Wrynose) removed the "debug-tweaks" meta-feature and split it into
+# the individual features below. We list them explicitly so the QEMU validation
+# image keeps blank-password root SSH (used by scripts/validate-qemu.sh).
+EXTRA_IMAGE_FEATURES ?= "allow-empty-password allow-root-login empty-root-password post-install-logging"
+
+# Yocto 6.0 (Wrynose) changed the qemux86-64 default IMAGE_FSTYPES to
+# "tar.zst ext4.zst". runqemu refuses to boot a .zst rootfs without "snapshot",
+# and `runqemu qemux86-64` infers the rootfs from this GLOBAL IMAGE_FSTYPES (not
+# the per-image value), so it looked for a .ext4.zst that no longer exists and
+# failed ("Failed to find rootfs ... .ext4.zst"). Pin the global default to a
+# plain uncompressed ext4 so the build, runqemu, the CI upload, and release.yml
+# all agree on *.rootfs.ext4. (Scarthgap's poky defaulted to ext4 already.)
+IMAGE_FSTYPES = "ext4"
 
 #
 # Additional image features
@@ -258,22 +269,20 @@ PACKAGECONFIG:append:pn-nativesdk-qemu = " sdl"
 # this doesn't mean anything to you.
 CONF_VERSION = "2"
 
-DISTRO_FEATURES:append = " systemd virtualization tpm2 usrmerge"
-VIRTUAL-RUNTIME_init_manager = "systemd"
-VIRTUAL-RUNTIME_initscripts = "systemd-compat-units"
+# Use systemd as the init manager. On Wrynose (Yocto 6.0) the systemd recipe
+# sets CONFLICT_DISTRO_FEATURES += "sysvinit", so we must switch the init
+# manager (which drops the default sysvinit DISTRO_FEATURE) rather than just
+# appending "systemd" alongside poky's default sysvinit. INIT_MANAGER pulls in
+# conf/distro/include/init-manager-systemd.inc (adds systemd + usrmerge, sets
+# the systemd VIRTUAL-RUNTIME providers).
+INIT_MANAGER = "systemd"
+DISTRO_FEATURES:append = " virtualization tpm2"
 
-# Disable local hash equivalence server (can be unstable in CI/container environments)
-BB_SIGNATURE_HANDLER = "OEBasicHash"
-
-# Use meta-rust instead of Poky's Rust (kirkstone has 1.59, too old for IoT Edge)
-BBMASK += "poky/meta/recipes-devtools/rust"
-BBMASK += "poky/meta/recipes-devtools/cargo"
-
-# --- IoT Edge version selection for Kirkstone (Yocto 4.0) ---
+# --- IoT Edge version selection for Wrynose (Yocto 6.0) ---
 # meta-iotedge carries coexisting recipe versions on a single branch; pin the
-# 1.5.x line for Kirkstone builds.
-PREFERRED_VERSION_iotedge = "1.5.21"
-PREFERRED_VERSION_aziot-edged = "1.5.21"
-PREFERRED_VERSION_aziotd = "1.5.6"
-PREFERRED_VERSION_aziotctl = "1.5.6"
-PREFERRED_VERSION_aziot-keys = "1.5.6"
+# 1.6.x line for Wrynose builds. Scarthgap pins 1.5.x in its own template.
+PREFERRED_VERSION_iotedge = "1.6.0-rc.1"
+PREFERRED_VERSION_aziot-edged = "1.6.0-rc.1"
+PREFERRED_VERSION_aziotd = "1.6.0-rc.1"
+PREFERRED_VERSION_aziotctl = "1.6.0-rc.1"
+PREFERRED_VERSION_aziot-keys = "1.6.0-rc.1"

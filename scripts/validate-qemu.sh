@@ -43,6 +43,13 @@ ssh_cmd() {
     sshpass -p '' ssh ${SSH_OPTS} -p "${SSH_PORT}" "root@${SSH_HOST}" "$@"
 }
 
+# Same as ssh_cmd but bounded by a host-side timeout (the guest BusyBox has no
+# timeout applet). First arg is the timeout in seconds; the rest is the command.
+ssh_cmd_timeout() {
+    local secs="$1"; shift
+    timeout "${secs}" sshpass -p '' ssh ${SSH_OPTS} -p "${SSH_PORT}" "root@${SSH_HOST}" "$@"
+}
+
 cleanup() {
     if [[ -n "${RUNQEMU_PID:-}" ]]; then
         echo "Shutting down QEMU..."
@@ -146,24 +153,33 @@ if [[ -n "${MOCK_IOTEDGE_CONFIG}" ]]; then
 else
     echo "2. Running iotedge check (some failures expected without config):"
 fi
-ssh_cmd "iotedge check --verbose 2>&1" || true
+# Bound `iotedge check` so it can't hang the CI job. With the mock config there
+# is no real IoT Hub, so the network/container checks (e.g. pulling the Edge
+# Agent or diagnostics image) can stall on long connect/pull retries instead of
+# failing fast. On wrynose the QEMU slirp resolver let those checks hang for
+# ~20 min until the runner killed the job; scarthgap happened to fail fast.
+# A host-side timeout drops the ssh client when it fires and we move on; the
+# trailing `|| true` keeps the image-boot validation passing (the check output
+# is informational here).
+ssh_cmd_timeout 240 "iotedge check --verbose 2>&1" || \
+    echo "(iotedge check exceeded 240s or returned non-zero; continuing)"
 
 echo ""
 echo "3. Checking aziot-edged service status:"
-ssh_cmd "systemctl is-active aziot-edged || true"
+ssh_cmd_timeout 30 "systemctl is-active aziot-edged || true" || true
 
 echo ""
 echo "4. Checking aziot-identityd service status:"
-ssh_cmd "systemctl is-active aziot-identityd || true"
+ssh_cmd_timeout 30 "systemctl is-active aziot-identityd || true" || true
 
 echo ""
 echo "5. Listing installed IoT Edge packages:"
-if ssh_cmd "command -v rpm" >/dev/null 2>&1; then
-    ssh_cmd "rpm -qa | grep -E 'iotedge|aziot' | sort"
-elif ssh_cmd "command -v opkg" >/dev/null 2>&1; then
-    ssh_cmd "opkg list-installed | grep -E 'iotedge|aziot' | sort"
-elif ssh_cmd "command -v dpkg" >/dev/null 2>&1; then
-    ssh_cmd "dpkg -l | grep -E 'iotedge|aziot'"
+if ssh_cmd_timeout 30 "command -v rpm" >/dev/null 2>&1; then
+    ssh_cmd_timeout 30 "rpm -qa | grep -E 'iotedge|aziot' | sort" || true
+elif ssh_cmd_timeout 30 "command -v opkg" >/dev/null 2>&1; then
+    ssh_cmd_timeout 30 "opkg list-installed | grep -E 'iotedge|aziot' | sort" || true
+elif ssh_cmd_timeout 30 "command -v dpkg" >/dev/null 2>&1; then
+    ssh_cmd_timeout 30 "dpkg -l | grep -E 'iotedge|aziot'" || true
 else
     echo "(Package manager not found - skipping package listing)"
 fi

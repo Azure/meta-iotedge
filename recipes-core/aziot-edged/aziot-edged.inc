@@ -11,9 +11,12 @@ SYSTEMD_SERVICE:${PN} = "aziot-edged.service"
 
 SRC_URI += "file://aziot-edged.service \
             file://iotedge.conf \
-            file://0001-Remove-panic-abort-from-workspace-profiles.patch \
-            file://0002-Work-around-Rust-1.78-dead_code-lint-issues.patch \
 "
+
+# Source-compatibility patches are version-specific (the upstream Cargo.toml /
+# source layout differs between releases), so each aziot-edged-<ver>.inc adds
+# its own patch SRC_URI entries rather than carrying them here in the shared
+# include (this lets 1.5.x and 1.6.x recipes coexist on the same branch).
 
 do_install:append () {
     # Create symbolic links
@@ -31,13 +34,18 @@ do_install:append () {
     install -d -m 755 -o iotedge -g iotedge ${D}${localstatedir}/lib/aziot/edged
 
     install -d ${D}${systemd_unitdir}/system
-    install -m 644 ${WORKDIR}/aziot-edged.service ${D}${systemd_unitdir}/system
-    install -m 644 ${WORKDIR}/git/edgelet/contrib/systemd/debian/aziot-edged.workload.socket ${D}${systemd_unitdir}/system
-    install -m 644 ${WORKDIR}/git/edgelet/contrib/systemd/debian/aziot-edged.mgmt.socket ${D}${systemd_unitdir}/system
+    # file:// SRC_URI assets unpack into the recipe's unpack root, which differs
+    # by Yocto release: Scarthgap unpacks to ${WORKDIR}, Wrynose (6.0) to
+    # ${UNPACKDIR} (= ${WORKDIR}/sources). ${UNPACK_ROOT} (defined in the shared
+    # iot-identity-service.inc, required by this recipe) resolves to whichever
+    # one applies.
+    install -m 644 ${UNPACK_ROOT}/aziot-edged.service ${D}${systemd_unitdir}/system
+    install -m 644 ${S}/edgelet/contrib/systemd/debian/aziot-edged.workload.socket ${D}${systemd_unitdir}/system
+    install -m 644 ${S}/edgelet/contrib/systemd/debian/aziot-edged.mgmt.socket ${D}${systemd_unitdir}/system
 
     #Creates /var/run/iotedge as 755, iotedge:iotedge via systemd-tmpfiles.setup.service
     install -d ${D}${sysconfdir}/tmpfiles.d
-    install -m 644 ${WORKDIR}/iotedge.conf ${D}${sysconfdir}/tmpfiles.d/iotedge.conf
+    install -m 644 ${UNPACK_ROOT}/iotedge.conf ${D}${sysconfdir}/tmpfiles.d/iotedge.conf
 }
 
 inherit useradd

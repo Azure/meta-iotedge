@@ -45,9 +45,10 @@ jobs:
     outputs:
       docs_only: ${{ steps.docs-only.outputs.docs_only }}
       template: ${{ steps.set-template.outputs.template }}
+      templates: ${{ steps.set-matrix.outputs.templates }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || '' }}
           fetch-depth: 0
@@ -94,13 +95,55 @@ jobs:
             echo "Code files changed - running full build"
           fi
 
-      - name: Determine template from branch
+      - name: Determine template from branch or tag
         id: set-template
         run: |
-          case "${{ github.base_ref || github.ref_name }}" in
-            kirkstone) echo "template=kirkstone" >> "$GITHUB_OUTPUT" ;;  
-            *) echo "template=scarthgap" >> "$GITHUB_OUTPUT" ;;  
+          # Tag-triggered builds (releases) pick the Yocto template from the
+          # IoT Edge version: 1.6.x -> Wrynose, 1.5.x -> Scarthgap. Branch
+          # builds map kirkstone -> kirkstone, everything else -> scarthgap.
+          REF="${{ inputs.ref || github.base_ref || github.ref_name }}"
+          case "$REF" in
+            1.6.*) echo "template=wrynose" >> "$GITHUB_OUTPUT" ;;
+            1.5.*) echo "template=scarthgap" >> "$GITHUB_OUTPUT" ;;
+            kirkstone) echo "template=kirkstone" >> "$GITHUB_OUTPUT" ;;
+            *) echo "template=scarthgap" >> "$GITHUB_OUTPUT" ;;
           esac
+
+      - name: Determine build matrix (templates to build)
+        id: set-matrix
+        run: |
+          # The build job runs as a matrix over Yocto templates so the green
+          # "Build and validate" check reflects every line we ship.
+          #
+          # Release tags (release.yml passes inputs.ref = 1.5.* / 1.6.*) build
+          # ONLY that line's template, so we don't double-build a release or
+          # build the wrong line (e.g. wrynose for a 1.5 tag). PR and push
+          # builds, which is where recipe changes land, build BOTH LTS lines
+          # (scarthgap = 1.5, wrynose = 1.6) so a passing check means both
+          # lines fetch, build, and boot. kirkstone is intentionally left out
+          # of the PR matrix: it shares the 1.5 recipe with scarthgap, so a
+          # third leg adds cost without testing a distinct recipe shape.
+          #
+          # A tag is detected from inputs.ref (workflow_call from release.yml)
+          # or github.ref_type. Branch/PR events fall through to both lines.
+          REF="${{ inputs.ref || github.ref_name }}"
+          IS_TAG="false"
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            IS_TAG="true"
+          fi
+          case "$REF" in
+            1.5.*|1.6.*) IS_TAG="true" ;;
+          esac
+
+          if [ "$IS_TAG" = "true" ]; then
+            # Single template, matching the release line.
+            templates="[\"${{ steps.set-template.outputs.template }}\"]"
+          else
+            # Double-build both LTS lines on PR/push.
+            templates='["scarthgap","wrynose"]'
+          fi
+          echo "templates=${templates}" >> "$GITHUB_OUTPUT"
+          echo "Build matrix templates: ${templates}"
 
   check-recipes:
     name: Recipe consistency check
@@ -109,7 +152,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || '' }}
 
@@ -158,6 +201,13 @@ jobs:
     name: Build and validate
     needs: [check-changes, check-recipes]
     if: needs.check-changes.outputs.docs_only != 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        # PR/push builds both LTS lines (scarthgap = 1.5, wrynose = 1.6);
+        # release tags collapse to the single matching template. See the
+        # set-matrix step in check-changes.
+        template: ${{ fromJSON(needs.check-changes.outputs.templates) }}
     runs-on:
     - self-hosted
     - 1ES.Pool=meta-iotedge-1es-github-linux-amd64
@@ -165,7 +215,12 @@ jobs:
     outputs:
       template: ${{ needs.check-changes.outputs.template }}
     container:
-      image: ghcr.io/azure/meta-iotedge-devcontainer:scarthgap
+      # The devcontainer image is Yocto-release-agnostic: it provides host
+      # build tools only, and OE-core fetches the per-template uninative +
+      # cross toolchain at build time. So a single neutral :latest tag serves
+      # every matrix leg; the real Yocto line comes from matrix.template,
+      # which is passed to fetch.sh / build.sh / validate-qemu.sh below.
+      image: ghcr.io/azure/meta-iotedge-devcontainer:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -174,7 +229,7 @@ jobs:
       DEVCONTAINER: "1"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || '' }}
 
@@ -195,11 +250,11 @@ jobs:
           echo "Downloads: $(du -sh /workspaces/yocto-cache/downloads 2>/dev/null | cut -f1 || echo 'empty')"
 
       - name: Fetch layers
-        run: sudo -E -u builder ./scripts/fetch.sh "${{ needs.check-changes.outputs.template }}"
+        run: sudo -E -u builder ./scripts/fetch.sh "${{ matrix.template }}"
 
       - name: Build
         env:
-          TEMPLATE: ${{ needs.check-changes.outputs.template }}
+          TEMPLATE: ${{ matrix.template }}
         run: |
           if [[ "${{ inputs.skip_qemu }}" == "true" ]]; then
             sudo -E -u builder ./scripts/build.sh "${TEMPLATE}"
@@ -209,7 +264,7 @@ jobs:
 
       - name: Run QEMU validation
         if: ${{ !inputs.skip_qemu }}
-        run: sudo -E -u builder ./scripts/validate-qemu.sh "${{ needs.check-changes.outputs.template }}"
+        run: sudo -E -u builder ./scripts/validate-qemu.sh "${{ matrix.template }}"
 
       - name: Collect IoT Edge RPM packages
         id: collect-rpms
@@ -223,18 +278,18 @@ jobs:
           ls -la rpm-staging/
 
       - name: Upload RPM packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: rpm-packages-${{ needs.check-changes.outputs.template }}
+          name: rpm-packages-${{ matrix.template }}
           path: rpm-staging/*.rpm
           retention-days: 7
           if-no-files-found: warn
 
       - name: Upload QEMU image
         if: ${{ !inputs.skip_qemu }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: iotedge-qemu-image-${{ needs.check-changes.outputs.template }}
+          name: iotedge-qemu-image-${{ matrix.template }}
           path: |
             build/tmp/deploy/images/qemux86-64/iotedge-qemu-image-qemux86-64.rootfs.ext4
             build/tmp/deploy/images/qemux86-64/bzImage
@@ -249,6 +304,11 @@ jobs:
     steps:
       - name: Determine overall status
         run: |
+          # needs.build.result is the AGGREGATE of every matrix leg: GitHub
+          # reports 'success' only when ALL legs (scarthgap and wrynose on a
+          # PR/push) succeed, and 'failure' if any single leg fails. So this
+          # check fails the moment one line fails to build or boot, which is
+          # what makes the green check honest across both LTS lines.
           if [ "${{ needs.check-changes.outputs.docs_only }}" == "true" ]; then
             echo "✓ Docs-only change - no build required"
             exit 0
@@ -256,9 +316,9 @@ jobs:
             echo "✗ Recipe consistency check failed"
             exit 1
           elif [ "${{ needs.build.result }}" == "success" ]; then
-            echo "✓ Build succeeded"
+            echo "✓ Build succeeded for all templates"
             exit 0
           else
-            echo "✗ Build failed or was cancelled"
+            echo "✗ Build failed or was cancelled (one or more templates)"
             exit 1
           fi
