@@ -108,17 +108,33 @@ do_install:append  () {
 
 inherit useradd
 USERADD_PACKAGES = "${PN}"
-USERADD_PARAM:${PN} = "-r -u 13624 -g aziotcs -c 'aziot-certd user' -G aziotks -s /sbin/nologin -d ${localstatedir}/lib/aziot/certd aziotcs; "
-USERADD_PARAM:${PN} += "-r -u 13625 -g aziotks -c 'aziot-keyd user' -s /sbin/nologin -d ${localstatedir}/lib/aziot/keyd aziotks; "
-USERADD_PARAM:${PN} += "-r -u 13626 -g aziotid -c 'aziot-identityd user' -G aziotcs,aziotks,aziottpm -s /sbin/nologin -d ${localstatedir}/lib/aziot/identityd aziotid; "
+
+# Optionally pin the aziot service users/groups to static UIDs/GIDs.
+# Opt-in and defaults off (legacy dynamic allocation). See aziot-edged.inc and
+# https://github.com/Azure/meta-iotedge/issues/130 for the rationale and the
+# A/B upgrade ownership caveat. Set IOTEDGE_STATIC_UIDS = "1" to enable.
+IOTEDGE_STATIC_UIDS ??= "0"
+IOTEDGE_UID_AZIOTCS = "${@'-u 13624 ' if d.getVar('IOTEDGE_STATIC_UIDS') == '1' else ''}"
+IOTEDGE_UID_AZIOTKS = "${@'-u 13625 ' if d.getVar('IOTEDGE_STATIC_UIDS') == '1' else ''}"
+IOTEDGE_UID_AZIOTID = "${@'-u 13626 ' if d.getVar('IOTEDGE_STATIC_UIDS') == '1' else ''}"
+IOTEDGE_UID_AZIOTTPM = "${@'-u 13627 ' if d.getVar('IOTEDGE_STATIC_UIDS') == '1' else ''}"
+
+USERADD_PARAM:${PN} = "-r ${IOTEDGE_UID_AZIOTCS}-g aziotcs -c 'aziot-certd user' -G aziotks -s /sbin/nologin -d ${localstatedir}/lib/aziot/certd aziotcs; "
+USERADD_PARAM:${PN} += "-r ${IOTEDGE_UID_AZIOTKS}-g aziotks -c 'aziot-keyd user' -s /sbin/nologin -d ${localstatedir}/lib/aziot/keyd aziotks; "
+USERADD_PARAM:${PN} += "-r ${IOTEDGE_UID_AZIOTID}-g aziotid -c 'aziot-identityd user' -G aziotcs,aziotks,aziottpm -s /sbin/nologin -d ${localstatedir}/lib/aziot/identityd aziotid; "
 # Add aziottpm to tss group for TPM device access
 # Fixes: https://github.com/Azure/meta-iotedge/issues/132
-USERADD_PARAM:${PN} += "-r -u 13627 -g aziottpm -G tss -c 'aziot-tpmd user' -s /sbin/nologin -d ${localstatedir}/lib/aziot/tpmd aziottpm; "
+USERADD_PARAM:${PN} += "-r ${IOTEDGE_UID_AZIOTTPM}-g aziottpm -G tss -c 'aziot-tpmd user' -s /sbin/nologin -d ${localstatedir}/lib/aziot/tpmd aziottpm; "
 
-GROUPADD_PARAM:${PN} = "-r -g 13624 aziotcs; "
-GROUPADD_PARAM:${PN} += "-r -g 13625 aziotks; "
-GROUPADD_PARAM:${PN} += "-r -g 13626 aziotid; "
-GROUPADD_PARAM:${PN} += "-r -g 13627 aziottpm; "
+# Group GIDs are static only when IOTEDGE_STATIC_UIDS = "1".
+IOTEDGE_GID_AZIOTCS = "${@'-g 13624 ' if d.getVar('IOTEDGE_STATIC_UIDS') == '1' else ''}"
+IOTEDGE_GID_AZIOTKS = "${@'-g 13625 ' if d.getVar('IOTEDGE_STATIC_UIDS') == '1' else ''}"
+IOTEDGE_GID_AZIOTID = "${@'-g 13626 ' if d.getVar('IOTEDGE_STATIC_UIDS') == '1' else ''}"
+IOTEDGE_GID_AZIOTTPM = "${@'-g 13627 ' if d.getVar('IOTEDGE_STATIC_UIDS') == '1' else ''}"
+GROUPADD_PARAM:${PN} = "-r ${IOTEDGE_GID_AZIOTCS}aziotcs; "
+GROUPADD_PARAM:${PN} += "-r ${IOTEDGE_GID_AZIOTKS}aziotks; "
+GROUPADD_PARAM:${PN} += "-r ${IOTEDGE_GID_AZIOTID}aziotid; "
+GROUPADD_PARAM:${PN} += "-r ${IOTEDGE_GID_AZIOTTPM}aziottpm; "
 
 export SOCKET_DIR = "/run/aziot"
 export USER_AZIOTID = "aziotid"

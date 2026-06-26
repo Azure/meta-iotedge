@@ -50,12 +50,28 @@ do_install:append () {
 
 inherit useradd
 USERADD_PACKAGES = "${PN}"
-USERADD_PARAM:${PN} = "-r -u 13620 -g iotedge -c 'iotedge user' -G docker,systemd-journal,aziotcs,aziotks,aziottpm,aziotid -s /sbin/nologin -d ${localstatedir}/lib/aziot/edged iotedge; "
+
+# Optionally pin the iotedge user/group to a static UID/GID.
+#
+# Static IDs are required for stable [[principal]] config references and make
+# A/B partition upgrades deterministic, but switching an already-deployed device
+# from a dynamically-allocated ID to a static one changes the on-disk ownership
+# of persisted data under ${localstatedir}/lib/aziot, which must then be chowned.
+# To avoid surprising existing integrators, this is opt-in and defaults off
+# (legacy dynamic allocation). Set IOTEDGE_STATIC_UIDS = "1" in your distro or
+# local.conf to enable. See https://github.com/Azure/meta-iotedge/issues/130
+IOTEDGE_STATIC_UIDS ??= "0"
+IOTEDGE_UID_IOTEDGE = "${@'-u 13620 ' if d.getVar('IOTEDGE_STATIC_UIDS') == '1' else ''}"
+IOTEDGE_GID_IOTEDGE = "${@'-g 13620 ' if d.getVar('IOTEDGE_STATIC_UIDS') == '1' else ''}"
+
+USERADD_PARAM:${PN} = "-r ${IOTEDGE_UID_IOTEDGE}-g iotedge -c 'iotedge user' -G docker,systemd-journal,aziotcs,aziotks,aziottpm,aziotid -s /sbin/nologin -d ${localstatedir}/lib/aziot/edged iotedge; "
+# edgeagentuser/edgehubuser have been statically pinned since before the optional
+# flag existed; left unchanged to avoid a regression for existing builds.
 USERADD_PARAM:${PN} += "-r -g iotedge -c 'edgeAgent user' -s /bin/sh -u 13622 edgeagentuser; "
 USERADD_PARAM:${PN} += "-r -g iotedge -c 'edgeHub user' -s /bin/sh -u 13623 edgehubuser; "
 # Create both iotedge and docker groups - docker group is needed for iotedge user supplementary groups
-# Static GID for iotedge group; docker group left dynamic (shared with other layers)
-GROUPADD_PARAM:${PN} = "-r -g 13620 iotedge; -r docker"
+# iotedge GID is static only when IOTEDGE_STATIC_UIDS = "1"; docker group left dynamic (shared with other layers)
+GROUPADD_PARAM:${PN} = "-r ${IOTEDGE_GID_IOTEDGE}iotedge; -r docker"
 
 FILES:${PN} += " \
     ${systemd_unitdir}/system/* \
