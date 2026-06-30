@@ -57,10 +57,13 @@ USERADD_PACKAGES = "${PN}"
 # A/B partition upgrades deterministic, but switching an already-deployed device
 # from a dynamically-allocated ID to a static one changes the on-disk ownership
 # of persisted data under ${localstatedir}/lib/aziot, which must then be chowned.
-# To avoid surprising existing integrators, this is opt-in and defaults off
-# (legacy dynamic allocation). Set IOTEDGE_STATIC_UIDS = "1" in your distro or
-# local.conf to enable. See https://github.com/Azure/meta-iotedge/issues/130
-IOTEDGE_STATIC_UIDS ??= "0"
+# The default is version-dependent: 1.6 is a new LTS line, so it defaults ON
+# (the one-time move onto static IDs rides along with the major upgrade people
+# are already testing, and the IDs never drift again afterward). 1.5.x is an
+# already-shipped line, so it stays OFF to avoid changing on-disk ownership for
+# devices in the field. Override either way with IOTEDGE_STATIC_UIDS in your
+# distro or local.conf. See https://github.com/Azure/meta-iotedge/issues/130
+IOTEDGE_STATIC_UIDS ??= "${@'1' if (d.getVar('PV') or '').startswith('1.6') else '0'}"
 IOTEDGE_UID_IOTEDGE = "${@'-u 13620 ' if d.getVar('IOTEDGE_STATIC_UIDS') == '1' else ''}"
 IOTEDGE_GID_IOTEDGE = "${@'-g 13620 ' if d.getVar('IOTEDGE_STATIC_UIDS') == '1' else ''}"
 

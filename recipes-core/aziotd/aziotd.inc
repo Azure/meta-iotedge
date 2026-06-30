@@ -110,10 +110,11 @@ inherit useradd
 USERADD_PACKAGES = "${PN}"
 
 # Optionally pin the aziot service users/groups to static UIDs/GIDs.
-# Opt-in and defaults off (legacy dynamic allocation). See aziot-edged.inc and
-# https://github.com/Azure/meta-iotedge/issues/130 for the rationale and the
-# A/B upgrade ownership caveat. Set IOTEDGE_STATIC_UIDS = "1" to enable.
-IOTEDGE_STATIC_UIDS ??= "0"
+# Version-dependent default (see aziot-edged.inc and issue #130): 1.6 (new LTS)
+# defaults ON so the one-time static-ID move lands with the major upgrade; 1.5.x
+# (shipped) stays OFF to avoid changing on-disk ownership for fielded devices.
+# Override with IOTEDGE_STATIC_UIDS in your distro or local.conf.
+IOTEDGE_STATIC_UIDS ??= "${@'1' if (d.getVar('PV') or '').startswith('1.6') else '0'}"
 IOTEDGE_UID_AZIOTCS = "${@'-u 13624 ' if d.getVar('IOTEDGE_STATIC_UIDS') == '1' else ''}"
 IOTEDGE_UID_AZIOTKS = "${@'-u 13625 ' if d.getVar('IOTEDGE_STATIC_UIDS') == '1' else ''}"
 IOTEDGE_UID_AZIOTID = "${@'-u 13626 ' if d.getVar('IOTEDGE_STATIC_UIDS') == '1' else ''}"
