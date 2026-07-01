@@ -104,11 +104,11 @@ On 32-bit ARM targets where OpenSSL is compiled with `_TIME_BITS=64`, the Rust `
 remove `-D_TIME_BITS=64` from OpenSSL flags. Fix: update the vendored `libc` crate to >= 0.2.179
 and set `RUST_LIBC_UNSTABLE_GNU_TIME_BITS=64`. See [#187](https://github.com/Azure/meta-iotedge/issues/187).
 
-**Static UIDs for aziotd users**
+**Static UIDs for aziotd users (version-dependent default)**
 
-All IoT Edge system users and groups are assigned static UIDs/GIDs so they remain
-consistent across builds (important for A/B partition schemes and `[[principal]]`
-config references):
+IoT Edge system users and groups can be pinned to fixed UIDs/GIDs, which keeps
+ownership consistent across builds (important for A/B partition schemes and
+`[[principal]]` config references):
 
 | User / Group | UID / GID |
 | :----------- | --------: |
@@ -120,9 +120,22 @@ config references):
 | `aziotid` | 13626 |
 | `aziottpm` | 13627 |
 
-The `docker` group is left dynamic because other layers may also create it.
-To override any ID, use a `.bbappend` with your own `USERADD_PARAM`/`GROUPADD_PARAM`.
-See [#130](https://github.com/Azure/meta-iotedge/issues/130).
+The default depends on the IoT Edge version. **1.6** (a new LTS line) defaults to
+static IDs, so the deterministic numbering is in place from the start of the line.
+**1.5.x** (already shipped) defaults to dynamic allocation, so existing fielded
+devices see no change. Set `IOTEDGE_STATIC_UIDS = "1"` (or `"0"`) in your distro
+config or `local.conf` to override either way.
+
+`edgeagentuser` and `edgehubuser` are always statically assigned (they predate the
+flag). The `docker` group is left dynamic because other layers may also create it.
+
+Enabling static UIDs on a device that previously ran dynamic IDs changes the
+on-disk ownership of persisted data under `/var/lib/aziot`. On A/B OTA systems that
+carry that data across the partition swap, the files end up owned by the wrong user
+until they are chowned to the new IDs. This is a one-time change: once on static
+IDs the numbers never drift again, unlike dynamic allocation where they can shift
+on any rebuild. To override any individual ID, use a `.bbappend` with your own
+`USERADD_PARAM`/`GROUPADD_PARAM`. See [#130](https://github.com/Azure/meta-iotedge/issues/130).
 
 **Overriding `do_install:append` in recipes**
 
