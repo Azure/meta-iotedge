@@ -1,7 +1,9 @@
 # Yocto + IoT Edge Release Guide
 
-This guide covers the IoT Edge release process for Yocto Scarthgap (main branch). Kirkstone uses templates on main
-and does not have a dedicated branch or CI runs.
+This guide covers the parallel IoT Edge release process on `main`:
+IoT Edge 1.5.x for Yocto Scarthgap and IoT Edge 1.6.x for Yocto Wrynose.
+Kirkstone uses templates on `main` and does not have a dedicated branch or CI
+runs.
 
 ## Release Flow
 
@@ -46,13 +48,17 @@ flowchart TD
 
    ```bash
    git pull origin main
-   git tag 1.5.35
-   git push origin 1.5.35
+   git tag 1.5.35                 # Scarthgap / IoT Edge 1.5.x
+   # or
+   git tag 1.6.0                  # Wrynose / IoT Edge 1.6.x
+   git push origin <tag>
    ```
 
-   > **Note:** The tag matches the upstream release (e.g., `1.5.35`) even if the recipe
-   > filenames use the daemon version (e.g., `1.5.21`). The `.inc` file stores
-   > `IOTEDGE_RELEASE = "1.5.35"` for traceability.
+   > **Note:** The tag matches the upstream release (for example, `1.5.35`)
+   > even if the recipe filenames use the daemon version (for example,
+   > `1.5.21`). The `.inc` file stores `IOTEDGE_RELEASE = "1.5.35"` for
+   > traceability. A suffix such as `-1` identifies a Yocto-layer maintenance
+   > revision without inventing a new upstream IoT Edge product version.
 
 5. **Verify** — Check [GitHub Releases](https://github.com/Azure/meta-iotedge/releases)
 
@@ -92,11 +98,34 @@ The workflow uses `scripts/check-upstream.sh` to fetch `product-versions.json` a
 - Old recipes are automatically removed when updating to a new version
 - Git tags preserve history — checkout a tag to get old recipes: `git checkout 1.5.5`
 
+## Parallel Release Lines
+
+`main` carries two active recipe lines at the same time. Tags can alternate
+chronologically; they are not a single monotonically increasing product stream.
+
+|Tag series|Yocto release|Template|Release title|
+|---|---|---|---|
+|`1.5.*`|Scarthgap (5.0 LTS)|`scarthgap`|Scarthgap / IoT Edge 1.5.x|
+|`1.6.*`|Wrynose (6.0 LTS)|`wrynose`|Wrynose / IoT Edge 1.6.x|
+
+Release automation compares generated notes with the previous tag in the same
+series. Release notes identify both the Yocto release and IoT Edge line so a
+later 1.5 maintenance release is not mistaken for a downgrade from 1.6.
+
+The GitHub **Latest** marker follows the latest stable product generation:
+
+- Before 1.6 GA, a stable 1.5 release remains Latest and 1.6 prereleases do not
+  replace it.
+- A stable 1.6 release becomes Latest.
+- After 1.6 GA, later 1.5 maintenance releases remain supported releases but do
+  not move Latest back to 1.5.
+
 ## Branch Mapping
 
 | Branch | Yocto Release | Script Parameter |
 | ------ | ------------- | ---------------- |
 | main   | Scarthgap (5.0 LTS) | `scarthgap` |
+| main   | Wrynose (6.0 LTS) | `wrynose` |
 | main (templates only) | Kirkstone (out of support Apr'2026) | `kirkstone` |
 
 ## Manual Recipe Updates

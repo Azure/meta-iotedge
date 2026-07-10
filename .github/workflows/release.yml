@@ -31,6 +31,12 @@ jobs:
     needs: build
     runs-on: ubuntu-22.04
     steps:
+      - name: Check out release tag and history
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+          fetch-depth: 0
+
       - name: Download RPM packages
         uses: actions/download-artifact@v8
         with:
@@ -75,51 +81,142 @@ jobs:
           
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
+      - name: Prepare release metadata and notes
+        id: metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ steps.artifacts.outputs.version }}"
+          case "$VERSION" in
+            1.5.*)
+              SERIES="1.5"
+              YOCTO="Scarthgap"
+              TEMPLATE="scarthgap"
+              RELEASE_SUMMARY="This is a maintenance release for the **Scarthgap (Yocto 5.0) / IoT Edge 1.5.x** line. It is not a downgrade from a 1.6.x release."
+              ;;
+            1.6.*)
+              SERIES="1.6"
+              YOCTO="Wrynose"
+              TEMPLATE="wrynose"
+              RELEASE_SUMMARY="This release belongs to the **Wrynose (Yocto 6.0) / IoT Edge 1.6.x** line."
+              ;;
+            *)
+              echo "Unsupported release tag: $VERSION" >&2
+              exit 1
+              ;;
+          esac
+
+          if [[ "$VERSION" == *-rc* || "$VERSION" == *-beta* ]]; then
+            PRERELEASE=true
+          else
+            PRERELEASE=false
+          fi
+
+          # GitHub otherwise compares generated notes against the most recently
+          # published release, which may be from the other supported release line.
+          PREVIOUS_TAG="$(git tag --list "${SERIES}.*" --sort=-version:refname \
+            | grep -Fxv "$VERSION" \
+            | head -n 1 || true)"
+
+          # Before 1.6 GA, 1.5 remains the latest stable line. After 1.6 GA,
+          # later 1.5 maintenance releases must not move Latest back to 1.5.
+          HAS_STABLE_16="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            --jq 'any(.[]; .draft == false and .prerelease == false and (.tag_name | startswith("1.6.")))')"
+          if [[ "$SERIES" == "1.6" && "$PRERELEASE" == "false" ]]; then
+            HAS_STABLE_16=true
+          fi
+
+          if [[ "$PRERELEASE" == "true" ]]; then
+            MAKE_LATEST=false
+          elif [[ "$SERIES" == "1.6" ]]; then
+            MAKE_LATEST=true
+          elif [[ "$HAS_STABLE_16" == "true" ]]; then
+            MAKE_LATEST=false
+          else
+            MAKE_LATEST=true
+          fi
+
+          {
+            echo "series=$SERIES"
+            echo "yocto=$YOCTO"
+            echo "template=$TEMPLATE"
+            echo "prerelease=$PRERELEASE"
+            echo "previous_tag=$PREVIOUS_TAG"
+            echo "make_latest=$MAKE_LATEST"
+          } >> "$GITHUB_OUTPUT"
+
+          if [[ "$HAS_STABLE_16" == "true" ]]; then
+            WRYNOSE_STATUS="Active and maintained"
+          else
+            WRYNOSE_STATUS="Active; latest release is a prerelease"
+          fi
+
+          cat > release-notes.md <<EOF
+          ## ${YOCTO} release for IoT Edge ${SERIES}.x
+
+          ${RELEASE_SUMMARY}
+
+          The repository maintains two release lines side by side:
+
+          | Yocto release | IoT Edge line | Status |
+          | --- | --- | --- |
+          | Scarthgap (5.0) | 1.5.x | Active and supported through November 2026 |
+          | Wrynose (6.0) | 1.6.x | ${WRYNOSE_STATUS} |
+
+          Release tags can alternate between 1.5.x and 1.6.x. Choose the tag that matches your Yocto release.
+
+          ## Build from source
+
+          Most users should build from source using the recipes in this repository. The prebuilt RPMs below target \`qemux86-64\` and will not work on other hardware.
+
+          \`\`\`bash
+          git clone --branch ${VERSION} https://github.com/${GITHUB_REPOSITORY}.git
+          cd meta-iotedge
+          ./scripts/build.sh ${TEMPLATE}
+          \`\`\`
+
+          ## Prebuilt artifacts (qemux86-64 only)
+
+          These artifacts are primarily for CI verification and testing.
+
+          ### RPM packages
+
+          \`\`\`bash
+          tar -xzvf iotedge-rpms-${VERSION}.tar.gz
+          \`\`\`
+
+          Included: iotedge, aziot-edged, aziotd, aziotctl, aziot-keys.
+
+          ### QEMU test image
+
+          \`\`\`bash
+          zstd -d iotedge-qemu-image-qemux86-64.rootfs.ext4.zst
+
+          qemu-system-x86_64 \\
+            -kernel bzImage \\
+            -drive file=iotedge-qemu-image-qemux86-64.rootfs.ext4,format=raw \\
+            -append "root=/dev/sda console=ttyS0" \\
+            -nographic -m 512
+          \`\`\`
+
+          ## Documentation
+
+          See the [README](https://github.com/${GITHUB_REPOSITORY}#readme) for build and integration instructions.
+
+          > **Repository history note:** \`main\` contains both the Scarthgap/1.5.x and Wrynose/1.6.x recipes. Generated notes compare against the previous ${SERIES}.x tag, but the repository diff may still include changes for both release lines.
+          EOF
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
-          name: IoT Edge Yocto Layer ${{ steps.artifacts.outputs.version }}
+          name: IoT Edge Yocto Layer ${{ steps.artifacts.outputs.version }} (${{ steps.metadata.outputs.yocto }} / ${{ steps.metadata.outputs.series }}.x)
           draft: false
-          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') }}
+          prerelease: ${{ steps.metadata.outputs.prerelease }}
+          make_latest: ${{ steps.metadata.outputs.make_latest }}
           generate_release_notes: true
+          previous_tag: ${{ steps.metadata.outputs.previous_tag }}
           files: final-artifacts/*
-          body: |
-            ## Azure IoT Edge Yocto Layer Release
-            
-            This release provides Yocto/OpenEmbedded recipes for building Azure IoT Edge on embedded Linux systems.
-            
-            ### For Yocto Users
-            
-            **Most users should build from source using the recipes in this repository.** The pre-built RPMs below are for the `qemux86-64` target and won't work on other hardware. To build for your target:
-            
-            ```bash
-            git clone --branch ${{ steps.artifacts.outputs.version }} https://github.com/${{ github.repository }}.git
-            cd meta-iotedge
-            ./scripts/build.sh ${{ needs.build.outputs.template }}
-            ```
-            
-            ### Pre-built Artifacts (qemux86-64 only)
-            
-            These artifacts are primarily for CI verification and testing:
-            
-            **RPM Packages** — Built for `qemux86-64`, useful for reference:
-            ```bash
-            tar -xzvf iotedge-rpms-${{ steps.artifacts.outputs.version }}.tar.gz
-            ```
-            
-            Included: iotedge, aziot-edged, aziotd, aziotctl, aziot-keys
-            
-            **QEMU Test Image** — Complete bootable image with IoT Edge pre-installed:
-            ```bash
-            zstd -d iotedge-qemu-image-qemux86-64.rootfs.ext4.zst
-            
-            qemu-system-x86_64 \
-              -kernel bzImage \
-              -drive file=iotedge-qemu-image-qemux86-64.rootfs.ext4,format=raw \
-              -append "root=/dev/sda console=ttyS0" \
-              -nographic -m 512
-            ```
-            
-            ### Documentation
-            See the [README](https://github.com/${{ github.repository }}#readme) for detailed build and integration instructions.
+          body_path: release-notes.md
