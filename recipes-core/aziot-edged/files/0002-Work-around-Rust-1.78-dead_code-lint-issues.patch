@@ -2,6 +2,7 @@ From 786983f0adc6352286e0ffe10a3a214b9b40f5ff Mon Sep 17 00:00:00 2001
 Date: Thu, 1 Aug 2024 00:39:45 +0000
 Subject: [PATCH] Work around Rust 1.78 dead_code lint issues
 
+Upstream-Status: Inappropriate [oe-specific]
 ---
  edgelet/iotedge/src/lib.rs | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
