@@ -15,7 +15,7 @@ inherit cargo cargo-update-recipe-crates pkgconfig
 CARGO_INSTALL_LIBRARIES = "1"
 
 SRC_URI += "gitsm://github.com/Azure/iot-identity-service.git;protocol=https;nobranch=1"
-SRCREV = "1a7a6e70c3a20389fd24090bba201b7fdd7de582"
+SRCREV = "a6b1d1628be550ddda8cc65573e509c753b7cb65"
 CARGO_SRC_DIR = "key/aziot-keys"
 
 require ${BPN}-${PV}-crates.inc
