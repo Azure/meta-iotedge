@@ -116,7 +116,16 @@ jobs:
 
           # GitHub otherwise compares generated notes against the most recently
           # published release, which may be from the other supported release line.
-          PREVIOUS_TAG="$(git tag --list "${SERIES}.*" --sort=-version:refname \
+          # Configure Git's version sort so prereleases sort before their stable
+          # release, while numeric Yocto-layer revisions sort after it:
+          # beta < rc < stable < -1 < -2. Limit candidates to ancestors of the
+          # checked-out tag so manually rerunning an older release can't select
+          # a newer tag as its comparison base.
+          PREVIOUS_TAG="$(git \
+            -c versionsort.suffix=-beta \
+            -c versionsort.suffix=-rc \
+            -c versionsort.suffix= \
+            tag --list "${SERIES}.*" --merged=HEAD --sort=-version:refname \
             | grep -Fxv "$VERSION" \
             | head -n 1 || true)"
 
