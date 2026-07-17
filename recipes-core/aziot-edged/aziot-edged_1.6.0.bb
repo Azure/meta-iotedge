@@ -9,7 +9,7 @@ LIC_FILES_CHKSUM = " \
 inherit cargo cargo-update-recipe-crates pkgconfig
 
 SRC_URI += "git://github.com/Azure/iotedge.git;protocol=https;nobranch=1"
-SRCREV = "2567ba1b0e9a39ec69c92cc16c494253d9d2b2b9"
+SRCREV = "314983eaa92809521518a95631a22d7a9259a3eb"
 CARGO_SRC_DIR = "edgelet"
 CARGO_BUILD_FLAGS += "-p aziot-edged"
 CARGO_LOCK_SRC_DIR = "${S}/edgelet"

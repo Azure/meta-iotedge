@@ -6,6 +6,7 @@ The Yocto Rust toolchain's sysroot does not include panic_abort compiled
 with the abort strategy. Explicitly set panic = 'unwind' in the workspace
 profile sections for compatibility with the Yocto-provided Rust sysroot.
 
+Upstream-Status: Inappropriate [oe-specific]
 ---
  Cargo.toml | 4 ++--
  1 file changed, 2 insertions(+), 2 deletions(-)

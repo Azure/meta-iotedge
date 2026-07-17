@@ -1,1 +1,0 @@
-export VERSION = "1.6.0-rc.1"

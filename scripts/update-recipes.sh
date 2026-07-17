@@ -215,15 +215,38 @@ prepare_repo() {
 
 # Resolve the patch dir for a package version, mirroring bitbake FILESPATH
 # precedence: prefer the version-specific dir recipes-core/<pkg>/<pkg>-<ver>/,
-# fall back to the shared recipes-core/<pkg>/files/ dir. Prints the dir on
-# stdout, or nothing if neither has .patch files. This is the same order the
-# build uses to resolve file://, so the patches we wire and apply match what
-# the build picks up. Today 1.5.x patches live in files/ and 1.6.x patches
-# live in the version dir.
+# then the newest same-line (same major.minor) version dir, and only then fall
+# back to the shared recipes-core/<pkg>/files/ dir. Prints the dir on stdout, or
+# nothing if none have .patch files.
+#
+# The same-line fallback matters for a fresh upstream GA: when e.g. 1.6.0 GAs
+# and no 1.6.0/ patch dir exists yet, the previous 1.6.x dir (e.g. 1.6.0-rc.1/)
+# is the right source-compat patch set to try. Without it, resolution fell all
+# the way through to files/ (the 1.5.x patches), whose Cargo.toml line anchors
+# do not match 1.6 source, so 'git apply' failed and the watch-upstream job
+# broke on the GA of 1.6.0. Patches are still applied with strict 'git apply',
+# so a genuinely incompatible carried patch still fails loudly (as it should);
+# this only stops us from picking the wrong LTS line's patches.
 resolve_patch_dir() {
     local recipe_dir="$1" pkg="$2" ver="$3"
     if compgen -G "${recipe_dir}/${pkg}-${ver}/*.patch" >/dev/null; then
         echo "${recipe_dir}/${pkg}-${ver}"
+        return 0
+    fi
+    # Newest same major.minor line dir that carries patches (e.g. for 1.6.0,
+    # match 1.6.* dirs like 1.6.0-rc.1). cut on '.' yields 1.6 for both 1.6.0
+    # and 1.6.0-rc.1. Sort version-aware and take the highest.
+    local line same_line_dir
+    line=$(echo "${ver}" | cut -d. -f1,2)
+    same_line_dir=$(
+        for d in "${recipe_dir}/${pkg}-${line}."*/; do
+            [[ -d "${d}" ]] || continue
+            compgen -G "${d}*.patch" >/dev/null || continue
+            basename "${d}"
+        done | sort -V | tail -1
+    )
+    if [[ -n "${same_line_dir}" ]]; then
+        echo "${recipe_dir}/${same_line_dir}"
     elif compgen -G "${recipe_dir}/files/*.patch" >/dev/null; then
         echo "${recipe_dir}/files"
     fi
