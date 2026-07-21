@@ -40,12 +40,26 @@ if [[ $# -lt 1 ]]; then
 fi
 branch=${1}
 
+# Template/codename may differ from the actual Yocto layer branch. The
+# `scarthgap-1.6` template builds IoT Edge 1.6 on Yocto 5.0 (Scarthgap) layers,
+# so it fetches the same upstream layers as `scarthgap` but swaps meta-rust for
+# meta-lts-mixins scarthgap/rust (Rust 1.92, needed for 1.6). Map the template
+# name to the real Yocto branch here.
+YOCTO_BRANCH="${branch}"
+USE_LTS_MIXINS=0
+case "${branch}" in
+    scarthgap-1.6)
+        YOCTO_BRANCH="scarthgap"
+        USE_LTS_MIXINS=1
+        ;;
+esac
+
 # The poky "combo" repo was deprecated upstream starting with Yocto 6.0
 # (Wrynose), so wrynose and later must be assembled from the split repos.
 # Scarthgap (5.0) and earlier still ship the combo poky repo.
 # Default: combo layout, unless the codename is known to need split repos.
 SPLIT_REPO=0
-case "${branch}" in
+case "${YOCTO_BRANCH}" in
     wrynose) SPLIT_REPO=1 ;;  # Yocto 6.0 LTS: split repos (combo deprecated)
 esac
 # Explicit override for future codenames / testing: FORCE_SPLIT_REPO=1|0
@@ -145,22 +159,22 @@ update_repo() {
 METAOE_URI="https://git.openembedded.org/meta-openembedded.git"
 METAOE_UPSTREAM_URI="${METAOE_URI}"
 METAOE_PATH="poky/meta-openembedded"
-METAOE_REV="${METAOE_REV-refs/remotes/origin/${branch}}"
+METAOE_REV="${METAOE_REV-refs/remotes/origin/${YOCTO_BRANCH}}"
 
 METAVIRT_URI="https://git.yoctoproject.org/meta-virtualization"
 METAVIRT_UPSTREAM_URI="${METAVIRT_URI}"
 METAVIRT_PATH="poky/meta-virtualization"
-METAVIRT_REV="${METAVIRT_REV-refs/remotes/origin/${branch}}"
+METAVIRT_REV="${METAVIRT_REV-refs/remotes/origin/${YOCTO_BRANCH}}"
 
 METASECURITY_URI="https://git.yoctoproject.org/meta-security"
 METASECURITY_UPSTREAM_URI="${METASECURITY_URI}"
 METASECURITY_PATH="poky/meta-security"
-METASECURITY_REV="${METASECURITY_REV-refs/remotes/origin/${branch}}"
+METASECURITY_REV="${METASECURITY_REV-refs/remotes/origin/${YOCTO_BRANCH}}"
 
 METACLANG_URI="https://github.com/kraj/meta-clang"
 METACLANG_UPSTREAM_URI="${METACLANG_URI}"
 METACLANG_PATH="poky/meta-clang"
-METACLANG_REV="${METACLANG_REV-refs/remotes/origin/${branch}}"
+METACLANG_REV="${METACLANG_REV-refs/remotes/origin/${YOCTO_BRANCH}}"
 
 METAIOTEDGE_URI="."
 METAIOTEDGE_PATH="poky/meta-iotedge"
@@ -179,7 +193,7 @@ if [[ "${SPLIT_REPO}" == "1" ]]; then
 	# oe-core provides poky/meta + scripts + oe-init-build-env
 	OECORE_URI="https://git.openembedded.org/openembedded-core"
 	OECORE_PATH="poky"
-	OECORE_REV="${OECORE_REV-refs/remotes/origin/${branch}}"
+	OECORE_REV="${OECORE_REV-refs/remotes/origin/${YOCTO_BRANCH}}"
 
 	# bitbake is its own repo on wrynose. oe-core wrynose pairs with bitbake 2.18.
 	BITBAKE_URI="https://git.openembedded.org/bitbake"
@@ -189,7 +203,7 @@ if [[ "${SPLIT_REPO}" == "1" ]]; then
 	# meta-yocto provides meta-poky + meta-yocto-bsp
 	METAYOCTO_URI="https://git.yoctoproject.org/meta-yocto"
 	METAYOCTO_PATH="poky/meta-yocto"
-	METAYOCTO_REV="${METAYOCTO_REV-refs/remotes/origin/${branch}}"
+	METAYOCTO_REV="${METAYOCTO_REV-refs/remotes/origin/${YOCTO_BRANCH}}"
 
 	if [[ "${GIT_MIRROR}" == "github" ]]; then
 		OECORE_URI=$(verify_github_mirror "openembedded-core" "https://github.com/openembedded/openembedded-core.git" "${OECORE_URI}")
@@ -214,18 +228,32 @@ if [[ "${SPLIT_REPO}" == "1" ]]; then
 	ln -sf meta-yocto/meta-yocto-bsp poky/meta-yocto-bsp || die "unable to symlink meta-yocto-bsp"
 else
 	# ---- Scarthgap / Kirkstone combo poky repo ----
-	echo "Using poky combo-repo layout for '${branch}'."
+	echo "Using poky combo-repo layout for '${branch}' (Yocto branch '${YOCTO_BRANCH}')."
 
 	POKY_URI="https://git.yoctoproject.org/poky.git"
 	POKY_UPSTREAM_URI="${POKY_URI}"
 	POKY_PATH="poky"
-	POKY_REV="${POKY_REV-refs/remotes/origin/${branch}}"
+	POKY_REV="${POKY_REV-refs/remotes/origin/${YOCTO_BRANCH}}"
 
-	METARUST_URI="https://github.com/meta-rust/meta-rust"
-	METARUST_PATH="poky/meta-rust"
-	# Pin to 1c4ef8c (before f067576 which broke kirkstone compatibility by using undefined RUST_VERSION)
-	# This provides Rust 1.78.0 which is sufficient for IoT Edge 1.5
-	METARUST_REV="${METARUST_REV-1c4ef8cf7dea391b6a967a13abc61e878a8e778d}"
+	if [[ "${USE_LTS_MIXINS}" == "1" ]]; then
+		# scarthgap-1.6: IoT Edge 1.6 needs newer Rust than Poky Scarthgap
+		# (1.75) provides. Use Yocto's official meta-lts-mixins scarthgap/rust
+		# branch, which ships Rust 1.92.0 and is maintained through Scarthgap
+		# EOL (Apr 2028). 1.92 is sufficient for the whole 1.6 product (IIS +
+		# edgelet both compile clean on 1.92 with the sysinfo 0.38.4 pin the
+		# recipes already carry). The template masks Poky's rust/cargo so this
+		# layer provides the toolchain, mirroring the Kirkstone/meta-rust setup.
+		METAMIXINS_URI="https://git.yoctoproject.org/meta-lts-mixins"
+		METAMIXINS_UPSTREAM_URI="${METAMIXINS_URI}"
+		METAMIXINS_PATH="poky/meta-lts-mixins"
+		METAMIXINS_REV="${METAMIXINS_REV-refs/remotes/origin/scarthgap/rust}"
+	else
+		METARUST_URI="https://github.com/meta-rust/meta-rust"
+		METARUST_PATH="poky/meta-rust"
+		# Pin to 1c4ef8c (before f067576 which broke kirkstone compatibility by using undefined RUST_VERSION)
+		# This provides Rust 1.78.0 which is sufficient for IoT Edge 1.5
+		METARUST_REV="${METARUST_REV-1c4ef8cf7dea391b6a967a13abc61e878a8e778d}"
+	fi
 
 	if [[ "${GIT_MIRROR}" == "github" ]]; then
 		POKY_URI=$(verify_github_mirror "poky" "https://github.com/yoctoproject/poky.git" "${POKY_UPSTREAM_URI}")
@@ -236,7 +264,11 @@ else
 	update_repo "${METAVIRT_URI}"    "${METAVIRT_PATH}"    "${METAVIRT_REV}"
 	update_repo "${METASECURITY_URI}" "${METASECURITY_PATH}" "${METASECURITY_REV}"
 	update_repo "${METACLANG_URI}"   "${METACLANG_PATH}"   "${METACLANG_REV}"
-	update_repo "${METARUST_URI}"    "${METARUST_PATH}"    "${METARUST_REV}"
+	if [[ "${USE_LTS_MIXINS}" == "1" ]]; then
+		update_repo "${METAMIXINS_URI}" "${METAMIXINS_PATH}" "${METAMIXINS_REV}"
+	else
+		update_repo "${METARUST_URI}"    "${METARUST_PATH}"    "${METARUST_REV}"
+	fi
 fi
 
 rm -rf "${METAIOTEDGE_PATH}" || die "unable to clear old ${METAIOTEDGE_PATH}"
