@@ -249,8 +249,15 @@ too_many_lines = "allow"
 type_complexity = "allow"
 '''
 
-    unpackdir = d.getVar('UNPACKDIR')
-    if not unpackdir:
+    # UNPACK_ROOT resolves to UNPACKDIR on Wrynose (6.0) and falls back to
+    # WORKDIR on Scarthgap (5.0) -- exactly where the crates were unpacked and
+    # where EXTRA_OECARGO_PATHS point. The synthetic root must live at that
+    # common parent on BOTH releases. (Previously this bailed when UNPACKDIR
+    # was unset, so Scarthgap never got a root and the edgelet's
+    # path-redirected cert/*-async crates could not inherit
+    # workspace.dependencies.hyper -> "failed to find a workspace root".)
+    unpack_root = d.getVar('UNPACK_ROOT') or d.getVar('WORKDIR')
+    if not unpack_root:
         return
 
     # Derive workspace members from the IIS crates we actually fetched, using
@@ -269,7 +276,7 @@ type_complexity = "allow"
             rel = destsuffix.rstrip('/')
             # Only crates that physically live under UNPACKDIR and carry a
             # Cargo.toml are real workspace members.
-            if os.path.exists(os.path.join(unpackdir, rel, 'Cargo.toml')):
+            if os.path.exists(os.path.join(unpack_root, rel, 'Cargo.toml')):
                 members.append(rel)
             else:
                 # Top-level dir of a non-crate destsuffix gets excluded so a
@@ -278,13 +285,30 @@ type_complexity = "allow"
                 if top:
                     excludes.add(top)
 
-    # The edgelet (and any other source tree) under UNPACKDIR has its own
+    # Only synthesize the workspace root when the fetched crates actually use
+    # Cargo workspace inheritance (the 1.6 split-crate layout: `<dep> =
+    # { workspace = true }` / `[lints] workspace = true`). The 1.5.x IIS crates
+    # are self-contained and must NOT receive a synthetic root -- its 1.6
+    # dependency versions would be wrong for them, and 1.5 never inherited from
+    # a workspace so it does not need one. This makes the fix self-activating
+    # per release/version: no-op on 1.5, active on 1.6, on either Yocto line.
+    def _uses_workspace_inheritance(rel):
+        try:
+            with open(os.path.join(unpack_root, rel, 'Cargo.toml')) as fh:
+                txt = fh.read()
+        except OSError:
+            return False
+        return 'workspace = true' in txt or 'workspace.dependencies' in txt
+    if not any(_uses_workspace_inheritance(m) for m in members):
+        return
+
+    # The edgelet (and any other source tree) under the unpack root has its own
     # [workspace]; exclude every top-level dir we did not list as a member so
     # cargo never treats them as part of this synthetic IIS workspace.
     member_tops = {m.split('/', 1)[0] for m in members}
     try:
-        for entry in os.listdir(unpackdir):
-            full = os.path.join(unpackdir, entry)
+        for entry in os.listdir(unpack_root):
+            full = os.path.join(unpack_root, entry)
             if entry in member_tops:
                 continue
             if entry in ('cargo_home',):
@@ -296,7 +320,7 @@ type_complexity = "allow"
 
     if not members:
         bb.warn('iot-identity-service.inc: no IIS workspace members found under '
-                '%s; skipping synthetic workspace root' % unpackdir)
+                '%s; skipping synthetic workspace root' % unpack_root)
         return
 
     members.sort()
@@ -316,7 +340,7 @@ type_complexity = "allow"
     lines.append(iis_workspace_deps.strip())
     lines.append('')
 
-    root = os.path.join(unpackdir, 'Cargo.toml')
+    root = os.path.join(unpack_root, 'Cargo.toml')
     with open(root, 'w') as f:
         f.write('\n'.join(lines))
     bb.note('iot-identity-service.inc: wrote synthetic IIS workspace root %s '
