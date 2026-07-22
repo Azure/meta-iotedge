@@ -96,6 +96,17 @@ jobs:
               TEMPLATE="scarthgap"
               RELEASE_SUMMARY="This is a maintenance release for the **Scarthgap (Yocto 5.0) / IoT Edge 1.5.x** line. It is not a downgrade from a 1.6.x release."
               ;;
+            1.6.*-scarthgap|1.6.*-scarthgap.*)
+              # IoT Edge 1.6 built on Yocto 5.0 (Scarthgap) via the
+              # scarthgap-1.6 template + meta-lts-mixins Rust, for customers who
+              # need 1.6 before they can move to Wrynose (6.0). Shares the 1.6.x
+              # daemon/recipes with the Wrynose line; the '-scarthgap' tag
+              # suffix is what selects this Yocto line.
+              SERIES="1.6"
+              YOCTO="Scarthgap"
+              TEMPLATE="scarthgap-1.6"
+              RELEASE_SUMMARY="This release delivers **IoT Edge 1.6.x on Yocto 5.0 (Scarthgap)**, for devices that need 1.6 before moving to Wrynose (Yocto 6.0). It uses the same 1.6.x daemon as the Wrynose line."
+              ;;
             1.6.*)
               SERIES="1.6"
               YOCTO="Wrynose"
@@ -114,30 +125,62 @@ jobs:
             PRERELEASE=false
           fi
 
+          # Distinguish the secondary Scarthgap-1.6 line from the primary
+          # Wrynose 1.6 line. Both are SERIES=1.6, but Scarthgap-1.6 is a
+          # compatibility line: it must never take the "Latest" badge from the
+          # primary Wrynose release, and its release notes / previous-tag
+          # comparison must stay within its own '-scarthgap'-suffixed tags.
+          if [[ "$TEMPLATE" == "scarthgap-1.6" ]]; then
+            IS_SCARTHGAP_16=true
+          else
+            IS_SCARTHGAP_16=false
+          fi
+
           # GitHub otherwise compares generated notes against the most recently
           # published release, which may be from the other supported release line.
           # Configure Git's version sort so prereleases sort before their stable
           # release, while numeric Yocto-layer revisions sort after it:
           # beta < rc < stable < -1 < -2. Limit candidates to ancestors of the
           # checked-out tag so manually rerunning an older release can't select
-          # a newer tag as its comparison base.
+          # a newer tag as its comparison base. Scope the tag glob to the Yocto
+          # line so a Wrynose 1.6 release does not compare against a Scarthgap-1.6
+          # tag (or vice versa): Scarthgap-1.6 uses '1.6.*-scarthgap*', Wrynose
+          # 1.6 uses '1.6.*' with the '-scarthgap' tags filtered out.
+          if [[ "$IS_SCARTHGAP_16" == "true" ]]; then
+            TAG_GLOB="1.6.*-scarthgap*"
+            TAG_FILTER="cat"
+          elif [[ "$SERIES" == "1.6" ]]; then
+            TAG_GLOB="1.6.*"
+            TAG_FILTER="grep -v -- -scarthgap"
+          else
+            TAG_GLOB="${SERIES}.*"
+            TAG_FILTER="cat"
+          fi
           PREVIOUS_TAG="$(git \
             -c versionsort.suffix=-beta \
             -c versionsort.suffix=-rc \
             -c versionsort.suffix= \
-            tag --list "${SERIES}.*" --merged=HEAD --sort=-version:refname \
+            tag --list "${TAG_GLOB}" --merged=HEAD --sort=-version:refname \
             | grep -Fxv "$VERSION" \
+            | ${TAG_FILTER} \
             | head -n 1 || true)"
 
           # Before 1.6 GA, 1.5 remains the latest stable line. After 1.6 GA,
           # later 1.5 maintenance releases must not move Latest back to 1.5.
+          # "1.6 GA" here means a Wrynose (primary-line) stable release, so the
+          # startswith check excludes '-scarthgap' compatibility tags.
           HAS_STABLE_16="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
-            --jq 'any(.[]; .draft == false and .prerelease == false and (.tag_name | startswith("1.6.")))')"
-          if [[ "$SERIES" == "1.6" && "$PRERELEASE" == "false" ]]; then
+            --jq 'any(.[]; .draft == false and .prerelease == false and (.tag_name | startswith("1.6.")) and (.tag_name | contains("-scarthgap") | not))')"
+          if [[ "$SERIES" == "1.6" && "$PRERELEASE" == "false" && "$IS_SCARTHGAP_16" == "false" ]]; then
             HAS_STABLE_16=true
           fi
 
+          # Latest badge: only the primary Wrynose 1.6 stable line earns it.
+          # Scarthgap-1.6 is a compatibility line and is never Latest, so it
+          # can't override the Wrynose GA badge.
           if [[ "$PRERELEASE" == "true" ]]; then
+            MAKE_LATEST=false
+          elif [[ "$IS_SCARTHGAP_16" == "true" ]]; then
             MAKE_LATEST=false
           elif [[ "$SERIES" == "1.6" ]]; then
             MAKE_LATEST=true
@@ -167,14 +210,15 @@ jobs:
 
           ${RELEASE_SUMMARY}
 
-          The repository maintains two release lines side by side:
+          The repository maintains multiple release lines side by side:
 
           | Yocto release | IoT Edge line | Status |
           | --- | --- | --- |
           | Scarthgap (5.0) | 1.5.x | Active and supported through November 2026 |
           | Wrynose (6.0) | 1.6.x | ${WRYNOSE_STATUS} |
+          | Scarthgap (5.0) | 1.6.x (\`-scarthgap\` tags) | IoT Edge 1.6 on Yocto 5.0, for devices not yet on Wrynose |
 
-          Release tags can alternate between 1.5.x and 1.6.x. Choose the tag that matches your Yocto release.
+          Release tags select the line: \`1.5.x\` -> Scarthgap/1.5, \`1.6.x\` -> Wrynose/1.6, \`1.6.x-scarthgap\` -> Scarthgap/1.6. Choose the tag that matches your Yocto release.
 
           ## Build from source
 
