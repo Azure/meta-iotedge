@@ -8,13 +8,14 @@ Please see the corresponding sections below for details.
 Adding the meta-iotedge layer to your build
 =================================================
 
-Use the templates in `conf/templates/<release>` on the **main** branch for your Yocto release. The `main` branch supports two Yocto LTSes side by side, with the matching IoT Edge version selected by the template:
+Use the templates in `conf/templates/<release>` on the **main** branch for your Yocto release. The `main` branch supports multiple Yocto LTSes side by side, with the matching IoT Edge version selected by the template:
 
 **Active and maintained (main branch)**:
 * **Wrynose (Yocto 6.0)** - IoT Edge 1.6.x. `git clone -b main https://github.com/Azure/meta-iotedge.git`, then build with `./scripts/build.sh wrynose`.
 * **Scarthgap (Yocto 5.0)** - IoT Edge 1.5.x. `git clone -b main https://github.com/Azure/meta-iotedge.git`, then build with `./scripts/build.sh scarthgap`.
+* **Scarthgap (Yocto 5.0) with IoT Edge 1.6.x** - for devices that need 1.6 but cannot yet move to Wrynose (6.0). Build with `./scripts/build.sh scarthgap-1.6`. See [Scarthgap with IoT Edge 1.6](#scarthgap-with-iot-edge-16) below.
 
-The recipes for both IoT Edge versions live on `main` at the same time; each template pins the matching `PREFERRED_VERSION_*` so a Wrynose build produces 1.6.x and a Scarthgap build produces 1.5.x.
+The recipes for both IoT Edge versions live on `main` at the same time; each template pins the matching `PREFERRED_VERSION_*` so a Wrynose build produces 1.6.x and a Scarthgap build produces 1.5.x. The `scarthgap-1.6` template reuses the 1.6.x recipes on Scarthgap layers with a newer Rust toolchain (see below).
 
 **Kirkstone (out of support April 2026)**:
 * The `kirkstone` branch is frozen at IoT Edge 1.4.27 and will not receive further updates.
@@ -38,6 +39,7 @@ Branching Strategy and Timelines
 | :- | :- | :- | :- |
 | Wrynose | 1.6.x | main | Active and maintained |
 | Scarthgap | 1.5.x | main | Active and maintained |
+| Scarthgap | 1.6.x (`scarthgap-1.6` template) | main | Active and maintained |
 | Kirkstone | 1.5.x | main (templates only) | Out of Support Apr'2026 |
 | Kirkstone | 1.4.x | kirkstone (frozen) | Not active and Not maintained |
 | Dunfell | 1.4.x  | dunfell | Not active and Not maintained |
@@ -151,6 +153,24 @@ entirely in your `.bbappend` if you need full control. See [#181](https://github
 Kirkstone templates intentionally use `meta-rust` to provide Rust 1.78+ (Poky Kirkstone ships
 Rust 1.59, which is too old for IoT Edge 1.5). This is not required for Scarthgap. The `fetch.sh`
 script clones meta-rust automatically when targeting Kirkstone.
+
+Scarthgap with IoT Edge 1.6
+---------------------------
+
+The `scarthgap-1.6` template builds IoT Edge 1.6.x on Yocto 5.0 (Scarthgap) layers, for devices
+that need 1.6 before they can move to Wrynose (Yocto 6.0). It reuses the same 1.6.x recipes as the
+Wrynose line; only the Yocto layers and Rust toolchain differ.
+
+IoT Edge 1.6 needs a newer Rust than Poky Scarthgap ships (5.0 has 1.75). Rather than a local
+backport, `scarthgap-1.6` uses Yocto's official [`meta-lts-mixins`](https://git.yoctoproject.org/meta-lts-mixins)
+`scarthgap/rust` branch, which provides Rust 1.92.0 and is maintained through Scarthgap EOL
+(April 2028). 1.92 is sufficient for the entire 1.6 product: both `iot-identity-service` and the
+edgelet daemon compile cleanly with the `sysinfo` 0.38.4 pin the recipes already carry. The
+template masks Poky's `rust`/`cargo` so `meta-lts-mixins` provides the toolchain, mirroring the
+Kirkstone/meta-rust setup. `fetch.sh scarthgap-1.6` clones `meta-lts-mixins` automatically.
+
+Build with `./scripts/build.sh scarthgap-1.6`. Releases for this line use the `-scarthgap` tag
+suffix (for example `1.6.0-scarthgap`) so they are distinct from the Wrynose 1.6.x releases.
 
 
 Contributing

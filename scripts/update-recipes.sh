@@ -7,7 +7,7 @@ Usage: update-recipes.sh [options]
 
 Options:
     --iotedge-version <ver>   IoT Edge version tag (e.g., 1.5.35)
-    --template <name>         Yocto template (kirkstone, scarthgap, or wrynose, default: scarthgap)
+    --template <name>         Yocto template (kirkstone, scarthgap, wrynose, or scarthgap-1.6, default: scarthgap)
     --clean                   Remove old version-specific recipe files before generating
     --skip-validate           Skip bitbake validation (not recommended)
     --workdir <path>          Work directory (default: mktemp)
@@ -56,8 +56,8 @@ if [[ -z "${IOTEDGE_VERSION}" ]]; then
 fi
 
 # Validate template
-if [[ "${TEMPLATE}" != "scarthgap" && "${TEMPLATE}" != "kirkstone" && "${TEMPLATE}" != "wrynose" ]]; then
-    echo "Error: --template must be 'scarthgap', 'kirkstone', or 'wrynose'"
+if [[ "${TEMPLATE}" != "scarthgap" && "${TEMPLATE}" != "kirkstone" && "${TEMPLATE}" != "wrynose" && "${TEMPLATE}" != "scarthgap-1.6" ]]; then
+    echo "Error: --template must be 'scarthgap', 'kirkstone', 'wrynose', or 'scarthgap-1.6'"
     exit 1
 fi
 echo "Using template: ${TEMPLATE}"
@@ -73,12 +73,36 @@ echo "Using template: ${TEMPLATE}"
 #      dir at once. scarthgap/kirkstone keep the legacy shared <pkg>-crates.inc
 #      name they have always used.
 # Keep both shapes byte-identical to what already ships for each series.
-if [[ "${TEMPLATE}" == "wrynose" ]]; then
+#
+# The 1.6 recipe set is shared: it is built by BOTH the Wrynose (6.0) line and
+# the Scarthgap-1.6 (5.0) line. Both must emit the SAME recipe shape (per-version
+# crates.inc + the release-agnostic S expression), so the `scarthgap-1.6`
+# template selects the same shape as `wrynose` here. Do NOT let scarthgap-1.6
+# fall through to the 1.5/legacy ELSE branch: that would emit the shared
+# crates.inc name and a hardcoded S = "${WORKDIR}/git", producing the wrong
+# recipe text and failing the recipe-consistency check.
+if [[ "${TEMPLATE}" == "wrynose" || "${TEMPLATE}" == "scarthgap-1.6" ]]; then
     PER_VERSION_CRATES=true
-    EMIT_S_GIT=false
+    # The 1.6 recipe set lives on `main` and is built by BOTH the Wrynose (6.0)
+    # line and the Scarthgap-1.6 (5.0) line, which unpack git source to
+    # different paths. A hardcoded S = "${WORKDIR}/git" is correct only on
+    # Scarthgap and hard-errors on Wrynose; omitting S is correct only on
+    # Wrynose and breaks do_patch/cargo on Scarthgap. Emit an expression that
+    # mirrors the git fetcher on either release: source lands at
+    # ${UNPACKDIR:-${WORKDIR}}/${BB_GIT_DEFAULT_DESTSUFFIX:-git}, which resolves
+    # to ${WORKDIR}/git on Scarthgap and ${WORKDIR}/sources/${BP} on Wrynose.
+    S_LINE='# Yocto release-agnostic source dir: mirror the git fetcher so ONE recipe is
+# correct on both Yocto lines that build it. git unpacks to
+# ${UNPACKDIR:-${WORKDIR}}/${BB_GIT_DEFAULT_DESTSUFFIX:-git}: Scarthgap (5.0)
+# leaves both unset -> ${WORKDIR}/git; Wrynose (6.0) sets them -> ${WORKDIR}/
+# sources/${BP}. A hardcoded /git breaks Wrynose; omitting S breaks Scarthgap.
+S = "${@(d.getVar('"'"'UNPACKDIR'"'"') or d.getVar('"'"'WORKDIR'"'"')) + '"'"'/'"'"' + (d.getVar('"'"'BB_GIT_DEFAULT_DESTSUFFIX'"'"') or '"'"'git'"'"')}"'$'\n'
 else
     PER_VERSION_CRATES=false
-    EMIT_S_GIT=true
+    # 1.5 (Scarthgap/Kirkstone, Yocto <=5.0): UNPACKDIR is unset and git unpacks
+    # to ${WORKDIR}/git, so the legacy explicit S is both correct and required
+    # (the default S = ${WORKDIR}/${BP} would point at the wrong dir).
+    S_LINE='S = "${WORKDIR}/git"'$'\n'
 fi
 
 # Check dependencies early (before first use of curl/git/python3)
@@ -370,12 +394,8 @@ for pkg in aziot-edged iotedge; do
         crates_inc="${recipe_dir}/${pkg}-crates.inc"
         crates_require="\${BPN}-crates.inc"
     fi
-    # wrynose (Yocto 6.0) sets S by default and rejects the old explicit value.
-    if [[ "${EMIT_S_GIT}" == true ]]; then
-        s_line='S = "${WORKDIR}/git"'$'\n'
-    else
-        s_line=""
-    fi
+    # S line is series-dependent; computed once above as S_LINE.
+    s_line="${S_LINE}"
 
     # Generate .bb (template — only metadata + SRCREV change between versions)
     cat > "${bb}" <<BBEOF
@@ -467,12 +487,8 @@ for pkg in aziotd aziotctl aziot-keys; do
         crates_inc="${recipe_dir}/${pkg}-crates.inc"
         crates_require="\${BPN}-crates.inc"
     fi
-    # wrynose (Yocto 6.0) sets S by default and rejects the old explicit value.
-    if [[ "${EMIT_S_GIT}" == true ]]; then
-        s_line='S = "${WORKDIR}/git"'$'\n'
-    else
-        s_line=""
-    fi
+    # S line is series-dependent; computed once above as S_LINE.
+    s_line="${S_LINE}"
 
     # aziot-keys builds a cdylib (no binary). On wrynose (Yocto 6.0) the cargo
     # bbclass only installs the .so when CARGO_INSTALL_LIBRARIES is set, so wire

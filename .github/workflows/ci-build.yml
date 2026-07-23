@@ -101,8 +101,17 @@ jobs:
           # Tag-triggered builds (releases) pick the Yocto template from the
           # IoT Edge version: 1.6.x -> Wrynose, 1.5.x -> Scarthgap. Branch
           # builds map kirkstone -> kirkstone, everything else -> scarthgap.
+          #
+          # Scarthgap-1.6 override: IoT Edge 1.6 also builds on Yocto 5.0
+          # (Scarthgap) via the scarthgap-1.6 template, for customers who need
+          # 1.6 before they can move to Wrynose (6.0). Because that shares the
+          # 1.6.x version with the Wrynose line, a bare 1.6.x tag can't
+          # disambiguate it. A release tag with the '-scarthgap' suffix
+          # (e.g. 1.6.0-scarthgap, 1.6.1-scarthgap) selects the scarthgap-1.6
+          # template; a plain 1.6.x tag stays Wrynose.
           REF="${{ inputs.ref || github.base_ref || github.ref_name }}"
           case "$REF" in
+            *-scarthgap|*-scarthgap.*) echo "template=scarthgap-1.6" >> "$GITHUB_OUTPUT" ;;
             1.6.*) echo "template=wrynose" >> "$GITHUB_OUTPUT" ;;
             1.5.*) echo "template=scarthgap" >> "$GITHUB_OUTPUT" ;;
             kirkstone) echo "template=kirkstone" >> "$GITHUB_OUTPUT" ;;
@@ -118,14 +127,17 @@ jobs:
           # Release tags (release.yml passes inputs.ref = 1.5.* / 1.6.*) build
           # ONLY that line's template, so we don't double-build a release or
           # build the wrong line (e.g. wrynose for a 1.5 tag). PR and push
-          # builds, which is where recipe changes land, build BOTH LTS lines
-          # (scarthgap = 1.5, wrynose = 1.6) so a passing check means both
-          # lines fetch, build, and boot. kirkstone is intentionally left out
+          # builds, which is where recipe changes land, build ALL LTS lines
+          # (scarthgap = 1.5, wrynose = 1.6, scarthgap-1.6 = 1.6-on-Yocto-5.0)
+          # so a passing check means every shipped line fetches, builds, and
+          # boots. kirkstone is intentionally left out
           # of the PR matrix: it shares the 1.5 recipe with scarthgap, so a
           # third leg adds cost without testing a distinct recipe shape.
           #
           # A tag is detected from inputs.ref (workflow_call from release.yml)
-          # or github.ref_type. Branch/PR events fall through to both lines.
+          # or github.ref_type. Branch/PR events fall through to all lines.
+          # A '-scarthgap'-suffixed 1.6 tag (e.g. 1.6.0-scarthgap) is also a
+          # release tag and collapses to the single scarthgap-1.6 template.
           REF="${{ inputs.ref || github.ref_name }}"
           IS_TAG="false"
           if [ "${{ github.ref_type }}" = "tag" ]; then
@@ -139,8 +151,8 @@ jobs:
             # Single template, matching the release line.
             templates="[\"${{ steps.set-template.outputs.template }}\"]"
           else
-            # Double-build both LTS lines on PR/push.
-            templates='["scarthgap","wrynose"]'
+            # Multi-build every LTS line on PR/push.
+            templates='["scarthgap","wrynose","scarthgap-1.6"]'
           fi
           echo "templates=${templates}" >> "$GITHUB_OUTPUT"
           echo "Build matrix templates: ${templates}"
@@ -204,9 +216,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # PR/push builds both LTS lines (scarthgap = 1.5, wrynose = 1.6);
-        # release tags collapse to the single matching template. See the
-        # set-matrix step in check-changes.
+        # PR/push builds every LTS line (scarthgap = 1.5, wrynose = 1.6,
+        # scarthgap-1.6 = 1.6-on-Yocto-5.0); release tags collapse to the
+        # single matching template. See the set-matrix step in check-changes.
         template: ${{ fromJSON(needs.check-changes.outputs.templates) }}
     runs-on:
     - self-hosted
@@ -305,8 +317,9 @@ jobs:
       - name: Determine overall status
         run: |
           # needs.build.result is the AGGREGATE of every matrix leg: GitHub
-          # reports 'success' only when ALL legs (scarthgap and wrynose on a
-          # PR/push) succeed, and 'failure' if any single leg fails. So this
+          # reports 'success' only when ALL legs (scarthgap, wrynose, and
+          # scarthgap-1.6 on a PR/push) succeed, and 'failure' if any single
+          # leg fails. So this
           # check fails the moment one line fails to build or boot, which is
           # what makes the green check honest across both LTS lines.
           if [ "${{ needs.check-changes.outputs.docs_only }}" == "true" ]; then
