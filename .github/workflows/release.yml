@@ -32,19 +32,19 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out release tag and history
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ inputs.tag || github.ref_name }}
           fetch-depth: 0
 
       - name: Download RPM packages
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: rpm-packages-${{ needs.build.outputs.template }}
           path: release-artifacts/rpm
 
       - name: Download QEMU image
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: iotedge-qemu-image-${{ needs.build.outputs.template }}
           path: release-artifacts/qemu
@@ -262,7 +262,7 @@ jobs:
           EOF
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
           name: IoT Edge Yocto Layer ${{ steps.artifacts.outputs.version }} (${{ steps.metadata.outputs.yocto }} / ${{ steps.metadata.outputs.series }}.x)
