@@ -25,7 +25,7 @@ jobs:
       update_type: ${{ steps.check.outputs.update_type }}          # none, significant, or docker-only
     steps:
       - name: Checkout
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Check upstream releases
         id: check
@@ -54,7 +54,7 @@ jobs:
       options: --user root
     steps:
       - name: Checkout
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Fix git permissions
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
@@ -71,7 +71,7 @@ jobs:
             --clean
 
       - name: Create pull request
-        uses: peter-evans/create-pull-request@c5a7806660adbe173f04e3e038b0ccdcd758773c # v6.1.0
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           title: "Update to IoT Edge ${{ needs.check-upstream.outputs.release_version }}"
           commit-message: |
