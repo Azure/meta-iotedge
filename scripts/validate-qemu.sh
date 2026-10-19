@@ -56,6 +56,9 @@ cleanup() {
         kill "${RUNQEMU_PID}" >/dev/null 2>&1 || true
         wait "${RUNQEMU_PID}" >/dev/null 2>&1 || true
     fi
+    if [[ -n "${VERSION_CHECK_DIR:-}" ]]; then
+        rm -rf "${VERSION_CHECK_DIR}"
+    fi
 }
 trap cleanup EXIT
 
@@ -149,8 +152,16 @@ echo ""
 echo "=== IoT Edge Validation ==="
 echo ""
 
-echo "1. Checking iotedge version:"
-ssh_cmd "iotedge --version"
+echo "1. Verifying iotedge and all five installed RPM package versions:"
+VERSION_CHECK_DIR=$(mktemp -d)
+ssh_cmd_timeout 30 "iotedge --version" > "${VERSION_CHECK_DIR}/iotedge-version"
+# RPM is the release packaging contract: missing packages/manager are fatal.
+ssh_cmd_timeout 30 "rpm -q --qf '%{NAME} %{VERSION}\\n' iotedge aziot-edged aziotd aziotctl aziot-keys" \
+    > "${VERSION_CHECK_DIR}/rpm-versions"
+python3 "${SCRIPT_DIR}/verify-release-selection.py" \
+    --root "${REPO_ROOT}" --template "${TEMPLATE}" \
+    --iotedge-version-file "${VERSION_CHECK_DIR}/iotedge-version" \
+    --rpm-versions-file "${VERSION_CHECK_DIR}/rpm-versions"
 
 echo ""
 if [[ -n "${MOCK_IOTEDGE_CONFIG}" ]]; then

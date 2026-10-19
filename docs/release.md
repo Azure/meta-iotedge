@@ -1,7 +1,8 @@
 # Yocto + IoT Edge Release Guide
 
 This guide covers the parallel IoT Edge release process on `main`:
-IoT Edge 1.5.x for Yocto Scarthgap and IoT Edge 1.6.x for Yocto Wrynose.
+IoT Edge 1.5.x for Yocto Scarthgap, and IoT Edge 1.6.x for Yocto Wrynose
+and the Scarthgap compatibility template (`scarthgap-1.6`).
 Kirkstone uses templates on `main` and does not have a dedicated branch or CI
 runs.
 
@@ -43,7 +44,7 @@ flowchart TD
 
 1. **Wait for automated PR** — `watch-upstream.yml` creates it daily at 6:00 UTC
 2. **Check CI status** — Both "Build packages" and "QEMU validation" must pass
-3. **Merge the PR**
+3. **Merge the PR** only after the selected provider/source versions and guest package versions match the intended release. A green parse or printed version alone is insufficient.
 4. **Tag the release** with the upstream release version (not the daemon version):
 
    ```bash
@@ -69,7 +70,9 @@ flowchart TD
 - **Source**: [product-versions.json](https://github.com/Azure/azure-iotedge/blob/main/product-versions.json) in Azure/azure-iotedge
 - **Release version**: The overall product version (e.g., `1.5.35`) — used for git tags and stored as `IOTEDGE_RELEASE` in the version `.inc` file
 - **Daemon version**: The `aziot-edge` component version (e.g., `1.5.21`) — used for recipe filenames, `VERSION` export, and `SRCREV` (the actual source that gets compiled)
-- **Significant vs Docker-only**: If daemon version changed → update recipes; Docker-only → info issue
+- **Significant vs Docker-only**: If daemon or Identity Service version changed → update recipes; unchanged components with a newer product release → info issue.
+- **Parallel LTS detection**: inspect every supported `aziot-edge` product in the LTS channel, not only its first product.
+- **Selection**: generation updates the exact `PREFERRED_VERSION_*` values in every template for the affected product line. Both 1.6 templates use the independently resolved daemon and Identity Service versions. Recipe generation does not rely on BitBake fallback.
 
 Some releases only update Docker images (e.g., agent, hub, diagnostics) while the daemon binaries stay
 at an earlier version. Recipes must use the daemon version so the built binaries reference matching
@@ -79,7 +82,8 @@ The workflow uses `scripts/check-upstream.sh` to fetch `product-versions.json` a
 
 ```bash
 ./scripts/check-upstream.sh         # Key=value output
-./scripts/check-upstream.sh --json  # JSON output
+./scripts/check-upstream.sh --json  # Legacy single-plan JSON output
+./scripts/check-upstream.sh --plans-json  # Both maintained LTS plans
 ```
 
 ### GitHub Actions Workflows
@@ -128,6 +132,46 @@ The GitHub **Latest** marker follows the latest stable product generation:
 | main   | Wrynose (6.0 LTS) | `wrynose` |
 | main (templates only) | Kirkstone (out of support Apr'2026) | `kirkstone` |
 
+## Automation verification and permissions
+
+The watcher uses pinned GitHub-owned actions with a checked-in git/API helper. It
+updates the existing `automation/upstream-update` branch from a fresh base, processes
+both maintained LTS plans sequentially, and reuses its matching open PR. Repeated
+unchanged runs do not create commits. No-diff and merged-branch housekeeping runs
+even when no generation is needed. Docker-only notifications recognize exact
+line/release markers, including closed issues acknowledged by a maintainer.
+
+The separate repository/org setting **Allow GitHub Actions to create and approve
+pull requests** must permit PR creation. If disabled, an administrator is required.
+Token-created PR workflows may require writer approval; do not add a PAT or remove
+SHA pins merely to bypass policy.
+
+Fast offline checks:
+
+```bash
+python3 -m unittest discover -s tests
+node --test tests/*.cjs
+```
+
+CI regenerates all maintained templates, detects tracked and untracked drift, and
+checks actual BitBake providers before building. Release calls additionally verify
+that the product version and Yocto template match the release tag. The publisher
+requires all five runtime RPMs and nonempty rootfs/kernel assets, uploads to a draft,
+verifies uploaded bytes, then publishes. Reruns of immutable releases must have
+identical assets. Publishing is bounded to 512 MiB of aggregate compressed release
+assets; larger releases fail before API writes and require a streaming publisher.
+Historical tags without the checked-in verification/test tooling are rejected in
+preflight; this workflow does not overlay new tooling onto old source commits.
+No release should be tagged until the combined recipe and
+selection changes have passed the intended build/QEMU legs. The QEMU validation
+image retains package management so installed RPM versions can be checked; it
+also retains debug settings and is not a production image.
+
+These fixture tests do not replace actual recipe generation, BitBake, QEMU or an
+authorized live watcher/publisher run. Existing consumer `local.conf` files are
+not automatically migrated when sample templates change; the repository build
+script recreates its local configuration.
+
 ## Manual Recipe Updates
 
 When automation fails or you need manual control:
@@ -143,6 +187,8 @@ The script:
 2. Resolves git SHAs from version tags
 3. Generates `*.bb` and `*.inc` template files
 4. Parses `Cargo.lock` files to generate `*-crates.inc` (crate SRC_URI + sha256sums)
+5. Copies carried compatibility patches into the new recipe version directories
+6. Updates both matching templates from the resolved daemon/Identity Service pair, preserving the other LTS line
 
 Recipes inherit `cargo-update-recipe-crates` from OE-Core, which enables the
 `bitbake -c update_crates <recipe>` task. Crate data is stored in dedicated
@@ -188,7 +234,8 @@ Kirkstone does not run in CI; the templates are validated but builds are manual.
 
 The `validate-qemu.sh` script boots the QEMU image and checks:
 
-- `iotedge --version` — CLI installed
+- `iotedge --version` — CLI matches the intended committed daemon version
+- Exact installed RPM versions for `iotedge`, `aziot-edged`, `aziotd`, `aziotctl` and `aziot-keys`
 - `iotedge check --verbose` — Diagnostics
 - Service status — keyd, certd, tpmd, identityd, aziot-edged
 

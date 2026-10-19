@@ -8,34 +8,87 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to release (e.g., 1.5.40 or 1.6.0-rc.1)"
+        description: "Existing tag to release (e.g., 1.5.40 or 1.6.0-rc.1)"
         required: true
 
 permissions:
-  contents: write
+  contents: read
   packages: read
 
+# Serialize publication across release lines too: an older run must not race
+# a newer stable release for Latest. Never cancel halfway through asset uploads.
+concurrency:
+  group: release-publication
+  cancel-in-progress: false
+
 jobs:
-  # Call the CI workflow to build and validate
+  preflight:
+    name: Validate release tag before building
+    runs-on: ubuntu-22.04
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      commit: ${{ steps.tag.outputs.commit }}
+    steps:
+      - name: Check out workflow tooling and tag history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+      - name: Resolve existing supported release tag
+        id: tag
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        with:
+          script: |
+            const {preflight} = require('./scripts/publish-release.cjs');
+            const info = preflight(process.env.RELEASE_TAG);
+            core.setOutput('tag', info.tag);
+            core.setOutput('commit', info.commit);
+
   build:
     name: Build and validate
+    needs: preflight
     uses: ./.github/workflows/ci-build.yml
     with:
-      ref: ${{ inputs.tag || github.ref_name }}
+      # Build the resolved immutable commit, not a ref that can move mid-run.
+      ref: ${{ needs.preflight.outputs.commit }}
+      release_tag: ${{ needs.preflight.outputs.tag }}
       skip_qemu: false
     secrets: inherit
 
-  # Create release after successful build and validation
   release:
     name: Create release
-    needs: build
+    needs: [preflight, build]
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.preflight.outputs.tag }}
+      EXPECTED_COMMIT: ${{ needs.preflight.outputs.commit }}
     steps:
-      - name: Check out release tag and history
+      # Publication tooling comes from this workflow's commit. Preflight rejects
+      # historical source tags without the helpers/tests required by reusable CI;
+      # there is no tooling overlay or support for rebuilding those older tags.
+      - name: Check out workflow tooling and tag history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag || github.ref_name }}
+          ref: ${{ github.workflow_sha }}
           fetch-depth: 0
+
+      - name: Verify release metadata against built commit
+        id: metadata
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          script: |
+            const {preflight, releasePolicy} = require('./scripts/publish-release.cjs');
+            const info = preflight(process.env.VERSION);
+            if (info.commit !== process.env.EXPECTED_COMMIT) throw new Error('Release tag moved after preflight');
+            const releases = await github.paginate(github.rest.repos.listReleases, {...context.repo, per_page: 100});
+            const policy = releasePolicy(info.tag, releases);
+            for (const [key, value] of Object.entries({...info, ...policy})) {
+              if (key !== 'order') core.setOutput(key, value);
+            }
 
       - name: Download RPM packages
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -49,156 +102,33 @@ jobs:
           name: iotedge-qemu-image-${{ needs.build.outputs.template }}
           path: release-artifacts/qemu
 
-      - name: Prepare release artifacts
-        id: artifacts
-        run: |
-          mkdir -p final-artifacts rpm-staging
-          VERSION="${{ inputs.tag || github.ref_name }}"
-          
-          # Only include IoT Edge specific RPMs (not all dependencies)
-          find release-artifacts/rpm -type f -name "*.rpm" \( \
-            -name "iotedge-*.rpm" -o \
-            -name "aziot-*.rpm" \) \
-            -exec cp {} rpm-staging/ \;
-          
-          echo "IoT Edge RPMs to include:"
-          ls -la rpm-staging/
-          
-          # Create tarball of just the IoT Edge packages
-          tar -czvf "final-artifacts/iotedge-rpms-${VERSION}.tar.gz" -C rpm-staging .
-          
-          # Compress QEMU rootfs
-          if [[ -f release-artifacts/qemu/iotedge-qemu-image-qemux86-64.rootfs.ext4 ]]; then
-            zstd -T0 -19 release-artifacts/qemu/iotedge-qemu-image-qemux86-64.rootfs.ext4 \
-              -o final-artifacts/iotedge-qemu-image-qemux86-64.rootfs.ext4.zst
-          fi
-          
-          # Copy kernel
-          cp release-artifacts/qemu/bzImage final-artifacts/ 2>/dev/null || true
-          
-          echo "Release artifacts:"
-          ls -la final-artifacts/
-          
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-
-      - name: Prepare release metadata and notes
-        id: metadata
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Prepare complete release artifacts
         run: |
           set -euo pipefail
+          python3 scripts/collect-release-artifacts.py \
+            --rpm-dir release-artifacts/rpm --qemu-dir release-artifacts/qemu \
+            --output-dir final-artifacts --version "$VERSION"
 
-          VERSION="${{ steps.artifacts.outputs.version }}"
-          case "$VERSION" in
-            1.5.*)
-              SERIES="1.5"
-              YOCTO="Scarthgap"
-              TEMPLATE="scarthgap"
+      - name: Prepare release notes
+        env:
+          SERIES: ${{ steps.metadata.outputs.series }}
+          YOCTO: ${{ steps.metadata.outputs.yocto }}
+          TEMPLATE: ${{ steps.metadata.outputs.template }}
+          HAS_STABLE_16: ${{ steps.metadata.outputs.has_stable_16 }}
+        run: |
+          set -euo pipefail
+          case "$TEMPLATE" in
+            scarthgap)
               RELEASE_SUMMARY="This is a maintenance release for the **Scarthgap (Yocto 5.0) / IoT Edge 1.5.x** line. It is not a downgrade from a 1.6.x release."
               ;;
-            1.6.*-scarthgap|1.6.*-scarthgap.*)
-              # IoT Edge 1.6 built on Yocto 5.0 (Scarthgap) via the
-              # scarthgap-1.6 template + meta-lts-mixins Rust, for customers who
-              # need 1.6 before they can move to Wrynose (6.0). Shares the 1.6.x
-              # daemon/recipes with the Wrynose line; the '-scarthgap' tag
-              # suffix is what selects this Yocto line.
-              SERIES="1.6"
-              YOCTO="Scarthgap"
-              TEMPLATE="scarthgap-1.6"
+            scarthgap-1.6)
               RELEASE_SUMMARY="This release delivers **IoT Edge 1.6.x on Yocto 5.0 (Scarthgap)**, for devices that need 1.6 before moving to Wrynose (Yocto 6.0). It uses the same 1.6.x daemon as the Wrynose line."
               ;;
-            1.6.*)
-              SERIES="1.6"
-              YOCTO="Wrynose"
-              TEMPLATE="wrynose"
+            wrynose)
               RELEASE_SUMMARY="This release belongs to the **Wrynose (Yocto 6.0) / IoT Edge 1.6.x** line."
               ;;
-            *)
-              echo "Unsupported release tag: $VERSION" >&2
-              exit 1
-              ;;
+            *) exit 1 ;;
           esac
-
-          if [[ "$VERSION" == *-rc* || "$VERSION" == *-beta* ]]; then
-            PRERELEASE=true
-          else
-            PRERELEASE=false
-          fi
-
-          # Distinguish the secondary Scarthgap-1.6 line from the primary
-          # Wrynose 1.6 line. Both are SERIES=1.6, but Scarthgap-1.6 is a
-          # compatibility line: it must never take the "Latest" badge from the
-          # primary Wrynose release, and its release notes / previous-tag
-          # comparison must stay within its own '-scarthgap'-suffixed tags.
-          if [[ "$TEMPLATE" == "scarthgap-1.6" ]]; then
-            IS_SCARTHGAP_16=true
-          else
-            IS_SCARTHGAP_16=false
-          fi
-
-          # GitHub otherwise compares generated notes against the most recently
-          # published release, which may be from the other supported release line.
-          # Configure Git's version sort so prereleases sort before their stable
-          # release, while numeric Yocto-layer revisions sort after it:
-          # beta < rc < stable < -1 < -2. Limit candidates to ancestors of the
-          # checked-out tag so manually rerunning an older release can't select
-          # a newer tag as its comparison base. Scope the tag glob to the Yocto
-          # line so a Wrynose 1.6 release does not compare against a Scarthgap-1.6
-          # tag (or vice versa): Scarthgap-1.6 uses '1.6.*-scarthgap*', Wrynose
-          # 1.6 uses '1.6.*' with the '-scarthgap' tags filtered out.
-          if [[ "$IS_SCARTHGAP_16" == "true" ]]; then
-            TAG_GLOB="1.6.*-scarthgap*"
-            TAG_FILTER="cat"
-          elif [[ "$SERIES" == "1.6" ]]; then
-            TAG_GLOB="1.6.*"
-            TAG_FILTER="grep -v -- -scarthgap"
-          else
-            TAG_GLOB="${SERIES}.*"
-            TAG_FILTER="cat"
-          fi
-          PREVIOUS_TAG="$(git \
-            -c versionsort.suffix=-beta \
-            -c versionsort.suffix=-rc \
-            -c versionsort.suffix= \
-            tag --list "${TAG_GLOB}" --merged=HEAD --sort=-version:refname \
-            | grep -Fxv "$VERSION" \
-            | ${TAG_FILTER} \
-            | head -n 1 || true)"
-
-          # Before 1.6 GA, 1.5 remains the latest stable line. After 1.6 GA,
-          # later 1.5 maintenance releases must not move Latest back to 1.5.
-          # "1.6 GA" here means a Wrynose (primary-line) stable release, so the
-          # startswith check excludes '-scarthgap' compatibility tags.
-          HAS_STABLE_16="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
-            --jq 'any(.[]; .draft == false and .prerelease == false and (.tag_name | startswith("1.6.")) and (.tag_name | contains("-scarthgap") | not))')"
-          if [[ "$SERIES" == "1.6" && "$PRERELEASE" == "false" && "$IS_SCARTHGAP_16" == "false" ]]; then
-            HAS_STABLE_16=true
-          fi
-
-          # Latest badge: only the primary Wrynose 1.6 stable line earns it.
-          # Scarthgap-1.6 is a compatibility line and is never Latest, so it
-          # can't override the Wrynose GA badge.
-          if [[ "$PRERELEASE" == "true" ]]; then
-            MAKE_LATEST=false
-          elif [[ "$IS_SCARTHGAP_16" == "true" ]]; then
-            MAKE_LATEST=false
-          elif [[ "$SERIES" == "1.6" ]]; then
-            MAKE_LATEST=true
-          elif [[ "$HAS_STABLE_16" == "true" ]]; then
-            MAKE_LATEST=false
-          else
-            MAKE_LATEST=true
-          fi
-
-          {
-            echo "series=$SERIES"
-            echo "yocto=$YOCTO"
-            echo "template=$TEMPLATE"
-            echo "prerelease=$PRERELEASE"
-            echo "previous_tag=$PREVIOUS_TAG"
-            echo "make_latest=$MAKE_LATEST"
-          } >> "$GITHUB_OUTPUT"
-
           if [[ "$HAS_STABLE_16" == "true" ]]; then
             WRYNOSE_STATUS="Active and maintained"
           else
@@ -233,6 +163,7 @@ jobs:
           ## Prebuilt artifacts (qemux86-64 only)
 
           These artifacts are primarily for CI verification and testing.
+          **Test-only image:** debug-tweaks enables a blank root password; do not deploy it to production.
 
           ### RPM packages
 
@@ -240,7 +171,7 @@ jobs:
           tar -xzvf iotedge-rpms-${VERSION}.tar.gz
           \`\`\`
 
-          Included: iotedge, aziot-edged, aziotd, aziotctl, aziot-keys.
+          Included: iotedge, aziot-edged, aziotd, aziotctl, aziot-keys, plus available reviewed dbg/dev/staticdev/doc subpackages.
 
           ### QEMU test image
 
@@ -251,25 +182,27 @@ jobs:
             -kernel bzImage \\
             -drive file=iotedge-qemu-image-qemux86-64.rootfs.ext4,format=raw \\
             -append "root=/dev/sda console=ttyS0" \\
-            -nographic -m 512
+            -nographic -m 1024
           \`\`\`
 
           ## Documentation
 
           See the [README](https://github.com/${GITHUB_REPOSITORY}#readme) for build and integration instructions.
 
-          > **Repository history note:** \`main\` contains both the Scarthgap/1.5.x and Wrynose/1.6.x recipes. Generated notes compare against the previous ${SERIES}.x tag, but the repository diff may still include changes for both release lines.
+          > **Repository history note:** \`main\` contains both the Scarthgap/1.5.x and Wrynose/1.6.x recipes. Generated notes compare against the previous strictly older tag on this same Yocto/IoT Edge line, but the repository diff may still include changes for other release lines.
           EOF
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+      # Publisher deliberately blocks aggregate assets above 512 MiB before API
+      # writes: Octokit buffers bodies. Larger releases need authenticated
+      # streaming support; increasing the bound is not an unbounded-memory fix.
+      - name: Upload, verify and publish GitHub Release
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         with:
-          tag_name: ${{ inputs.tag || github.ref_name }}
-          name: IoT Edge Yocto Layer ${{ steps.artifacts.outputs.version }} (${{ steps.metadata.outputs.yocto }} / ${{ steps.metadata.outputs.series }}.x)
-          draft: false
-          prerelease: ${{ steps.metadata.outputs.prerelease }}
-          make_latest: ${{ steps.metadata.outputs.make_latest }}
-          generate_release_notes: true
-          previous_tag: ${{ steps.metadata.outputs.previous_tag }}
-          files: final-artifacts/*
-          body_path: release-notes.md
+          script: |
+            const fs = require('node:fs');
+            const {preflight, publishRelease} = require('./scripts/publish-release.cjs');
+            const info = preflight(process.env.VERSION);
+            if (info.commit !== process.env.EXPECTED_COMMIT) throw new Error('Release tag moved after build');
+            await publishRelease({github, ...context.repo, tag: info.tag,
+              previousTag: info.previous_tag, commit: process.env.EXPECTED_COMMIT,
+              artifactDir: 'final-artifacts', customNotes: fs.readFileSync('release-notes.md', 'utf8')});

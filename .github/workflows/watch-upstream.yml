@@ -2,165 +2,101 @@ name: Watch upstream releases
 
 on:
   schedule:
-    # Run daily at 6:00 UTC
     - cron: "0 6 * * *"
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+
+# One combined branch, including both maintained LTS plans. Retain the legacy
+# branch for migration; never race two matrix jobs overwriting that branch.
+concurrency:
+  group: watch-upstream-publication
+  cancel-in-progress: false
 
 jobs:
   check-upstream:
-    name: Check for new releases
+    name: Check both maintained LTS releases
     runs-on: ubuntu-22.04
+    permissions:
+      contents: read
     outputs:
-      release_version: ${{ steps.check.outputs.release_version }}  # Latest overall release (e.g., 1.5.35)
-      daemon_version: ${{ steps.check.outputs.daemon_version }}    # Daemon binary version (e.g., 1.5.21)
-      current_recipe: ${{ steps.check.outputs.current_recipe }}    # Current recipe version (daemon)
-      current_release: ${{ steps.check.outputs.current_release }}  # Tracked release version (from IOTEDGE_RELEASE)
-      template: ${{ steps.check.outputs.template }}                 # Yocto template for the tracked LTS line (scarthgap/wrynose)
-      needs_update: ${{ steps.check.outputs.needs_update }}        # Whether recipe update is needed
-      is_significant: ${{ steps.check.outputs.is_significant }}    # Whether this is a daemon update (not Docker-only)
-      update_type: ${{ steps.check.outputs.update_type }}          # none, significant, or docker-only
+      plans: ${{ steps.check.outputs.plans }}
+      base_sha: ${{ steps.check.outputs.base_sha }}
     steps:
-      - name: Checkout
+      - name: Checkout default branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Check upstream releases
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Detect and validate plans
         id: check
-        run: |
-          # Run the check script and capture output
-          output=$(./scripts/check-upstream.sh)
-          
-          # Parse key=value output and set as GitHub outputs
-          while IFS='=' read -r key value; do
-            echo "${key}=${value}" >> "$GITHUB_OUTPUT"
-          done <<< "$output"
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const { execFileSync } = require('node:child_process');
+            const { validatePlans } = require('./scripts/publish-upstream-pr.cjs');
+            const plans = JSON.parse(execFileSync('bash', ['scripts/check-upstream.sh', '--plans-json'], { encoding: 'utf8' }));
+            validatePlans(plans);
+            core.setOutput('plans', JSON.stringify(plans));
+            core.setOutput('base_sha', execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim());
 
   update-recipes:
-    name: Update recipes
+    name: Generate, publish and clean up upstream PR
     needs: check-upstream
-    if: needs.check-upstream.outputs.needs_update == 'true' && needs.check-upstream.outputs.is_significant == 'true'
+    # No needs_update gate: housekeeping must also run after a merge/no update.
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 120
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write # provision missing metadata labels; preserve unrelated labels
+      packages: read
     container:
-      # Release-neutral devcontainer (host tools only; OE fetches the per-
-      # template toolchain). The Yocto line comes from --template below.
       image: ghcr.io/azure/meta-iotedge-devcontainer:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
       options: --user root
     steps:
-      - name: Checkout
+      - name: Checkout detected default-branch snapshot
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Fix git permissions
-        run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
-
-      - name: Update and validate recipes
-        run: |
-          # Pass the template for the LTS line being updated (1.6.* -> wrynose,
-          # 1.5.* -> scarthgap), derived by check-upstream from the lts
-          # channel's daemon version. --clean is scoped to that line, so the
-          # other LTS line's recipes are left untouched during overlap.
-          ./scripts/update-recipes.sh \
-            --iotedge-version "${{ needs.check-upstream.outputs.release_version }}" \
-            --template "${{ needs.check-upstream.outputs.template }}" \
-            --clean
-
-      - name: Create pull request
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
-          title: "Update to IoT Edge ${{ needs.check-upstream.outputs.release_version }}"
-          commit-message: |
-            Update IoT Edge recipes for ${{ needs.check-upstream.outputs.release_version }}
-            
-            IoT Edge daemon version: ${{ needs.check-upstream.outputs.daemon_version }}
-          branch: automation/upstream-update
-          delete-branch: true
-          labels: |
-            automated
-            upstream-update
-          body: |
-            ## Automated Upstream Update
-            
-            This PR was automatically created by the upstream release watcher.
-            
-            ### Versions
-            | Component | Current | New |
-            |-----------|---------|-----|
-            | Release | ${{ needs.check-upstream.outputs.current_release }} | ${{ needs.check-upstream.outputs.release_version }} |
-            | Daemon | - | ${{ needs.check-upstream.outputs.daemon_version }} |
-            
-            ### Validation Checklist
-            - [ ] CI build passes
-            - [ ] QEMU validation passes
-            
-            ### After Merging
-            Create a release by running:
-            ```bash
-            git pull origin main
-            git tag ${{ needs.check-upstream.outputs.release_version }}
-            git push origin ${{ needs.check-upstream.outputs.release_version }}
-            ```
-            This will trigger the [release workflow](../actions/workflows/release.yml) to build and publish packages.
-            
-            ### Release Notes
-            - [Azure IoT Edge ${{ needs.check-upstream.outputs.release_version }}](https://github.com/Azure/azure-iotedge/releases/tag/${{ needs.check-upstream.outputs.release_version }})
-
-  # Notify when recipes are current (daemon) but there's a newer Docker-only release
-  notify-docker-only:
-    name: Notify Docker-only update
-    needs: check-upstream
-    # Notify only when the upstream release is a Docker-only update that
-    # we haven't already tracked via IOTEDGE_RELEASE.
-    if: needs.check-upstream.outputs.update_type == 'docker-only'
-    runs-on: ubuntu-22.04
-    permissions:
-      issues: write
-    steps:
-      - name: Create issue for Docker-only update
+          ref: ${{ needs.check-upstream.outputs.base_sha }}
+          fetch-depth: 0
+      - name: Fix git permissions
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Generate sequentially and publish using git and first-party API
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          PLANS_JSON: ${{ needs.check-upstream.outputs.plans }}
+          DETECTED_BASE_SHA: ${{ needs.check-upstream.outputs.base_sha }}
         with:
           script: |
-            const releaseVersion = '${{ needs.check-upstream.outputs.release_version }}';
-            const daemonVersion = '${{ needs.check-upstream.outputs.daemon_version }}';
-            const currentRecipe = '${{ needs.check-upstream.outputs.current_recipe }}';
-            
-            // Check if there's already an open issue for this release
-            const issues = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              labels: 'docker-only-update'
-            });
-            
-            const existingIssue = issues.data.find(i => i.title.includes(releaseVersion));
-            if (existingIssue) {
-              console.log(`Issue already exists for ${releaseVersion}`);
-              return;
-            }
-            
-            const body = [
-              'A new IoT Edge release is available, but it only contains Docker image updates.',
-              '',
-              `**Latest Release:** ${releaseVersion}`,
-              `**Daemon Version:** ${daemonVersion} (unchanged)`,
-              `**Current Recipe:** ${currentRecipe}`,
-              '',
-              'No recipe updates are needed since the daemon binaries haven\'t changed.',
-              '',
-              'This issue is for tracking purposes only. Close it once acknowledged.',
-              '',
-              `[View release notes](https://github.com/Azure/azure-iotedge/releases/tag/${releaseVersion})`
-            ].join('\n');
-            
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: `IoT Edge ${releaseVersion} released (Docker images only)`,
-              labels: ['docker-only-update', 'no-action-needed'],
-              body: body
-            });
+            const { publish } = require('./scripts/publish-upstream-pr.cjs');
+            await publish({ github, context, plans: JSON.parse(process.env.PLANS_JSON), expectedBase: process.env.DETECTED_BASE_SHA });
+      # Separate repository/org setting can still block API-created PRs:
+      # "Allow GitHub Actions to create and approve pull requests" must be
+      # enabled by an administrator. No new PAT/App is introduced here.
+      # GITHUB_TOKEN-created PR CI may require writer approval; do not promise
+      # unattended CI or bypass action policy by unpinning actions.
+
+  notify-docker-only:
+    name: Notify Docker-only releases on both lines
+    needs: check-upstream
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout detection snapshot
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.check-upstream.outputs.base_sha }}
+      - name: Notify with persistent exact-release acknowledgement
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          PLANS_JSON: ${{ needs.check-upstream.outputs.plans }}
+        with:
+          script: |
+            const { notify } = require('./scripts/notify-upstream.cjs');
+            await notify({ github, context, plans: JSON.parse(process.env.PLANS_JSON) });
