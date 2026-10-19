@@ -81,6 +81,28 @@ def current_version(root, package, line):
     return max(versions, key=version_key) if versions else ""
 
 
+def paired_iis_version(root, current, line):
+    """Resolve the Edge pin to exactly one standalone IIS recipe on its line."""
+    inc = Path(root) / f"recipes-core/iotedge/iotedge-{current}.inc"
+    if not inc.is_file():
+        raise ValueError(f"Missing Edge source metadata: {inc}")
+    pins = re.findall(r'^IIS_SRCREV\s*=\s*"([^"\n]+)"\s*$', inc.read_text(), re.M)
+    if len(pins) != 1:
+        raise ValueError(f"Expected exactly one IIS_SRCREV in {inc}")
+    matches = []
+    for recipe in (Path(root) / "recipes-core/aziotd").glob(f"aziotd_{line}.*.bb"):
+        refs = re.findall(r'^SRCREV\s*=\s*"([^"\n]+)"\s*$', recipe.read_text(), re.M)
+        if len(refs) != 1:
+            raise ValueError(f"Expected exactly one SRCREV in {recipe}")
+        if refs[0] == pins[0]:
+            version = recipe.stem.removeprefix("aziotd_")
+            version_key(version)
+            matches.append(version)
+    if len(matches) != 1:
+        raise ValueError(f"Expected exactly one IIS recipe on line {line} matching IIS_SRCREV {pins[0]}, found {len(matches)}")
+    return matches[0]
+
+
 def release_plans(data, root):
     """One deterministic plan per supported LTS product, newest line first."""
     products = {}
@@ -104,7 +126,7 @@ def release_plans(data, root):
     for line in sorted(products, reverse=True):
         release, daemon, iis = products[line]
         current = current_version(root, "iotedge", line)
-        current_iis = current_version(root, "aziotd", line)
+        current_iis = paired_iis_version(root, current, line) if current else ""
         current_release = current
         if current:
             inc = Path(root) / f"recipes-core/iotedge/iotedge-{current}.inc"

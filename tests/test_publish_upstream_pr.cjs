@@ -67,6 +67,47 @@ test('Docker notifications paginate all states and honor exact closed acknowledg
   assert.ok(queries.every(q => q.state === 'all' && q.per_page === 100));
   assert.deepEqual(created[0].labels, ['docker-only-update', 'no-action-needed']);
 });
+test('Docker notifications deduplicate exact legacy acknowledgements and markers only', async t => {
+  const { notify } = require('../scripts/notify-upstream.cjs');
+  const title = 'IoT Edge 1.5.45 released (Docker images only)';
+  const field = '**Latest Release:** 1.5.45';
+  const marker = '<!-- meta-iotedge:docker-only:1.5:1.5.45 -->';
+  const legacy = { title, body: `Legacy notification\n\n${field}\n**Daemon Version:** 1.5.21 (unchanged)` };
+  const cases = [
+    ...['open', 'closed'].flatMap(state => [
+      { name: `${state} legacy LF`, issue: { ...legacy, state }, acknowledged: true },
+      { name: `${state} legacy CRLF`, issue: { ...legacy, state, body: legacy.body.replace(/\n/g, '\r\n') }, acknowledged: true },
+      { name: `${state} exact marker`, issue: { state, body: marker }, acknowledged: true }
+    ]),
+    { name: 'legacy pull request', issue: { ...legacy, pull_request: {} } },
+    { name: 'marked pull request', issue: { ...legacy, body: marker, pull_request: {} } },
+    { name: 'different title release', issue: { ...legacy, title: title.replace('1.5.45', '1.5.450') } },
+    { name: 'title prefix', issue: { ...legacy, title: `prefix ${title}` } },
+    { name: 'title suffix', issue: { ...legacy, title: `${title} suffix` } },
+    { name: 'different field release', issue: { ...legacy, body: field.replace('1.5.45', '1.5.450') } },
+    { name: 'field prefix', issue: { ...legacy, body: `prefix ${field}` } },
+    { name: 'field suffix', issue: { ...legacy, body: `${field} suffix` } },
+    { name: 'missing field', issue: { ...legacy, body: null } },
+    { name: 'different marker release', issue: { body: marker.replace('1.5.45', '1.5.450') } },
+    { name: 'different marker line', issue: { body: marker.replace('docker-only:1.5:', 'docker-only:1.6:') } },
+    { name: 'marker prefix', issue: { body: `prefix ${marker}` } },
+    { name: 'marker suffix', issue: { body: `${marker} suffix` } }
+  ];
+  for (const { name, issue, acknowledged = false } of cases) await t.test(name, async () => {
+    const a = api(), created = [];
+    a.github.rest.issues.listForRepo = async args => {
+      assert.equal(args.state, 'all');
+      assert.equal(args.per_page, 100);
+      assert.equal(args.labels, undefined);
+      return { data: [issue] };
+    };
+    a.github.rest.issues.create = async args => { created.push({ ...args, number: 9 }); return { data: created.at(-1) }; };
+    a.github.rest.issues.get = async () => ({ data: created.at(-1) });
+    const dockerPlans = plans().map((p, i) => ({ ...p, needs_update: false, update_type: i === 0 ? 'docker-only' : 'none' }));
+    await notify({ ...a, context, plans: dockerPlans });
+    assert.equal(created.length, acknowledged ? 0 : 1);
+  });
+});
 test('workflow uses pinned first-party publication with unconditional housekeeping, explicit permissions, serialized list plans and env inputs', () => {
   const source = fs.readFileSync(path.join(__dirname, '../.github/workflows/watch-upstream.yml'), 'utf8');
   assert.doesNotMatch(source, /peter-evans|\bgh pr\b/);

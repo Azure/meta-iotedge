@@ -238,6 +238,77 @@ class ReleaseVersionsTests(unittest.TestCase):
         self.assertEqual(plan["update_type"], "significant")
         self.assertTrue(plan["needs_update"])
 
+    def test_detector_uses_paired_iis_despite_newer_unselected_recipe(self):
+        data = json.loads(FIXTURE.read_text())
+        data["channels"][0]["products"][1]["components"][1]["version"] = "1.5.7"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            shutil.copytree(ROOT / "recipes-core", root / "recipes-core")
+            directory = root / "recipes-core/aziotd"
+            recipe = directory / "aziotd_1.5.6.bb"
+            old_pin = re.findall(r'^SRCREV = "([^"]+)"', recipe.read_text(), re.M)[0]
+            (directory / "aziotd_1.5.7.bb").write_text(
+                recipe.read_text().replace(old_pin, "b" * 40))
+            (directory / "aziotd-1.5.7.inc").write_text('export VERSION = "1.5.7"\n')
+            plan = versions.release_plans(data, root)[1]
+            self.assertEqual(plan["current_iis"], "1.5.6")
+            self.assertEqual(plan["update_type"], "significant")
+            self.assertTrue(plan["needs_update"])
+
+    def test_detector_pairs_checked_in_edge_pins_with_standalone_iis_sources(self):
+        plans = versions.release_plans(json.loads(FIXTURE.read_text()), ROOT)
+        self.assertEqual([(p["current_recipe"], p["current_iis"]) for p in plans],
+                         [("1.6.0", "1.6.0"), ("1.5.21", "1.5.6")])
+        for plan in plans:
+            with self.subTest(line=plan["line"]):
+                edge = ROOT / f'recipes-core/iotedge/iotedge-{plan["current_recipe"]}.inc'
+                iis = ROOT / f'recipes-core/aziotd/aziotd_{plan["current_iis"]}.bb'
+                self.assertEqual(re.findall(r'^IIS_SRCREV = "([^"]+)"', edge.read_text(), re.M),
+                                 re.findall(r'^SRCREV = "([^"]+)"', iis.read_text(), re.M))
+                self.assertIn('gitsm://github.com/Azure/iot-identity-service.git;', iis.read_text())
+
+    def test_detector_fails_closed_for_missing_or_ambiguous_iis_pins(self):
+        data = json.loads(FIXTURE.read_text())
+        cases = ("missing-edge-inc", "missing-edge-pin", "duplicate-edge-pin",
+                 "missing-iis-pin", "duplicate-iis-pin", "unmatched-pin",
+                 "missing-iis-recipe", "ambiguous-iis-recipes", "only-cross-line-match")
+        for case in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                shutil.copytree(ROOT / "recipes-core", root / "recipes-core")
+                edge = root / "recipes-core/iotedge/iotedge-1.5.21.inc"
+                iis = root / "recipes-core/aziotd/aziotd_1.5.6.bb"
+                edge_pin = re.findall(r'^IIS_SRCREV = "[^"]+"', edge.read_text(), re.M)[0]
+                iis_pin = re.findall(r'^SRCREV = "[^"]+"', iis.read_text(), re.M)[0]
+                if case == "missing-edge-inc":
+                    edge.unlink()
+                elif case == "missing-edge-pin":
+                    edge.write_text(edge.read_text().replace(edge_pin, ""))
+                elif case == "duplicate-edge-pin":
+                    edge.write_text(edge.read_text() + edge_pin + "\n")
+                elif case == "missing-iis-pin":
+                    iis.write_text(iis.read_text().replace(iis_pin, ""))
+                elif case == "duplicate-iis-pin":
+                    iis.write_text(iis.read_text() + iis_pin + "\n")
+                elif case == "unmatched-pin":
+                    edge.write_text(edge.read_text().replace(edge_pin, f'IIS_SRCREV = "{"b" * 40}"'))
+                elif case == "missing-iis-recipe":
+                    iis.unlink()
+                elif case == "ambiguous-iis-recipes":
+                    (iis.parent / "aziotd_1.5.7.bb").write_text(iis.read_text())
+                    (iis.parent / "aziotd-1.5.7.inc").write_text('export VERSION = "1.5.7"\n')
+                elif case == "only-cross-line-match":
+                    # An exact ref outside the Edge line is not a compatible pair.
+                    iis.rename(iis.parent / "aziotd_1.4.6.bb")
+                with self.assertRaisesRegex(ValueError, "metadata|IIS_SRCREV|SRCREV"):
+                    versions.release_plans(data, root)
+
+    def test_detector_without_current_edge_plans_initial_source_update(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plans = versions.release_plans(json.loads(FIXTURE.read_text()), Path(tmp))
+            self.assertEqual([p["current_iis"] for p in plans], ["", ""])
+            self.assertTrue(all(p["update_type"] == "significant" for p in plans))
+
     def test_generator_rejects_cross_line_template_before_clean(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
