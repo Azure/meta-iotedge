@@ -234,6 +234,8 @@ jobs:
     env:
       DEVCONTAINER: "1"
       RELEASE_TAG: ${{ inputs.release_tag || '' }}
+      # Explicit opt-in: generated local.conf only, never developer templates.
+      CI_YOCTO_RESOURCE_LIMITS: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -263,15 +265,41 @@ jobs:
         env:
           TEMPLATE: ${{ matrix.template }}
         run: |
-          if [[ "${{ inputs.skip_qemu }}" == "true" ]]; then
-            sudo -E -u builder ./scripts/build.sh "${TEMPLATE}"
+          build=(sudo -E -u builder ./scripts/build.sh "${TEMPLATE}")
+          if [[ "${{ inputs.skip_qemu }}" != "true" ]]; then
+            build+=(--with-qemu)
+          fi
+          if [[ -f scripts/ci-resource-monitor.py ]]; then
+            python3 scripts/ci-resource-monitor.py --output-dir runner-diagnostics/build --label build -- "${build[@]}"
           else
-            sudo -E -u builder ./scripts/build.sh "${TEMPLATE}" --with-qemu
+            # Reusable workflow callers may explicitly check out older tags.
+            echo "::warning::Checked-out ref predates CI resource instrumentation; using its original build tooling."
+            "${build[@]}"
           fi
 
       - name: Run QEMU validation
         if: ${{ !inputs.skip_qemu }}
-        run: sudo -E -u builder ./scripts/validate-qemu.sh "${{ matrix.template }}"
+        env:
+          TEMPLATE: ${{ matrix.template }}
+        run: |
+          if [[ -f scripts/ci-resource-monitor.py ]]; then
+            python3 scripts/ci-resource-monitor.py --output-dir runner-diagnostics/qemu --label qemu -- \
+              sudo -E -u builder ./scripts/validate-qemu.sh "${TEMPLATE}"
+          else
+            echo "::warning::Checked-out ref predates CI resource instrumentation; using its original QEMU tooling."
+            sudo -E -u builder ./scripts/validate-qemu.sh "${TEMPLATE}"
+          fi
+
+      - name: Upload runner resource diagnostics
+        if: ${{ always() }}
+        continue-on-error: true
+        timeout-minutes: 2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: runner-diagnostics-${{ matrix.template }}
+          path: runner-diagnostics/
+          retention-days: 7
+          if-no-files-found: warn
 
       - name: Collect IoT Edge RPM packages
         id: collect-rpms
