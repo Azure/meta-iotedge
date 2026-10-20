@@ -6,11 +6,16 @@ on:
       - main
     paths:
       - '.devcontainer/**'
+      - '.github/workflows/build-devcontainer.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
+
+concurrency:
+  group: devcontainer-publication
+  cancel-in-progress: false
 
 jobs:
   build-and-push:
@@ -20,37 +25,43 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Use the runner's reviewed Docker CLI rather than third-party actions
+      # whose SHA refs do not match the organization's tag-only allowlist.
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        env:
+          BUILDER: meta-iotedge-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          docker version
+          docker buildx version
+          docker buildx create --name "$BUILDER" --driver docker-container --use
+          docker buildx inspect --bootstrap
 
       - name: Login to GHCR
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Compute lowercase repo owner
-        shell: bash
-        run: echo "REPO_OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+        env:
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
 
       - name: Build and push
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
-        with:
-          context: .devcontainer
-          file: .devcontainer/Dockerfile
-          push: true
-          # The devcontainer image is Yocto-release-agnostic: it only provides
-          # host build tools, and OE-core fetches its own uninative + cross
-          # toolchain per template at build time. So it carries ONE neutral
-          # :latest tag rather than per-release tags. The build and
-          # upstream-update workflows reference :latest for every Yocto line.
-          #
-          # :scarthgap is kept as a transitional alias for one publish cycle
-          # so refs that still point at it during the rename keep working. It
-          # can be dropped after this image is published once under :latest.
-          tags: |
-            ghcr.io/${{ env.REPO_OWNER_LC }}/meta-iotedge-devcontainer:latest
-            ghcr.io/${{ env.REPO_OWNER_LC }}/meta-iotedge-devcontainer:scarthgap
-          cache-from: type=registry,ref=ghcr.io/${{ env.REPO_OWNER_LC }}/meta-iotedge-devcontainer:latest
-          cache-to: type=inline
+        run: |
+          set -euo pipefail
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/meta-iotedge-devcontainer"
+          # One neutral tag: host tools are Yocto-release-agnostic.
+          # Keep :scarthgap as a transitional alias for existing consumers.
+          docker buildx build .devcontainer --file .devcontainer/Dockerfile --push \
+            --tag "$IMAGE:latest" --tag "$IMAGE:scarthgap" \
+            --cache-from "type=registry,ref=$IMAGE:latest" --cache-to type=inline
+          # Read both pushed manifests back before reporting publication success.
+          docker buildx imagetools inspect "$IMAGE:latest"
+          docker buildx imagetools inspect "$IMAGE:scarthgap"
+
+      - name: Clean up registry login and builder
+        if: always()
+        env:
+          BUILDER: meta-iotedge-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          docker logout ghcr.io
+          docker buildx rm "$BUILDER"

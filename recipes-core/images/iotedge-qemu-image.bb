@@ -20,7 +20,9 @@ inherit core-image
 IMAGE_FSTYPES = "ext4"
 QB_DEFAULT_FSTYPE = "ext4"
 
-IMAGE_FEATURES += "ssh-server-dropbear"
+# Keep the RPM database and query tools for validate-qemu.sh's mandatory
+# installed-version inventory. Limit this to the throwaway validation image.
+IMAGE_FEATURES += "ssh-server-dropbear package-management"
 
 # QEMU validation runs `iotedge check --verbose`, which docker-pulls the
 # azureiotedge-diagnostics image (a multi-layer .NET runtime image) into the

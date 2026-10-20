@@ -6,11 +6,10 @@ set -x
 
 # This file should be in the "<repo>/scripts" directory. We put all relevant sources in "<repo>/poky", 
 # This finds "<repo>"
-SCRIPT_DIR=$(dirname $0)
-DIR=${SCRIPT_DIR%/scripts}
-
-# build targets
-targets=$@
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+# Preserve the explicit line before oe-init-build-env can change TEMPLATECONF.
+RELEASE_TEMPLATE="${TEMPLATECONF##*/}"
 
 # allow longer startup for the bitbake server in containerized builds
 export BB_SERVER_TIMEOUT="${BB_SERVER_TIMEOUT:-600}"
@@ -37,4 +36,8 @@ if ! bitbake -p; then
 fi
 echo "✓ Recipe parse validation passed"
 
-bitbake -T "${BB_SERVER_TIMEOUT}" ${targets}
+# Resolve all five actual providers; PREFERRED_VERSION alone permits fallback.
+python3 "${SCRIPT_DIR}/verify-release-selection.py" \
+    --root "${DIR}" --template "${RELEASE_TEMPLATE}" || exit 1
+
+bitbake -T "${BB_SERVER_TIMEOUT}" "$@"

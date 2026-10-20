@@ -21,6 +21,10 @@ on:
         description: "Git ref to checkout (tag or branch)"
         type: string
         required: false
+      release_tag:
+        description: "Existing release tag whose product version must match selected recipes"
+        type: string
+        required: false
       skip_qemu:
         description: "Skip QEMU validation"
         type: boolean
@@ -56,6 +60,17 @@ jobs:
       - name: Check if only docs changed
         id: docs-only
         run: |
+          # Reusable release builds must validate the requested ref even when
+          # its last commit is documentation-only (the caller event is reused).
+          if [ "${{ github.event_name }}" != "pull_request" ] && \
+             [ "${{ github.event_name }}" != "push" ]; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -n "${{ inputs.ref }}" ]; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [ "${{ github.event_name }}" == "pull_request" ]; then
             # For PRs, check files changed in the PR
             git fetch origin ${{ github.base_ref }}
@@ -109,7 +124,7 @@ jobs:
           # disambiguate it. A release tag with the '-scarthgap' suffix
           # (e.g. 1.6.0-scarthgap, 1.6.1-scarthgap) selects the scarthgap-1.6
           # template; a plain 1.6.x tag stays Wrynose.
-          REF="${{ inputs.ref || github.base_ref || github.ref_name }}"
+          REF="${{ inputs.release_tag || inputs.ref || github.base_ref || github.ref_name }}"
           case "$REF" in
             *-scarthgap|*-scarthgap.*) echo "template=scarthgap-1.6" >> "$GITHUB_OUTPUT" ;;
             1.6.*) echo "template=wrynose" >> "$GITHUB_OUTPUT" ;;
@@ -138,7 +153,7 @@ jobs:
           # or github.ref_type. Branch/PR events fall through to all lines.
           # A '-scarthgap'-suffixed 1.6 tag (e.g. 1.6.0-scarthgap) is also a
           # release tag and collapses to the single scarthgap-1.6 template.
-          REF="${{ inputs.ref || github.ref_name }}"
+          REF="${{ inputs.release_tag || inputs.ref || github.ref_name }}"
           IS_TAG="false"
           if [ "${{ github.ref_type }}" = "tag" ]; then
             IS_TAG="true"
@@ -157,6 +172,19 @@ jobs:
           echo "templates=${templates}" >> "$GITHUB_OUTPUT"
           echo "Build matrix templates: ${templates}"
 
+  regression-tests:
+    name: Fast regression tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || '' }}
+      - name: Run offline Python and Node regressions
+        run: |
+          python3 -m unittest discover -s tests
+          node --test tests/*.cjs
+
   check-recipes:
     name: Recipe consistency check
     needs: check-changes
@@ -168,49 +196,15 @@ jobs:
         with:
           ref: ${{ inputs.ref || '' }}
 
-      - name: Extract IoT Edge release version from committed recipes
-        id: version
-        run: |
-          # Find the version-specific .inc file (excludes -crates.inc)
-          inc_file=$(ls recipes-core/iotedge/iotedge-[0-9]*.inc 2>/dev/null | head -1)
-          if [[ -z "${inc_file}" ]]; then
-            echo "No iotedge version .inc found — skipping idempotency check"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          # Extract the release tag (IOTEDGE_RELEASE) from the .inc file.
-          # This may differ from the recipe filename version when a release
-          # only updates Docker images (e.g. release 1.5.35, daemon 1.5.21).
-          ver=$(grep 'IOTEDGE_RELEASE' "${inc_file}" | sed 's/.*= *"//;s/".*//' || true)
-          if [[ -z "${ver}" ]]; then
-            # Fallback for older recipes without IOTEDGE_RELEASE:
-            # use the recipe filename version (same as release when daemon == release)
-            bb_file=$(ls recipes-core/iotedge/iotedge_*.bb 2>/dev/null | head -1)
-            ver=$(basename "${bb_file}" | sed 's/^iotedge_//;s/\.bb$//')
-          fi
-          echo "iotedge_version=${ver}" >> "$GITHUB_OUTPUT"
-          echo "Detected IoT Edge release version: ${ver}"
-
-      - name: Regenerate recipes
-        if: ${{ steps.version.outputs.skip != 'true' }}
-        run: |
-          ./scripts/update-recipes.sh \
-            --iotedge-version "${{ steps.version.outputs.iotedge_version }}" \
-            --skip-validate
-
-      - name: Check for drift between generated and committed recipes
-        if: ${{ steps.version.outputs.skip != 'true' }}
-        run: |
-          if ! git diff --exit-code recipes-core/; then
-            echo ""
-            echo "::error::Generated recipes differ from committed files."
-            echo "Run './scripts/update-recipes.sh --iotedge-version ${{ steps.version.outputs.iotedge_version }}' and commit the results."
-            exit 1
-          fi
-          echo "✓ Committed recipes match generated output"
+      - name: Regenerate and check every maintained line and template
+        run: python3 scripts/check-recipe-consistency.py
 
   build:
     name: Build and validate
+    # Container jobs otherwise default to sh; build/artifact gates use [[ ... ]].
+    defaults:
+      run:
+        shell: bash
     needs: [check-changes, check-recipes]
     if: needs.check-changes.outputs.docs_only != 'true'
     strategy:
@@ -239,6 +233,7 @@ jobs:
       options: --user root -v ${{ vars.YOCTO_CACHE_PATH || '/var/cache/yocto' }}:/workspaces/yocto-cache
     env:
       DEVCONTAINER: "1"
+      RELEASE_TAG: ${{ inputs.release_tag || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -281,13 +276,18 @@ jobs:
       - name: Collect IoT Edge RPM packages
         id: collect-rpms
         run: |
-          mkdir -p rpm-staging
-          find build/tmp/deploy/rpm -type f -name "*.rpm" \( \
-            -name "iotedge-*.rpm" -o \
-            -name "aziot-*.rpm" \) \
-            -exec cp {} rpm-staging/ \;
-          echo "IoT Edge RPMs:"
-          ls -la rpm-staging/
+          # Fail on either missing/empty boot artifact, not only an empty glob.
+          if [[ "${{ inputs.skip_qemu }}" != "true" ]]; then
+            for asset in iotedge-qemu-image-qemux86-64.rootfs.ext4 bzImage; do
+              test -s "build/tmp/deploy/images/qemux86-64/${asset}" || {
+                echo "Missing or empty QEMU artifact: ${asset}" >&2
+                exit 1
+              }
+            done
+          fi
+          python3 scripts/collect-release-artifacts.py \
+            --rpm-dir build/tmp/deploy/rpm --output-dir rpm-staging \
+            --version "${{ matrix.template }}" --packages-only
 
       - name: Upload RPM packages
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -295,7 +295,7 @@ jobs:
           name: rpm-packages-${{ matrix.template }}
           path: rpm-staging/*.rpm
           retention-days: 7
-          if-no-files-found: warn
+          if-no-files-found: error
 
       - name: Upload QEMU image
         if: ${{ !inputs.skip_qemu }}
@@ -306,12 +306,12 @@ jobs:
             build/tmp/deploy/images/qemux86-64/iotedge-qemu-image-qemux86-64.rootfs.ext4
             build/tmp/deploy/images/qemux86-64/bzImage
           retention-days: 7
-          if-no-files-found: warn
+          if-no-files-found: error
 
   status-check:
     name: Status check
     runs-on: ubuntu-22.04
-    needs: [check-changes, check-recipes, build]
+    needs: [check-changes, regression-tests, check-recipes, build]
     if: always()
     steps:
       - name: Determine overall status
@@ -322,7 +322,11 @@ jobs:
           # leg fails. So this
           # check fails the moment one line fails to build or boot, which is
           # what makes the green check honest across both LTS lines.
-          if [ "${{ needs.check-changes.outputs.docs_only }}" == "true" ]; then
+          if [ "${{ needs.regression-tests.result }}" != "success" ] || \
+             [ "${{ needs.check-changes.result }}" != "success" ]; then
+            echo "✗ Fast regressions or change detection failed"
+            exit 1
+          elif [ "${{ needs.check-changes.outputs.docs_only }}" == "true" ]; then
             echo "✓ Docs-only change - no build required"
             exit 0
           elif [ "${{ needs.check-recipes.result }}" != "success" ]; then

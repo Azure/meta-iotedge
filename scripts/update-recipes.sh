@@ -124,48 +124,13 @@ PRODUCT_VERSIONS=$(curl -fsSL "$PRODUCT_VERSIONS_URL") || {
 # daemon binaries (aziot-edged, iotedge) stay at an earlier version
 # (e.g. 1.5.21).  Recipes must use the daemon version so the built
 # binaries reference matching container image tags.
-read -r IOTEDGE_DAEMON_VERSION IIS_VERSION < <(echo "$PRODUCT_VERSIONS" | IOTEDGE_VERSION="${IOTEDGE_VERSION}" python3 -c "
-import json, os, sys
-data = json.load(sys.stdin)
-release = os.environ['IOTEDGE_VERSION']
-channels = data['channels']
-
-def aziot_of(channel):
-    return next((p for p in channel['products'] if p['id'] == 'aziot-edge'), None)
-
-# Pick the channel that ships this exact release. Each channel's aziot-edge
-# product carries a 'version' field that is the release tag (e.g. 1.5.35 in
-# lts, 1.6.0-rc.1 in prerelease). Match on that so a release tag resolves to
-# the channel that actually contains it. If several channels match, prefer
-# lts (the embedded default). If none match (older product-versions.json that
-# predates the version field, or an unexpected layout), fall back to lts so
-# existing 1.5 behavior is unchanged.
-matches = [c for c in channels if (aziot_of(c) or {}).get('version') == release]
-chosen = next((c for c in matches if c['name'] == 'lts'), None) or (matches[0] if matches else None)
-if chosen is None:
-    chosen = next((c for c in channels if c['name'] == 'lts'), None)
-if not chosen:
-    print('Error: No matching channel and no lts channel found', file=sys.stderr)
-    sys.exit(1)
-aziot = aziot_of(chosen)
-if not aziot:
-    print('Error: No aziot-edge product found', file=sys.stderr)
-    sys.exit(1)
-daemon = next((c['version'] for c in aziot['components'] if c['name'] == 'aziot-edge'), '')
-if not daemon:
-    print('Error: No aziot-edge daemon version found', file=sys.stderr)
-    sys.exit(1)
-iis = next((c['version'] for c in aziot['components'] if c['name'] == 'aziot-identity-service'), '')
-if not iis:
-    print('Error: No IIS version found', file=sys.stderr)
-    sys.exit(1)
-print(f'{daemon} {iis}')
-")
+RESOLVED_VERSIONS=$(printf '%s\n' "$PRODUCT_VERSIONS" | python3 "${ROOT_DIR}/scripts/release_versions.py" resolve "${IOTEDGE_VERSION}" "${TEMPLATE}")
+read -r IOTEDGE_DAEMON_VERSION IIS_VERSION <<< "$RESOLVED_VERSIONS"
 echo "  IoT Edge release tag: ${IOTEDGE_VERSION}"
 echo "  IoT Edge daemon version: ${IOTEDGE_DAEMON_VERSION}"
 echo "  IIS version: ${IIS_VERSION}"
 if [[ "${IOTEDGE_DAEMON_VERSION}" != "${IOTEDGE_VERSION}" ]]; then
-    echo "  Note: Release ${IOTEDGE_VERSION} is a Docker-image-only update; daemon stays at ${IOTEDGE_DAEMON_VERSION}"
+    echo "  Note: Release ${IOTEDGE_VERSION} uses daemon source tag ${IOTEDGE_DAEMON_VERSION}; IIS is resolved independently"
 fi
 
 # Resolve SHAs from version tags
@@ -276,6 +241,24 @@ resolve_patch_dir() {
     fi
 }
 
+# Carry compatibility patches into the exact BP search directory for BitBake.
+materialize_patch_dir() {
+    local recipe_dir="$1" pkg="$2" ver="$3" patch_dir
+    patch_dir=$(resolve_patch_dir "${recipe_dir}" "${pkg}" "${ver}")
+    [[ -z "${patch_dir}" ]] && return 0
+    # A sibling version directory is NOT in BitBake FILESPATH. Materialize
+    # carried patches into ${BP} before wiring their basenames. Shared files/
+    # is already searched by BitBake and must not create duplicate patch dirs.
+    local target_dir="${recipe_dir}/${pkg}-${ver}"
+    if [[ "${patch_dir}" != "${target_dir}" && "${patch_dir}" != "${recipe_dir}/files" ]]; then
+        mkdir -p "${target_dir}"
+        cp "${patch_dir}/"*.patch "${target_dir}/"
+        patch_dir="${target_dir}"
+    fi
+
+    echo "${patch_dir}"
+}
+
 # Apply a package version's source-compatibility patches to a checked-out source
 # tree before reading its Cargo.lock for crates.inc generation.
 #
@@ -314,10 +297,9 @@ apply_recipe_patches() {
 # we wire up whatever .patch files already live in the recipe's patch dir for
 # this version, and let bitbake resolve each file:// at build time.
 #
-# Patch FILES are kept by hand in version dirs (the patches themselves are
-# crafted per release). This function only writes the SRC_URI wiring, so the
-# generated .inc always matches the patch files on disk and the consistency
-# check stays green.
+# Patches are hand-crafted, but reviewed same-line patches can be carried
+# forward. Materialize carried files into this version's BP search directory
+# before writing SRC_URI so both generator and BitBake use the same bytes.
 #
 # Directory lookup mirrors bitbake FILESPATH precedence via resolve_patch_dir:
 # the version-specific dir recipes-core/<pkg>/<pkg>-<ver>/ first, then the
@@ -327,6 +309,7 @@ append_patch_src_uri() {
     local patch_dir
     patch_dir=$(resolve_patch_dir "${recipe_dir}" "${pkg}" "${ver}")
     [[ -z "${patch_dir}" ]] && return 0
+    patch_dir=$(materialize_patch_dir "${recipe_dir}" "${pkg}" "${ver}")
 
     # Sort by filename for deterministic output (0001 before 0002, ...).
     local patches=()
@@ -527,9 +510,16 @@ export VERSION = "${IIS_VERSION}"
 INCEOF
     echo "  Generated ${ver_inc}"
 
+    # IIS patch basenames are wired by the shared package .inc files. Carry
+    # the same applied compatibility set without adding duplicate SRC_URI entries.
+    materialize_patch_dir "${recipe_dir}" "${pkg}" "${IIS_VERSION}" >/dev/null
+
     # Generate crates.inc from Cargo.lock
     python3 "${HELPERS}" generate-crates-inc "${IIS_DIR}/Cargo.lock" "${crates_inc}"
 done
+
+# Select exactly the generated daemon/IIS pair in every corresponding template.
+python3 "${ROOT_DIR}/scripts/release_versions.py" select "${ROOT_DIR}" "${TEMPLATE}" "${IOTEDGE_DAEMON_VERSION}" "${IIS_VERSION}"
 
 # Validate recipes with bitbake (skip with --skip-validate)
 if [[ "${SKIP_VALIDATE}" != true ]]; then
