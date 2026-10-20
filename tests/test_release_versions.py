@@ -201,11 +201,24 @@ class ReleaseVersionsTests(unittest.TestCase):
                     else:
                         self.assertEqual(first, tree)
 
-    def detector(self, data=None, mode="--plans-json"):
+    def detector(self, data=None, mode="--plans-json", current_edge="1.6.0"):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             shutil.copytree(ROOT / "scripts", root / "scripts")
-            shutil.copytree(ROOT / "recipes-core", root / "recipes-core")
+            # Controlled installed metadata, independent of checked-in releases.
+            for edge_version, release, iis_version, pin in (
+                    (current_edge, current_edge, "1.6.0", "a" * 40),
+                    ("1.5.21", "1.5.35", "1.5.6", "b" * 40)):
+                edge = root / "recipes-core/iotedge"
+                iis = root / "recipes-core/aziotd"
+                edge.mkdir(parents=True, exist_ok=True)
+                iis.mkdir(parents=True, exist_ok=True)
+                (edge / f"iotedge_{edge_version}.bb").write_text(
+                    f'require iotedge-{edge_version}.inc\n')
+                (edge / f"iotedge-{edge_version}.inc").write_text(
+                    f'IOTEDGE_RELEASE = "{release}"\nIIS_SRCREV = "{pin}"\n')
+                (iis / f"aziotd_{iis_version}.bb").write_text(
+                    f'SRCREV = "{pin}"\n')
             manifest = root / "manifest.json"
             manifest.write_text(json.dumps(data) if data is not None else FIXTURE.read_text())
             binary = root / "curl"
@@ -228,6 +241,15 @@ class ReleaseVersionsTests(unittest.TestCase):
         self.assertEqual(plans[1]["release_version"], "1.5.45")
         self.assertEqual(plans[1]["update_type"], "docker-only")
         self.assertFalse(plans[1]["needs_update"])
+
+    def test_detector_does_not_replan_an_already_current_source_pair(self):
+        result = self.detector(current_edge="1.6.4")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        plan = json.loads(result.stdout)[0]
+        self.assertEqual((plan["current_recipe"], plan["current_iis"]),
+                         ("1.6.4", "1.6.0"))
+        self.assertEqual(plan["update_type"], "none")
+        self.assertFalse(plan["needs_update"])
 
     def test_detector_treats_iis_only_source_update_as_significant(self):
         data = json.loads(FIXTURE.read_text())
@@ -257,8 +279,7 @@ class ReleaseVersionsTests(unittest.TestCase):
 
     def test_detector_pairs_checked_in_edge_pins_with_standalone_iis_sources(self):
         plans = versions.release_plans(json.loads(FIXTURE.read_text()), ROOT)
-        self.assertEqual([(p["current_recipe"], p["current_iis"]) for p in plans],
-                         [("1.6.0", "1.6.0"), ("1.5.21", "1.5.6")])
+        self.assertEqual([p["line"] for p in plans], ["1.6", "1.5"])
         for plan in plans:
             with self.subTest(line=plan["line"]):
                 edge = ROOT / f'recipes-core/iotedge/iotedge-{plan["current_recipe"]}.inc'

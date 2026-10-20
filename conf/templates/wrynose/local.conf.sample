@@ -281,8 +281,8 @@ DISTRO_FEATURES:append = " virtualization tpm2"
 # --- IoT Edge version selection for Wrynose (Yocto 6.0) ---
 # meta-iotedge carries coexisting recipe versions on a single branch; pin the
 # 1.6.x line for Wrynose builds. Scarthgap pins 1.5.x in its own template.
-PREFERRED_VERSION_iotedge = "1.6.0"
-PREFERRED_VERSION_aziot-edged = "1.6.0"
+PREFERRED_VERSION_iotedge = "1.6.4"
+PREFERRED_VERSION_aziot-edged = "1.6.4"
 PREFERRED_VERSION_aziotd = "1.6.0"
 PREFERRED_VERSION_aziotctl = "1.6.0"
 PREFERRED_VERSION_aziot-keys = "1.6.0"

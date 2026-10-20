@@ -281,8 +281,8 @@ BBMASK += "poky/meta/recipes-devtools/cargo"
 # template pins the 1.6.x line onto Scarthgap (Yocto 5.0), for customers who
 # need 1.6 before they can move to Wrynose (Yocto 6.0). The stock `scarthgap`
 # template pins 1.5.x; `wrynose` pins 1.6.x on Yocto 6.0.
-PREFERRED_VERSION_iotedge = "1.6.0"
-PREFERRED_VERSION_aziot-edged = "1.6.0"
+PREFERRED_VERSION_iotedge = "1.6.4"
+PREFERRED_VERSION_aziot-edged = "1.6.4"
 PREFERRED_VERSION_aziotd = "1.6.0"
 PREFERRED_VERSION_aziotctl = "1.6.0"
 PREFERRED_VERSION_aziot-keys = "1.6.0"
