@@ -1,0 +1,77 @@
+name: 1ES cache metadata diagnostic
+
+# Isolated branch push avoids dispatch registration on main and avoids Yocto CI.
+on:
+  push:
+    branches: [diag/1es-cache-metadata]
+    paths: [.github/workflows/diag-1es-cache.yml]
+
+permissions: {}
+
+jobs:
+  inspect-cache-metadata:
+    if: github.repository == 'Azure/meta-iotedge'
+    runs-on:
+      - self-hosted
+      - 1ES.Pool=meta-iotedge-1es-github-linux-amd64
+      - 1ES.ImageOverride=agent-aziotedge-ubuntu-22.04-msmoby
+    timeout-minutes: 3
+    steps:
+      # Intentionally no checkout, container, actions, network, or build invocation.
+      - name: Inspect allowlisted host cache metadata
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import stat
+
+          def inspect_cache(path):
+              try:
+                  fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+                  with os.fdopen(fd, 'rb') as handle:
+                      if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+                          raise ValueError
+                      raw = handle.read(1048577)
+                  if len(raw) > 1048576:
+                      raise ValueError
+                  caches = json.loads(raw)
+                  return summarize(caches)
+              except FileNotFoundError:
+                  return {'status': 'configuration_missing'}, 2
+              except Exception:
+                  # Never emit exception messages or credential-bearing input.
+                  return {'status': 'configuration_unreadable_or_invalid'}, 2
+
+          def summarize(caches):
+              if not isinstance(caches, list) or any(not isinstance(c, dict) for c in caches):
+                  raise ValueError
+              matches = [cache for cache in caches if cache.get('Name') == 'yocto-sstate']
+              if len(matches) != 1:
+                  return {'status': 'matching_cache_not_found_or_ambiguous'}, 2
+              shards = matches[0]['Shards']
+              if not isinstance(shards, list) or any(not isinstance(s, dict) for s in shards):
+                  raise ValueError
+              counts = {'Content': 0, 'Metadata': 0, 'Checkpoint': 0}
+              other = 0
+              for shard in shards:
+                  for container in shard.get('Containers', []):
+                      kind = container.get('Type')
+                      if kind in counts:
+                          counts[kind] += 1
+                      else:
+                          other += 1
+              return {
+                  'status': 'matching_cache_with_shards' if shards else 'matching_cache_without_shards',
+                  'shard_count': len(shards),
+                  'content_container_count': counts['Content'],
+                  'metadata_container_count': counts['Metadata'],
+                  'checkpoint_container_count': counts['Checkpoint'],
+                  'other_container_count': other,
+              }, 0 if shards else 2
+
+          if __name__ == '__main__':
+              result, code = inspect_cache('/buildcacheconfig.json')
+              print(json.dumps(result, sort_keys=True))
+              raise SystemExit(code)
+          PY
