@@ -1,0 +1,66 @@
+name: Shared cache pilot
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    branches: [main, kirkstone]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shared-cache-pilot-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  offline-tests:
+    if: ${{ github.event_name == 'pull_request' && github.repository == 'Azure/meta-iotedge' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'experiment/shared-yocto-cache' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - name: Full isolated source checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: shared-cache-pilot-source
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Offline fixtures only
+        working-directory: shared-cache-pilot-source
+        run: |
+          python3 -m unittest discover -s tests -p test_shared_cache_preflight.py
+          node --test tests/test_shared_cache_workflow.cjs
+
+  host-preflight:
+    # No PR code runs on the pool. Manual review/dispatch of this exact branch only.
+    if: ${{ github.event_name == 'workflow_dispatch' && github.repository == 'Azure/meta-iotedge' && github.ref_type == 'branch' && github.ref == 'refs/heads/experiment/shared-yocto-cache' }}
+    runs-on:
+      - self-hosted
+      - 1ES.Pool=meta-iotedge-1es-github-linux-amd64
+      - 1ES.ImageOverride=agent-aziotedge-ubuntu-22.04-msmoby
+    timeout-minutes: 5
+    steps:
+      - name: Full isolated source checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: shared-cache-pilot-source
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Read-only host prerequisites
+        timeout-minutes: 1
+        env:
+          REPORT_DIR: ${{ runner.temp }}/shared-cache-pilot-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -eu
+          mkdir -p "$REPORT_DIR"
+          python3 shared-cache-pilot-source/scripts/shared-cache-preflight.py > "$REPORT_DIR/preflight.json"
+      - name: Upload allowlisted inventory
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: shared-cache-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/shared-cache-pilot-${{ github.run_id }}-${{ github.run_attempt }}/preflight.json
+          if-no-files-found: error
+          retention-days: 7
