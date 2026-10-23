@@ -344,7 +344,11 @@ esac''',
 
     def test_ci_collector_requires_all_runtime_rpms_and_both_qemu_assets(self):
         workflow = (ROOT / ".github/workflows/ci-build.yml").read_text()
-        self.assertNotIn("if-no-files-found: warn", workflow)
+        for name in ("Upload RPM packages", "Upload QEMU image"):
+            upload = workflow.split(f"      - name: {name}\n", 1)[1].split("\n      - name:", 1)[0].split("\n  status-check:", 1)[0]
+            self.assertIn("if-no-files-found: error", upload)
+            self.assertNotIn("continue-on-error: true", upload)
+            self.assertNotIn("if-no-files-found: warn", upload)
         step = workflow.split("      - name: Collect IoT Edge RPM packages\n", 1)[1].split("\n      - name:", 1)[0]
         shell = textwrap.dedent(step.split("        run: |\n", 1)[1])
         self.assertIn("scripts/collect-release-artifacts.py", shell)

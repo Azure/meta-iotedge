@@ -17,6 +17,12 @@ export BB_COMMAND_TIMEOUT="${BB_COMMAND_TIMEOUT:-300}"
 
 source ${DIR}/poky/oe-init-build-env build
 
+# CI opts in explicitly; leave developer templates and copied configs unchanged.
+# Apply after oe-init creates local.conf, before any recipe parsing or queries.
+if [[ "${CI_YOCTO_RESOURCE_LIMITS:-0}" == "1" ]]; then
+    python3 "${SCRIPT_DIR}/ci-bitbake-limits.py" configure conf/local.conf || exit 1
+fi
+
 # Ensure BB_COMMAND_TIMEOUT survives BitBake's environment cleanup
 export BB_ENV_PASSTHROUGH_ADDITIONS="${BB_ENV_PASSTHROUGH_ADDITIONS:+${BB_ENV_PASSTHROUGH_ADDITIONS} }BB_COMMAND_TIMEOUT"
 
@@ -35,6 +41,10 @@ if ! bitbake -p; then
     exit 1
 fi
 echo "✓ Recipe parse validation passed"
+
+if [[ "${CI_YOCTO_RESOURCE_LIMITS:-0}" == "1" ]]; then
+    python3 "${SCRIPT_DIR}/ci-bitbake-limits.py" verify || exit 1
+fi
 
 # Resolve all five actual providers; PREFERRED_VERSION alone permits fallback.
 python3 "${SCRIPT_DIR}/verify-release-selection.py" \
