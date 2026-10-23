@@ -18,12 +18,56 @@ class HostPreflightTests(unittest.TestCase):
     def test_disk_capacity_is_read_only_and_numeric(self):
         module = self.module()
         self.assertTrue(callable(getattr(module, 'disk_capacity', None)))
-        result = module.disk_capacity()
+        mounts, _ = module.read_text(Path('/proc/self/mountinfo'), 1048576)
+        result = module.disk_capacity(mounts)
         self.assertEqual(result['status'], 'ok')
         self.assertGreater(result['total_bytes'], 0)
         self.assertGreaterEqual(result['available_bytes'], 0)
         with patch.object(module.os, 'statvfs', side_effect=PermissionError):
-            self.assertEqual(module.disk_capacity()['status'], 'unknown')
+            self.assertEqual(module.disk_capacity(mounts)['status'], 'unknown')
+
+    def test_disk_locations_distinguish_workspace_mnt_and_cache_fallback_without_paths(self):
+        module = self.module()
+        mounts = '1 0 0:1 / / rw - ext4 secret rw\n'
+        with tempfile.TemporaryDirectory(prefix='FAKE_CREDENTIAL_SENTINEL-') as tmp:
+            with patch.dict(os.environ, {'GITHUB_WORKSPACE': tmp, 'SECRET': 'FAKE_CREDENTIAL_SENTINEL'}):
+                def capacity_value(fd):
+                    # Distinct fixture capacities prove workspace is not a cache alias.
+                    blocks = 200 if os.readlink(f'/proc/self/fd/{fd}') == '/mnt' else 100
+                    return os.statvfs_result((4096, 4096, blocks, 75, 60, 50, 40, 30, 0, 255))
+                with patch.object(module.os, 'statvfs', side_effect=capacity_value):
+                    result = module.disk_capacity(mounts)
+            self.assertEqual(result['locations']['workspace']['total_bytes'], 409600)
+            self.assertEqual(result['locations']['mnt']['total_bytes'], 819200)
+            self.assertEqual(set(result['locations']), {'cache', 'cache_parent', 'root', 'workspace', 'mnt'})
+            self.assertEqual(result['locations']['workspace']['status'], 'ok')
+            self.assertEqual(result['locations']['mnt']['status'], 'ok')
+            self.assertEqual(result['locations']['cache_parent']['status'], 'ok')
+            self.assertEqual(result['locations']['workspace']['covering_filesystem'], 'ext4')
+            self.assertNotIn(tmp, json.dumps(result))
+            self.assertNotIn('FAKE_CREDENTIAL_SENTINEL', json.dumps(result))
+            # No filesystem syscalls for invalid workspace values or remote mounts.
+            for workspace in ('relative', '/bad/../path', '/bad/./path', '/bad\x00path', '/' + 'a' * 4096):
+                with patch.object(module.os, 'environ', dict(os.environ, GITHUB_WORKSPACE=workspace)), \
+                        patch.object(module, 'local_capacity', wraps=module.local_capacity) as capacity:
+                    result = module.disk_capacity(mounts)
+                    self.assertEqual(result['locations']['workspace']['reason'], 'invalid_workspace')
+                    self.assertNotIn(workspace, [call.args[0] for call in capacity.call_args_list])
+            with patch.dict(os.environ, {}, clear=True):
+                self.assertEqual(module.disk_capacity(mounts)['locations']['workspace']['reason'], 'workspace_unset')
+            remote = mounts + f'2 1 0:2 / {tmp} rw - nfs4 secret rw\n'
+            with patch.object(module.os, 'open', side_effect=AssertionError('remote path reached')):
+                self.assertEqual(module.local_capacity(tmp, remote)['reason'], 'nonlocal_or_unknown_filesystem')
+            (Path(tmp) / 'link').symlink_to('/var/cache', target_is_directory=True)
+            self.assertEqual(module.local_capacity(tmp + '/link', mounts)['status'], 'unknown')
+
+    def test_missing_mount_table_never_retries_against_another_proc_scope(self):
+        module = self.module()
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(module, 'read_text', wraps=module.read_text) as reader:
+                result = module.collect(Path(tmp), Path(tmp) / 'cg')
+            self.assertEqual(result['disk_capacity']['status'], 'unknown')
+            self.assertFalse(any(str(call.args[0]) == '/proc/self/mountinfo' for call in reader.call_args_list))
 
     def test_selected_service_budgets_without_process_arguments(self):
         module = self.module()
@@ -102,6 +146,60 @@ class HostPreflightTests(unittest.TestCase):
             self.assertEqual(module.memory(root)['MemTotal']['status'], 'unknown')
             self.assertNotIn('FAKE_CREDENTIAL_SENTINEL', json.dumps(module.memory(root)))
 
+    def test_mount_diagnostics_are_counts_and_fixed_enums_not_raw_paths(self):
+        module = self.module()
+        with tempfile.TemporaryDirectory() as tmp:
+            proc = Path(tmp)
+            (proc / 'self').mkdir()
+            table = ('1 0 0:1 / / rw - ext4 FAKE_CREDENTIAL_SENTINEL rw\n'
+                     'bad unrelated FAKE_CREDENTIAL_SENTINEL\n')
+            (proc / 'self/mountinfo').write_text(table)
+            result = module.collect(proc, proc / 'cg')
+            self.assertEqual(result['execution_context']['mount_table'], {
+                'status': 'partial', 'reason': 'invalid_rows_skipped',
+                'valid_row_count': 1, 'invalid_row_count': 1})
+            self.assertNotIn('FAKE_CREDENTIAL_SENTINEL', json.dumps(result))
+            for text, reason in ((None, 'missing'), ('x' * 1048577, 'table_bound'),
+                                 ('\n' * 4097, 'table_bound')):
+                diagnostics = {}
+                self.assertEqual(module.mount_records(text, diagnostics), [])
+                self.assertEqual(diagnostics['status'], 'unknown')
+                self.assertEqual(diagnostics['reason'], reason)
+                self.assertIsNone(diagnostics['valid_row_count'])
+
+    def test_invalid_covering_mount_blocks_io_without_erasing_unrelated_valid_rows(self):
+        module = self.module()
+        table = ('1 0 0:1 / / rw - ext4 secret rw\n'
+                 '2 1 0:2 /../hidden /var/cache rw - nfs4 secret rw\n')
+        with patch.object(module.os, 'open', side_effect=AssertionError('unsafe mount reached')):
+            result = module.local_capacity('/var/cache', table)
+        self.assertEqual(result['reason'], 'nonlocal_or_unknown_filesystem')
+        self.assertEqual(module.cache_filesystem(table)['status'], 'unknown')
+        with tempfile.TemporaryDirectory() as tmp:
+            proc = Path(tmp)
+            (proc / 'self').mkdir()
+            (proc / 'self/cgroup').write_text('0::/job\n')
+            table += ('3 1 0:3 / /sys/fs/cgroup rw - cgroup2 secret rw\n'
+                      '4 3 0:4 /../hidden /sys/fs/cgroup/job rw - cgroup2 secret rw\n')
+            with patch.object(module, 'read_text', wraps=module.read_text) as reader:
+                result = module.cgroup_memory(proc, proc / 'cg', table)
+                self.assertEqual(result['mapping']['reason'], 'shadowed_mount')
+                self.assertEqual(reader.call_count, 1)
+
+    def test_unrelated_invalid_mount_rows_do_not_discard_valid_rows(self):
+        module = self.module()
+        mounts = (
+            '1 0 0:1 / / rw - ext4 /dev/root rw\n'
+            'bad unrelated FAKE_CREDENTIAL_SENTINEL\n'
+            '2 1 0:2 / /sys/fs/cgroup rw - cgroup2 cgroup rw\n'
+            '3 1 0:3 /bad\\000path /unrelated rw - tmpfs secret rw\n'
+            '4 1 0:4 / /unrelated/../bad rw - tmpfs secret rw\n')
+        self.assertEqual(module.cache_filesystem(mounts)['covering_filesystem'], 'ext4')
+        self.assertEqual(module.mount_records(mounts),
+                         [('/', '/', 'ext4'), ('/', '/sys/fs/cgroup', 'cgroup2'), (None, '/unrelated', None)])
+        self.assertEqual(module.mount_records(mounts * 4097), [])
+        self.assertNotIn('FAKE_CREDENTIAL_SENTINEL', json.dumps(module.cache_filesystem(mounts)))
+
     def test_cache_filesystem_never_exports_mount_source_or_options(self):
         module = self.module()
         self.assertTrue(hasattr(module, 'cache_filesystem'), 'mountinfo parser missing')
@@ -118,6 +216,93 @@ class HostPreflightTests(unittest.TestCase):
         self.assertFalse(local['exact_mountpoint'])
         self.assertFalse(local['shared_filesystem_type'])
         self.assertEqual(module.cache_filesystem('FAKE_CREDENTIAL_SENTINEL')['status'], 'unknown')
+
+    def test_unavailable_mount_mapping_counts_remain_unknown_not_zero(self):
+        module = self.module()
+        with tempfile.TemporaryDirectory() as tmp:
+            proc = Path(tmp)
+            (proc / 'self').mkdir()
+            (proc / 'self/cgroup').write_text('0::/\n')
+            for mounts in (None, 'x' * 1048577):
+                result = module.cgroup_memory(proc, proc / 'cg', mounts)
+                self.assertEqual(result['mapping']['reason'], 'mount_table_unavailable')
+                self.assertIsNone(result['mapping']['candidate_count'])
+                self.assertIsNone(result['mapping']['matching_candidate_count'])
+
+    def test_nonstandard_cgroup_mount_maps_only_proven_membership_suffix(self):
+        module = self.module()
+        mounts = ('bad unrelated row\n'
+                  '1 0 0:1 /tenant /sys/fs/cgroup/unified rw - cgroup2 secret rw\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'proc/self').mkdir(parents=True)
+            (root / 'proc/self/cgroup').write_text('0::/tenant/job\n')
+            (root / 'cg/unified/job').mkdir(parents=True)
+            (root / 'cg/unified/job/memory.max').write_text('123\n')
+            (root / 'cg/unified/memory.max').write_text('456\n')
+            (root / 'cg/memory.max').write_text('999\n')
+            result = module.cgroup_memory(root / 'proc', root / 'cg', mounts)
+            self.assertEqual(result['status'], 'partial')
+            self.assertEqual([entry['memory.max']['value'] for entry in
+                              result['visible_ancestors_including_self']], [123, 456])
+            self.assertEqual(result['mapping'], {
+                'candidate_count': 1, 'matching_candidate_count': 1,
+                'reason': 'mapped', 'root_is_global': False,
+                'mountpoint_category': 'under_cgroup_root'})
+            self.assertEqual(result['host_ancestor_coverage'], 'UNVERIFIED')
+            self.assertNotIn('/tenant', json.dumps(result))
+            # Namespace-relative '/' cannot be guessed to mean '/tenant'.
+            for member in ('/', '/tenant2/job', '/other/job'):
+                (root / 'proc/self/cgroup').write_text('0::' + member + '\n')
+                with patch.object(module, 'read_text', wraps=module.read_text) as reader:
+                    rejected = module.cgroup_memory(root / 'proc', root / 'cg', mounts)
+                    self.assertEqual(rejected['status'], 'unknown')
+                    self.assertEqual(rejected['mapping']['reason'], 'membership_not_covered')
+                    self.assertEqual(reader.call_count, 1)
+            # A namespace-visible global root and namespace-relative '/' are safe.
+            (root / 'proc/self/cgroup').write_text('0::/\n')
+            namespaced = mounts.replace('/tenant ', '/ ')
+            result = module.cgroup_memory(root / 'proc', root / 'cg', namespaced)
+            self.assertEqual(len(result['visible_ancestors_including_self']), 1)
+            self.assertTrue(result['mapping']['root_is_global'])
+
+    def test_cgroup_directory_symlinks_are_not_followed(self):
+        module = self.module()
+        mounts = '1 0 0:1 / /sys/fs/cgroup rw - cgroup2 cgroup rw\n'
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'proc/self').mkdir(parents=True)
+            (root / 'proc/self/cgroup').write_text('0::/job\n')
+            (root / 'outside').mkdir()
+            (root / 'outside/memory.max').write_text('123\n')
+            (root / 'cg').mkdir()
+            (root / 'cg/job').symlink_to(root / 'outside', target_is_directory=True)
+            with patch.object(module, 'read_text', wraps=module.read_text) as reader:
+                result = module.cgroup_memory(root / 'proc', root / 'cg', mounts)
+                self.assertEqual(result['status'], 'unknown')
+                self.assertEqual(result['mapping']['reason'], 'unsafe_or_unreadable_directory')
+                self.assertEqual(reader.call_count, 1)
+
+    def test_ambiguous_outside_shadowed_and_traversing_cgroup_mounts_do_not_read_metrics(self):
+        module = self.module()
+        valid = '1 0 0:1 / /sys/fs/cgroup rw - cgroup2 secret rw\n'
+        with tempfile.TemporaryDirectory() as tmp:
+            proc = Path(tmp)
+            (proc / 'self').mkdir()
+            (proc / 'self/cgroup').write_text('0::/job\n')
+            cases = [
+                (valid + valid, 'ambiguous_candidates'),
+                (valid + '2 1 0:2 /../hidden /sys/fs/cgroup rw - cgroup2 secret rw\n', 'shadowed_mount'),
+                (valid.replace('/sys/fs/cgroup', '/outside'), 'membership_not_covered'),
+                (valid.replace('/sys/fs/cgroup', '/sys/fs/cgroup/../outside'), 'membership_not_covered'),
+                (valid + '2 1 0:2 / /sys/fs/cgroup/job rw - tmpfs secret rw\n', 'shadowed_mount'),
+            ]
+            for mounts, reason in cases:
+                with self.subTest(reason=reason), patch.object(module, 'read_text', wraps=module.read_text) as reader:
+                    result = module.cgroup_memory(proc, proc / 'cg', mounts)
+                    self.assertEqual(result['status'], 'unknown')
+                    self.assertEqual(result['mapping']['reason'], reason)
+                    self.assertEqual(reader.call_count, 1)
 
     def test_v2_ancestors_preserve_finite_unlimited_missing_and_bad_counters(self):
         module = self.module()

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Read-only, allowlisted observations; unknown is never zero or unlimited."""
+import contextlib
 import errno
 import json
 import os
@@ -9,10 +10,10 @@ import stat
 import sys
 
 
-def read_text(path, limit=16384):
+def read_text(path, limit=16384, dir_fd=None):
     """No final symlink/device/FIFO reads; procfs regular files have size zero."""
     try:
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dir_fd)
         with os.fdopen(fd, 'rb') as stream:
             if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
                 return None, 'unsafe'
@@ -34,39 +35,70 @@ def unknown() -> dict:
     return {'status': 'unknown'}
 
 
-def mount_records(text):
-    """Internal-only paths; sources/options never leave this parser."""
+def safe_absolute_path(value):
+    return (isinstance(value, str) and 0 < len(value) <= 4096
+            and value.startswith('/') and not any(ord(c) < 32 or ord(c) == 127 for c in value)
+            and (value == '/' or all(p not in {'', '.', '..'} for p in value.split('/')[1:])))
+
+
+def mount_records(text, diagnostics=None):
+    """Internal-only paths; one unrelated bad row must not erase valid mappings."""
+    diagnostics = diagnostics if diagnostics is not None else {}
+    diagnostics.update(status='unknown', reason='missing', valid_row_count=None, invalid_row_count=None)
     records = []
-    if text is None or len(text) > 1048576 or len(text.splitlines()) > 4096:
+    if text is None:
         return records
+    if len(text) > 1048576 or len(text.splitlines()) > 4096:
+        diagnostics['reason'] = 'table_bound'
+        return records
+    invalid = valid = 0
     for line in text.splitlines():
         before, sep, after = line.partition(' - ')
         left, right = before.split(), after.split()
-        if not sep or len(left) < 6 or len(right) < 3:
-            return []
-        root, target = [re.sub(r'\\([0-7]{3})', lambda m: chr(int(m[1], 8)), value)
-                        for value in left[3:5]]
-        if any(not p.startswith('/') or '..' in p.split('/') for p in (root, target)):
-            return []
+        root, target = (None, None)
+        if len(left) >= 5:
+            root, target = [re.sub(r'\\([0-7]{3})', lambda m: chr(int(m[1], 8)), value)
+                            for value in left[3:5]]
+        if (not sep or len(left) < 6 or len(right) < 3
+                or not all(safe_absolute_path(p) for p in (root, target))):
+            invalid += 1
+            # A known target with an invalid root/row must block covering reads,
+            # not silently expose an apparently safe less-specific filesystem.
+            if safe_absolute_path(target):
+                records.append((None, target, None))
+            continue
         records.append((root, target, right[0]))
+        valid += 1
+    diagnostics.update(status=('partial' if invalid else 'ok') if valid else 'unknown',
+                       reason='invalid_rows_skipped' if invalid else 'parsed',
+                       valid_row_count=valid, invalid_row_count=invalid)
     return records
+
+
+def covering_mount(records, target):
+    candidates = [row for row in records
+                  if target == row[1] or target.startswith(row[1].rstrip('/') + '/')]
+    if not candidates:
+        return None
+    longest = max(len(row[1]) for row in candidates)
+    selected = [row for row in candidates if len(row[1]) == longest]
+    return selected[0] if len(selected) == 1 and selected[0][2] is not None else None
 
 
 def cache_filesystem(text):
     target = '/var/cache/yocto'
-    candidates = [row for row in mount_records(text)
-                  if target == row[1] or target.startswith(row[1].rstrip('/') + '/')]
-    if not candidates:
+    selected = covering_mount(mount_records(text), target)
+    if selected is None:
         return unknown()
-    _, mountpoint, filesystem = max(candidates, key=lambda row: len(row[1]))
+    _, mountpoint, filesystem = selected
     allowed = {'nfs', 'nfs4', 'cifs', 'ext4', 'xfs', 'overlay', 'tmpfs', 'btrfs'}
     return {'status': 'ok', 'covering_filesystem': filesystem if filesystem in allowed else 'other',
             'exact_mountpoint': mountpoint == target,
             'shared_filesystem_type': filesystem in {'nfs', 'nfs4', 'cifs'}}
 
 
-def scalar(path, unlimited=False):
-    text, status = read_text(path, 128)
+def scalar(path, unlimited=False, dir_fd=None):
+    text, status = read_text(path, 128, dir_fd=dir_fd)
     if text is None:
         return {'status': 'unknown', 'reason': status}
     value = text.strip()
@@ -77,8 +109,8 @@ def scalar(path, unlimited=False):
     return unknown()
 
 
-def counters(path, keys):
-    text, status = read_text(path)
+def counters(path, keys, dir_fd=None):
+    text, status = read_text(path, dir_fd=dir_fd)
     result: dict = {key: {'status': 'unknown', 'reason': status if text is None else 'invalid_or_missing'}
               for key in keys}
     for line in (text or '').splitlines():
@@ -88,8 +120,8 @@ def counters(path, keys):
     return result
 
 
-def cpu_limit(path):
-    text, status = read_text(path, 128)
+def cpu_limit(path, dir_fd=None):
+    text, status = read_text(path, 128, dir_fd=dir_fd)
     match = re.fullmatch(r'(max|[0-9]{1,24}) ([0-9]{1,24})\s*', text or '')
     if status != 'ok' or not match or int(match[2]) == 0:
         return unknown()
@@ -99,7 +131,7 @@ def cpu_limit(path):
 
 
 def cgroup_memory(proc, cgroot, mounts, membership_file=None):
-    result = {'status': 'unknown', 'version': 'unknown',
+    result: dict = {'status': 'unknown', 'version': 'unknown',
               'host_ancestor_coverage': 'UNVERIFIED'}
     membership, status = read_text(membership_file or proc / 'self/cgroup')
     if membership is None:
@@ -118,28 +150,66 @@ def cgroup_memory(proc, cgroot, mounts, membership_file=None):
     if (not re.fullmatch(r'/[A-Za-z0-9_./:@-]*', membership)
             or any(p in {'.', '..', ''} for p in parts if membership != '/')):
         return dict(result, reason='unsafe_membership')
-    cgmounts = [row for row in mount_records(mounts) if row[2] == 'cgroup2']
-    # Fail closed on unusual mount-root/namespace mappings instead of guessing.
-    if cgmounts != [('/', '/sys/fs/cgroup', 'cgroup2')]:
+    mount_diagnostics = {}
+    records = mount_records(mounts, mount_diagnostics)
+    cgmounts = [row for row in records if row[2] == 'cgroup2']
+    matches = [row for row in cgmounts
+               if (row[1] == '/sys/fs/cgroup' or row[1].startswith('/sys/fs/cgroup/'))
+               and (row[0] == '/' or membership == row[0] or membership.startswith(row[0] + '/'))]
+    mapping = {'candidate_count': len(cgmounts), 'matching_candidate_count': len(matches),
+               'reason': 'membership_not_covered', 'root_is_global': None,
+               'mountpoint_category': 'unknown'}
+    result['mapping'] = mapping
+    if mount_diagnostics['valid_row_count'] is None:
+        mapping.update(candidate_count=None, matching_candidate_count=None, reason='mount_table_unavailable')
         return dict(result, reason='unsupported_mount_mapping')
-    if len(parts) > 15:
+    if len(matches) != 1:
+        mapping['reason'] = 'ambiguous_candidates' if matches else 'membership_not_covered'
+        return dict(result, reason='unsupported_mount_mapping')
+    mountroot, mountpoint, _ = matches[0]
+    mapping.update(root_is_global=mountroot == '/',
+                   mountpoint_category='cgroup_root' if mountpoint == '/sys/fs/cgroup'
+                   else 'under_cgroup_root')
+    relative = membership[len(mountroot):].lstrip('/') if mountroot != '/' else membership.lstrip('/')
+    parts = relative.split('/') if relative else []
+    mountparts = mountpoint.split('/')[4:]
+    visible_path = mountpoint + ('/' + relative if relative else '')
+    if (covering_mount(records, mountpoint) != matches[0]
+            or any(target != mountpoint and target.startswith(mountpoint + '/')
+                   and (visible_path == target or visible_path.startswith(target + '/'))
+                   for _, target, _ in records)):
+        mapping['reason'] = 'shadowed_mount'
+        return dict(result, reason='unsupported_mount_mapping')
+    if len(parts) > 15 or len(mountparts) > 15:
+        mapping['reason'] = 'ancestor_bound'
         return dict(result, reason='ancestor_bound')
-    directory = cgroot.joinpath(*parts)
+    mapping['reason'] = 'mapped'
     ancestors = []
-    while True:
-        entry = {name: scalar(directory / name, unlimited=name.endswith(('.max', '.high')))
-                 for name in ('memory.current', 'memory.peak', 'memory.max', 'memory.high',
-                              'memory.swap.current', 'memory.swap.max')}
-        entry['memory.events'] = counters(directory / 'memory.events', ('low', 'high', 'max', 'oom', 'oom_kill'))
-        entry['memory.stat'] = counters(directory / 'memory.stat',
-                                        ('anon', 'file', 'shmem', 'inactive_file', 'slab_reclaimable'))
-        entry['cpu.max'] = cpu_limit(directory / 'cpu.max')
-        entry['cpu.stat'] = counters(directory / 'cpu.stat',
-                                     ('usage_usec', 'nr_periods', 'nr_throttled', 'throttled_usec'))
-        ancestors.append(entry)
-        if directory == cgroot:
-            break
-        directory = directory.parent
+    try:
+        with contextlib.ExitStack() as opened:
+            flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK
+            fd = os.open(cgroot, flags)
+            opened.callback(os.close, fd)
+            descriptors = [fd]
+            for part in mountparts + parts:
+                fd = os.open(part, flags, dir_fd=fd)
+                opened.callback(os.close, fd)
+                descriptors.append(fd)
+            # Only the selected mount and descendants; never its hidden parents.
+            for fd in reversed(descriptors[len(mountparts):]):
+                entry = {name: scalar(name, unlimited=name.endswith(('.max', '.high')), dir_fd=fd)
+                         for name in ('memory.current', 'memory.peak', 'memory.max', 'memory.high',
+                                      'memory.swap.current', 'memory.swap.max')}
+                entry['memory.events'] = counters('memory.events', ('low', 'high', 'max', 'oom', 'oom_kill'), dir_fd=fd)
+                entry['memory.stat'] = counters('memory.stat',
+                                                ('anon', 'file', 'shmem', 'inactive_file', 'slab_reclaimable'), dir_fd=fd)
+                entry['cpu.max'] = cpu_limit('cpu.max', dir_fd=fd)
+                entry['cpu.stat'] = counters('cpu.stat',
+                                             ('usage_usec', 'nr_periods', 'nr_throttled', 'throttled_usec'), dir_fd=fd)
+                ancestors.append(entry)
+    except OSError:
+        mapping['reason'] = 'unsafe_or_unreadable_directory'
+        return dict(result, reason='unsafe_or_unreadable_directory')
     return dict(result, status='partial', visible_ancestors_including_self=ancestors)
 
 
@@ -214,24 +284,61 @@ def memory(proc):
     return result
 
 
-def disk_capacity():
-    for source, path in (('cache', '/var/cache/yocto'), ('cache_parent', '/var/cache'), ('root', '/')):
-        try:
-            value = os.statvfs(path)
-            return {'status': 'ok', 'source': source,
-                    'total_bytes': value.f_blocks * value.f_frsize,
-                    'available_bytes': value.f_bavail * value.f_frsize,
-                    'free_inodes': value.f_favail}
-        except FileNotFoundError:
-            continue
-        except OSError:
-            return unknown()
-    return unknown()
+def local_capacity(path, mounts):
+    """Stat only proven local directories; do not follow symlinks or remote mounts."""
+    if not safe_absolute_path(path):
+        return {'status': 'unknown', 'reason': 'unsafe_path'}
+    parts = path.split('/')[1:] if path != '/' else []
+    if len(parts) > 64:
+        return {'status': 'unknown', 'reason': 'path_bound'}
+    records = mount_records(mounts)
+    prefixes = ['/'] + ['/' + '/'.join(parts[:index]) for index in range(1, len(parts) + 1)]
+    selected = [covering_mount(records, prefix) for prefix in prefixes]
+    if any(row is None or row[2] not in {'ext4', 'xfs', 'overlay', 'tmpfs', 'btrfs'} for row in selected):
+        return {'status': 'unknown', 'reason': 'nonlocal_or_unknown_filesystem'}
+    try:
+        with contextlib.ExitStack() as opened:
+            flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK
+            fd = os.open('/', flags)
+            opened.callback(os.close, fd)
+            for part in parts:
+                fd = os.open(part, flags, dir_fd=fd)
+                opened.callback(os.close, fd)
+            value = os.statvfs(fd)
+        return {'status': 'ok', 'covering_filesystem': selected[-1][2] if selected[-1] is not None else 'other',
+                'total_bytes': value.f_blocks * value.f_frsize,
+                'available_bytes': value.f_bavail * value.f_frsize,
+                'free_inodes': value.f_favail}
+    except FileNotFoundError:
+        return {'status': 'unknown', 'reason': 'missing'}
+    except OSError:
+        return {'status': 'unknown', 'reason': 'unsafe_or_unreadable_directory'}
+
+
+def disk_capacity(mounts):
+    locations = {source: local_capacity(path, mounts) for source, path in (
+        ('cache', '/var/cache/yocto'), ('cache_parent', '/var/cache'), ('root', '/'), ('mnt', '/mnt'))}
+    workspace = os.environ.get('GITHUB_WORKSPACE')
+    if workspace is None:
+        locations['workspace'] = {'status': 'unknown', 'reason': 'workspace_unset'}
+    elif not safe_absolute_path(workspace):
+        locations['workspace'] = {'status': 'unknown', 'reason': 'invalid_workspace'}
+    else:
+        locations['workspace'] = local_capacity(workspace, mounts)
+    # Preserve the original cache/default fallback summary, not workspace capacity.
+    for source in ('cache', 'cache_parent', 'root'):
+        if locations[source]['status'] == 'ok':
+            return dict(locations[source], source=source, locations=locations)
+    return dict(unknown(), locations=locations)
 
 
 def collect(proc=Path('/proc'), cgroot=Path('/sys/fs/cgroup')):
     """Root parameters are for imported offline tests, never CLI/workflow inputs."""
     mounts, status = read_text(proc / 'self/mountinfo', 1048576)
+    mount_table = {}
+    mount_records(mounts, mount_table)
+    if mounts is None:
+        mount_table['reason'] = status
     cache = cache_filesystem(mounts)
     if mounts is None:
         cache = {'status': 'unknown', 'reason': status}
@@ -239,7 +346,7 @@ def collect(proc=Path('/proc'), cgroot=Path('/sys/fs/cgroup')):
         'schema_version': 1,
         'execution_context': {'observation_scope': 'current_process_visible_procfs',
                               'host_job_declaration': 'external_workflow_only',
-                              'idle_host': 'UNVERIFIED'},
+                              'idle_host': 'UNVERIFIED', 'mount_table': mount_table},
         'user': {'effective_uid': os.geteuid(), 'effective_gid': os.getegid(),
                  'is_root': os.geteuid() == 0},
         'prerequisites': prerequisites(proc),
@@ -249,7 +356,7 @@ def collect(proc=Path('/proc'), cgroot=Path('/sys/fs/cgroup')):
         'memory_pressure': pressure(proc / 'pressure/memory'),
         'cpu_pressure': pressure(proc / 'pressure/cpu'),
         'io_pressure': pressure(proc / 'pressure/io'),
-        'disk_capacity': disk_capacity(),
+        'disk_capacity': disk_capacity(mounts),
         'host_identity': {'hostname': os.uname().nodename},
         'self_cgroup': cgroup_memory(proc, cgroot, mounts),
         'service_budgets': service_budgets(proc, cgroot, mounts),
