@@ -6,12 +6,11 @@ raw logs or resource-limit changes. This is a snapshot, not a reliability fix.
 
 ## Trigger and authorized execution
 
-`workflow_dispatch` remains available after registration. The initial isolated
-publication uses a push trigger restricted to branch
-`diag/host-cache-memory-preflight` and the exact workflow/collector paths.
-Do not open a PR: that would trigger unrelated Yocto builds. Inspect all existing
-workflow triggers before publishing. Further matching pushes can run the probe
-again; do not push unreviewed iterations or create an automatic retry loop.
+The diagnostic is now manual-only (`workflow_dispatch`); its initial branch-push
+bootstrap trigger has been removed. Publishing this repair must not launch another
+probe. Do not open a PR: that would trigger unrelated Yocto builds. Dispatch still
+depends on GitHub workflow registration and requires a separately chosen reason
+and scope. No automatic retries or scheduled probes are configured.
 
 John authorized proceeding with a small host diagnostic for both runner reliability
 and cache feasibility. GitHub schedules this separate job on an available runner;
@@ -48,8 +47,14 @@ unverified. This cannot establish the historical failed host's state.
 ## Collection and security boundaries
 
 The host job checks out its immutable workflow SHA with full-SHA-pinned Actions,
-contents-read permissions and no persisted Git credentials. It uploads exactly
-`host-preflight.json`, retained three days. No arbitrary ref/path inputs exist.
+contents-read permissions and no persisted Git credentials. It uses a full,
+non-sparse checkout under `host-preflight-source/`, never in the default build checkout.
+It runs that subdirectory's collector and uploads exactly
+`host-preflight-source/host-preflight.json`, retained three days. The collector's
+`GITHUB_WORKSPACE` capacity target remains the Actions workspace, not this source
+subdirectory. No arbitrary ref/path inputs exist. This isolation prevents future
+probe checkouts from changing the build repository's sparse configuration; it
+does not repair previously reused workspaces.
 The imported fixture-root API is for offline tests, not CLI/workflow input.
 
 Individual reads reject final symlinks and nonregular files and are size bounded;

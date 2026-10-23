@@ -406,11 +406,9 @@ class HostPreflightTests(unittest.TestCase):
         path = SCRIPT.parents[1] / '.github/workflows/host-preflight.yml'
         self.assertTrue(path.is_file(), 'manual workflow missing')
         text = path.read_text()
-        self.assertIn('  workflow_dispatch:', text)
-        self.assertIn('  push:', text)
-        self.assertIn('      - diag/host-cache-memory-preflight', text)
-        self.assertIn('      - .github/workflows/host-preflight.yml', text)
-        self.assertIn('      - scripts/host-preflight.py', text)
+        self.assertIn('\non: workflow_dispatch\n', text)
+        self.assertNotIn('  push:', text)
+        self.assertNotIn('sparse-checkout:', text)
         self.assertIn('timeout-minutes: 2', text)
         for label in ('self-hosted', '1ES.Pool=meta-iotedge-1es-github-linux-amd64',
                       '1ES.ImageOverride=agent-aziotedge-ubuntu-22.04-msmoby'):
@@ -419,14 +417,35 @@ class HostPreflightTests(unittest.TestCase):
         self.assertIn('ref: ${{ github.workflow_sha }}', text)
         self.assertIn('persist-credentials: false', text)
         self.assertIn('actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a', text)
-        self.assertIn('path: host-preflight.json\n', text)
+        self.assertIn('          path: host-preflight-source\n', text)
+        self.assertIn('path: host-preflight-source/host-preflight.json\n', text)
         self.assertIn('if-no-files-found: error', text)
-        self.assertIn('python3 scripts/host-preflight.py > host-preflight.json', text)
+        self.assertIn('python3 host-preflight-source/scripts/host-preflight.py > host-preflight-source/host-preflight.json', text)
         for excluded in ('container:', 'build.sh', 'bitbake', 'sudo ', 'secrets.', 'inputs.',
                          'pull_request:', 'workflow_call:', 'cancel-in-progress: true'):
             self.assertNotIn(excluded, text.lower())
         self.assertEqual(text.count('uses:'), 2)
         self.assertEqual(text.count('run:'), 1)
+
+    def test_workflow_collector_uses_isolated_source_and_output_paths(self):
+        workflow = (SCRIPT.parents[1] / '.github/workflows/host-preflight.yml').read_text()
+        command = next(line.strip().removeprefix('run: ') for line in workflow.splitlines()
+                       if line.strip().startswith('run: '))
+        with tempfile.TemporaryDirectory(prefix='host-checkout-path-') as tmp:
+            root = Path(tmp)
+            source = root / 'host-preflight-source/scripts'
+            source.mkdir(parents=True)
+            (source / 'host-preflight.py').write_text('print(\'{"fixture": true}\')\n')
+            (root / '.git').mkdir()
+            (root / '.git/config').write_text('default checkout sentinel\n')
+            result = subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', command],
+                                    cwd=root, text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            artifact = root / 'host-preflight-source/host-preflight.json'
+            self.assertEqual(json.loads(artifact.read_text()), {'fixture': True})
+            self.assertFalse((root / 'host-preflight.json').exists())
+            self.assertEqual((root / '.git/config').read_text(), 'default checkout sentinel\n')
+            self.assertIn('          path: ' + str(artifact.relative_to(root)) + '\n', workflow)
 
     def test_malformed_membership_stops_before_counter_reads_without_traceback(self):
         module = self.module()

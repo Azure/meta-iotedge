@@ -1,14 +1,6 @@
 name: Manual read-only host preflight
 
-on:
-  workflow_dispatch:
-  # Isolated bootstrap route: this workflow is not registered on main yet.
-  push:
-    branches:
-      - diag/host-cache-memory-preflight
-    paths:
-      - .github/workflows/host-preflight.yml
-      - scripts/host-preflight.py
+on: workflow_dispatch
 
 permissions:
   contents: read
@@ -19,7 +11,7 @@ concurrency:
 
 jobs:
   preflight:
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/diag/host-cache-memory-preflight'
+    if: github.event_name == 'workflow_dispatch'
     timeout-minutes: 2
     runs-on:
       - self-hosted
@@ -30,19 +22,20 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.workflow_sha }}
+          # Use an isolated full checkout; never leave sparse state on a reused runner.
+          path: host-preflight-source
           persist-credentials: false
           fetch-depth: 1
-          sparse-checkout: scripts/host-preflight.py
-          sparse-checkout-cone-mode: false
+
       - name: Collect current process visible evidence
         shell: bash
-        run: python3 scripts/host-preflight.py > host-preflight.json
+        run: python3 host-preflight-source/scripts/host-preflight.py > host-preflight-source/host-preflight.json
       - name: Upload only allowlisted JSON
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: host-preflight
-          path: host-preflight.json
+          path: host-preflight-source/host-preflight.json
           if-no-files-found: error
           retention-days: 3
           include-hidden-files: false
