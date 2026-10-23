@@ -245,6 +245,20 @@ jobs:
       - name: Configure git safe directory
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
+      - name: Materialize full checkout
+        run: |
+          # Reused runners can retain local sparse=true after checkout disables
+          # worktreeConfig. Clear skip bits too: disabling sparse alone is not enough.
+          git config --local core.sparseCheckout false
+          git ls-files -z | git update-index --no-skip-worktree -z --stdin
+          git restore --source=HEAD --staged --worktree -- .
+          for script in scripts/fetch.sh scripts/build.sh scripts/validate-qemu.sh; do
+            test -s "$script" && test -x "$script" || {
+              echo "::error::Checkout missing required executable: ${script}" >&2
+              exit 1
+            }
+          done
+
       - name: Create build user
         run: |
           useradd -m builder
