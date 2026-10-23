@@ -45,7 +45,8 @@ def collect(timeout=3):
         'nfs_common_package': {'passed': 'installed', 'failed': 'not_confirmed'}.get(
             package, package),
         # CLI only: never reads Docker configuration or contacts a daemon.
-        'docker_cli': (check_command([tools['docker'], '--version'], timeout=timeout)
+        # Allow slow CLI startup without extending sudo/package checks (3s each).
+        'docker_cli': (check_command([tools['docker'], '--version'], timeout=15)
                        if tools['docker'] else 'unavailable'),
         'sudo_noninteractive_true': (
             check_command([tools['sudo'], '-n', 'true'], timeout=timeout)

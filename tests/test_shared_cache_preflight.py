@@ -74,6 +74,55 @@ class CommandTests(unittest.TestCase):
 
 
 class SnapshotTests(unittest.TestCase):
+    def test_only_docker_gets_longer_fixed_budget_with_real_delayed_commands(self):
+        probe = load_probe()
+        real_run = subprocess.run
+        for delayed in [('docker',), ('docker', 'sudo', 'dpkg-query')]:
+            with self.subTest(delayed=delayed), tempfile.TemporaryDirectory() as directory:
+                tools = {}
+                for name in ['docker', 'sudo', 'dpkg-query', 'mount', 'mount.nfs']:
+                    helper = Path(directory) / name
+                    helper.write_text('#!' + sys.executable + '\n'
+                        'import sys, time\n'
+                        + ('raise SystemExit("FORBIDDEN_MOUNT")\n'
+                           if name.startswith('mount') else
+                           ('time.sleep(0.6)\n' if name in delayed else '')
+                           + 'print("installed" if sys.argv[1:2] == ["-W"] '
+                             'else "SENTINEL_SECRET", end="")\n'
+                           + 'print("SENTINEL_SECRET", file=sys.stderr)\n'))
+                    helper.chmod(0o755)
+                    tools[name] = str(helper)
+                commands = []
+                budgets = []
+
+                def scaled_run(argv, **kwargs):
+                    commands.append([Path(argv[0]).name, *argv[1:]])
+                    budgets.append(kwargs['timeout'])
+                    # Capture production budgets, then exercise real processes
+                    # at 1/10 scale: 0.6s exceeds 0.3s but fits within 1.5s.
+                    kwargs['timeout'] *= 0.1
+                    return real_run(argv, **kwargs)
+
+                with patch.object(probe.shutil, 'which',
+                                  side_effect=lambda name, **kwargs: tools[name]), \
+                     patch.object(probe.subprocess, 'run', side_effect=scaled_run), \
+                     contextlib.redirect_stdout(io.StringIO()) as output, \
+                     contextlib.redirect_stderr(output):
+                    snapshot = probe.collect()
+                self.assertEqual(snapshot['docker_cli'], 'passed')
+                self.assertEqual(snapshot['sudo_noninteractive_true'],
+                                 'timeout' if 'sudo' in delayed else 'passed')
+                self.assertEqual(snapshot['nfs_common_package'],
+                                 'timeout' if 'dpkg-query' in delayed else 'installed')
+                self.assertEqual(budgets, [3, 15, 3])
+                self.assertLess(sum(budgets), 60)
+                self.assertEqual(commands, [
+                    ['dpkg-query', '-W', '-f=${db:Status-Status}', 'nfs-common'],
+                    ['docker', '--version'], ['sudo', '-n', 'true']])
+                self.assertEqual(snapshot['docker_daemon_access'], 'unknown')
+                self.assertEqual(output.getvalue(), '')
+                self.assertNotIn('SENTINEL_SECRET', json.dumps(snapshot))
+
     def test_fixed_probe_collects_only_allowlisted_prerequisites(self):
         probe = load_probe()
         self.assertTrue(hasattr(probe, 'collect'), 'missing fixed read-only probe')
@@ -106,10 +155,18 @@ class SnapshotTests(unittest.TestCase):
                         helper(name, ('import time; time.sleep(30)\n' if mode == 'timeout'
                                       else 'raise SystemExit(1)\n'))
                 captured = io.StringIO()
+                real_run = subprocess.run
+
+                def bounded_fixture_run(argv, **kwargs):
+                    if mode == 'timeout':
+                        kwargs['timeout'] = 0.05
+                    return real_run(argv, **kwargs)
+
                 with patch.object(probe.shutil, 'which', side_effect=lambda name, **kwargs:
                                   None if mode == 'missing' else tools[name]) as which, \
+                     patch.object(probe.subprocess, 'run', side_effect=bounded_fixture_run), \
                      contextlib.redirect_stdout(captured), contextlib.redirect_stderr(captured):
-                    snapshot = probe.collect(timeout=0.05 if mode == 'timeout' else 3)
+                    snapshot = probe.collect()
                 self.assertEqual(captured.getvalue(), '')
                 self.assertTrue(all(call.kwargs.get('path') == '/usr/sbin:/usr/bin:/sbin:/bin'
                                     for call in which.call_args_list),

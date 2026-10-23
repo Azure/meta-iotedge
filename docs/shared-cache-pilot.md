@@ -27,9 +27,25 @@ full tracked-source checkouts (shallow history is intentional, not sparse) in
 job checks out the immutable workflow SHA, not an arbitrary caller ref.
 Reports are isolated under a run/attempt-specific runner temporary directory.
 
-## First read-only host preflight (not yet executed)
+## Completed first read-only host preflight
 
-After independent review and separately authorized publication as a **draft**:
+[Run 40038583985](https://github.com/Azure/meta-iotedge/actions/runs/40038583985)
+completed inventory collection on the existing image. The observed real/effective
+UID was 1000, `sudo_noninteractive_true` was `passed`, the `mount.nfs` helper
+was not found, and the `nfs-common` package was `not_confirmed` (not proof of
+absence). `docker --version` reached the original three-second timeout; this
+is inconclusive CLI-startup evidence, not proof of an unsupported image or
+Docker failure. Docker daemon access remains `unknown`.
+
+The follow-up gives only the Docker CLI check a fixed 15-second bound; no live
+follow-up result is claimed here. Neither the completed inventory nor successful
+`sudo -n true` establishes mount authorization, mount success, network access or
+shared-storage support. Those fields remain `unknown`.
+
+## Reusable authorized dispatch procedure
+
+For each future run, after independent review and separately authorized
+publication as a **draft**, obtain separate dispatch authorization:
 
 1. Verify the exact remote SHA/files and that PR updates launched only the
    expected cheap jobs. Do not mark the PR ready just to register a workflow.
@@ -73,8 +89,10 @@ Executable discovery and child environments use a fixed system PATH.
   `sudo_noninteractive_true` does **not** authorize a mount or demonstrate mount
   success; both corresponding fields remain `unknown`.
 
-Each subprocess has a three-second timeout. Exit outcomes are `passed`,
-`failed`, `unavailable`, `timeout`, or `unknown`; raw stdout/stderr and
+The Docker CLI version subprocess has a fixed 15-second timeout; sudo and
+package-query subprocesses retain three seconds each (21 seconds combined,
+within the one-minute collector step and five-minute job limits). Exit outcomes
+are `passed`, `failed`, `unavailable`, `timeout`, or `unknown`; raw stdout/stderr and
 exceptions are never copied to the report. The exact package-state stdout is
 compared internally and discarded. Missing commands do not trigger installs.
 
