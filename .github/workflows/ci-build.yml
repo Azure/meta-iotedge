@@ -230,7 +230,7 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-      options: --user root -v ${{ vars.YOCTO_CACHE_PATH || '/var/cache/yocto' }}:/workspaces/yocto-cache
+      options: --user root -v ${{ vars.YOCTO_CACHE_PATH || '/mnt/yocto-cache' }}:/workspaces/yocto-cache
     env:
       DEVCONTAINER: "1"
       RELEASE_TAG: ${{ inputs.release_tag || '' }}

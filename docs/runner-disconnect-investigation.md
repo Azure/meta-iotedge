@@ -1,6 +1,6 @@
 # Investigating self-hosted Yocto runner disconnects
 
-This is a **concurrency mitigation and evidence-collection experiment**, not a
+This is a **concurrency/storage mitigation and evidence-collection experiment**, not a
 confirmed root-cause fix. Lost communication can reflect host resource pressure,
 runner/service faults, network interruption, or provider VM lifecycle events.
 A passing retry alone does not distinguish these causes.
@@ -28,6 +28,48 @@ The reusable workflow can check out an explicit older ref. If that ref predates
 the resource-monitor script, the workflow warns and runs that ref's original
 build/QEMU tooling. Such a run is **not** evidence that this mitigation was
 applied. Supported historical-ref/preflight constraints otherwise remain unchanged.
+
+## Local cache placement experiment
+
+The default host bind source is now `/mnt/yocto-cache`, rather than
+`/var/cache/yocto`, with the existing `vars.YOCTO_CACHE_PATH` override retained.
+The container destination remains `/workspaces/yocto-cache`. This is **local
+per-VM capacity**, not shared or durable cross-agent storage. No old cache is
+migrated, cleared or deleted; cache ownership preparation is unchanged.
+
+The fresh-host preflight in run `40030226512` observed local ext4 capacity of
+66,404,147,200 bytes on root/cache-parent versus 269,425,381,376 bytes on `/mnt`
+and the workspace. The default cache directory did not yet exist. That snapshot
+motivates testing the larger volume; it is not evidence of disk exhaustion on
+a failed runner, nor proof of placement on a future agent. Image, concurrency,
+cache configuration, local build `TMPDIR`, templates, build/QEMU checks and
+artifact acceptance are unchanged. No RAM cap is included.
+
+Each monitor sample adds `stat`/`statvfs` numeric capacity, free/available bytes,
+inodes, UID/GID and mode for only `container_root`, the current repository
+(`workspace`), and `cache`. Read errors are `unknown` with numeric errno, not
+zero. A workspace/cache same-device comparison is boolean, or null if unknown;
+no disk paths, device identifiers, raw mount sources or cache contents are
+emitted. `container_root` is **not host root**. The comparison alone does not
+identify the host bind source or establish durability.
+
+Compact `resource-monitor disk:` JSON lines show available bytes/inodes at START
+and END, plus at most one periodic line per minute (on the existing sampling
+cadence). Artifact sampling retains its original cadence and size cap. Console
+and artifact I/O failures are best effort and must not replace the command's
+exit status. Partial live logs may retain early evidence even if a disconnect
+prevents END and artifact upload; samples can miss short-lived exhaustion.
+
+For each experimental leg, record the checked-out source SHA, actual pulled
+image digest, initial cache status and BitBake `Sstate summary` Local/Mirrors/
+Missed counts. Compare the **observed container-visible capacity and device
+comparison** with that agent's known filesystem layout; do not assume the new
+default applied, because a repository/organization override may still select
+another source. These metrics cannot prove the exact host bind source; leave it
+unverified without host evidence. A new default directory can mean a cold cache,
+so this is not a controlled warm-cache A/B comparison. Require repeated full
+build/QEMU acceptance and correlated host evidence before claiming reliability
+improvement or a historical cause.
 
 ## Resource evidence
 

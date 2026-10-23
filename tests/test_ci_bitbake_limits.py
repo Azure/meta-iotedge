@@ -13,6 +13,14 @@ LIMITS = {'BB_NUMBER_THREADS': '4', 'PARALLEL_MAKE': '-j4', 'BB_NUMBER_PARSE_THR
 
 
 class LimitsTests(unittest.TestCase):
+    def test_cache_placement_changes_only_the_host_default_and_retains_override(self):
+        workflow = (ROOT / '.github/workflows/ci-build.yml').read_text()
+        options = next(line.strip() for line in workflow.splitlines()
+                       if line.strip().startswith('options:'))
+        self.assertEqual(options, "options: --user root -v ${{ vars.YOCTO_CACHE_PATH || '/mnt/yocto-cache' }}:/workspaces/yocto-cache")
+        self.assertIn('image: ghcr.io/azure/meta-iotedge-devcontainer:latest', workflow)
+        self.assertIn('chown -R builder:builder /workspaces/yocto-cache', workflow)
+
     def test_configuration_is_idempotent_and_preserves_user_content(self):
         with tempfile.TemporaryDirectory() as tmp:
             conf = Path(tmp) / 'local.conf'
@@ -97,7 +105,7 @@ esac
             sudo = root / 'bin/sudo'
             sudo.write_text('#!/bin/sh\nshift 3\nexec "$@"\n')
             sudo.chmod(0o755)
-            for label, name, script, code in [('build', 'Build', 'build.sh', 17),
+            for label, name, script, code in [('build', 'Build', 'build.sh', 37),
                                               ('qemu', 'Run QEMU validation', 'validate-qemu.sh', 0)]:
                 command = root / 'scripts' / script
                 command.write_text(f'#!/bin/sh\necho live-{label}\nexit {code}\n')
@@ -110,7 +118,11 @@ esac
                                         capture_output=True, text=True)
                 self.assertEqual(result.returncode, code, result.stderr)
                 self.assertIn(f'live-{label}', result.stdout)
-            for label, code in [('build', 17), ('qemu', 0)]:
+                disk_lines = [json.loads(line.split(': ', 1)[1]) for line in result.stdout.splitlines()
+                              if line.startswith('resource-monitor disk: ')]
+                self.assertEqual([line['phase'] for line in disk_lines], ['start', 'end'])
+                self.assertTrue(all(line['disks']['workspace']['status'] == 'ok' for line in disk_lines))
+            for label, code in [('build', 37), ('qemu', 0)]:
                 summary = root / f'runner-diagnostics/{label}/summary.json'
                 self.assertTrue(summary.is_file(), f'{label} diagnostics must survive the other phase')
                 report = json.loads(summary.read_text())

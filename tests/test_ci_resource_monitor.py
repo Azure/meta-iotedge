@@ -10,7 +10,6 @@ import tempfile
 import time
 import unittest
 from unittest.mock import patch
-from contextlib import redirect_stderr
 import io
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "ci-resource-monitor.py"
@@ -25,6 +24,177 @@ def load_monitor():
 
 
 class MonitorTests(unittest.TestCase):
+    def test_disk_fixtures_report_capacity_and_unknown_without_reading_contents(self):
+        monitor = load_monitor()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cache = root / 'cache-private-path'
+            cache.mkdir()
+            marker = cache / 'private-cache-content'
+            marker.write_text('must-not-be-read-or-changed')
+            space = os.statvfs(root)
+            with patch.object(Path, 'open', side_effect=AssertionError('no content reads')):
+                disks = monitor.collect_disks(root, root, cache)
+            self.assertTrue(disks['workspace_cache_same_device'])
+            entry = disks['cache']
+            self.assertEqual(entry['bytes_total'], space.f_blocks * space.f_frsize)
+            self.assertEqual(entry['inodes_total'], space.f_files)
+            self.assertEqual(set(entry), {'status', 'uid', 'gid', 'mode', 'bytes_total',
+                                         'bytes_free', 'bytes_available', 'inodes_total',
+                                         'inodes_free', 'inodes_available'})
+            missing = root / 'missing'
+            disks = monitor.collect_disks(root, root, missing)
+            self.assertEqual(disks['cache'], {'status': 'unknown', 'errno': 2})
+            self.assertIsNone(disks['workspace_cache_same_device'])
+            self.assertFalse(missing.exists())
+            for operation in ('stat', 'statvfs'):
+                original = getattr(monitor.os, operation)
+
+                def fail_cache(path):
+                    if path == cache:
+                        raise PermissionError(13, 'private failure text', str(cache))
+                    return original(path)
+
+                with self.subTest(operation=operation), \
+                        patch.object(monitor.os, operation, side_effect=fail_cache):
+                    disks = monitor.collect_disks(root, root, cache)
+                self.assertEqual(disks['cache'], {'status': 'unknown', 'errno': 13})
+                self.assertEqual(disks['workspace']['status'], 'ok')
+                self.assertIsNone(disks['workspace_cache_same_device'])
+                self.assertNotIn('private', json.dumps(disks))
+            self.assertEqual(marker.read_text(), 'must-not-be-read-or-changed')
+
+    def test_disk_device_comparison_does_not_emit_identifiers(self):
+        from types import SimpleNamespace
+        monitor = load_monitor()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cache = root / 'cache'
+            cache.mkdir()
+            real_stat = os.stat
+
+            def metadata(path):
+                result = real_stat(path)
+                return SimpleNamespace(st_dev=987654321 if path == cache else 123456789,
+                                       st_uid=result.st_uid, st_gid=result.st_gid,
+                                       st_mode=result.st_mode)
+
+            with patch.object(monitor.os, 'stat', side_effect=metadata):
+                disks = monitor.collect_disks(root, root, cache)
+            self.assertFalse(disks['workspace_cache_same_device'])
+            self.assertNotIn('987654321', json.dumps(disks))
+            self.assertNotIn('123456789', json.dumps(disks))
+
+    def test_closed_warning_pipe_does_not_mask_child_exit37(self):
+        read_fd, write_fd = os.pipe()
+        os.close(read_fd)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                blocked = Path(tmp) / 'not-a-directory'
+                blocked.write_text('fixture')
+                result = subprocess.run(
+                    [sys.executable, str(SCRIPT), '--output-dir', str(blocked), '--label', 'build',
+                     '--', sys.executable, '-c', 'raise SystemExit(37)'],
+                    stdout=subprocess.PIPE, stderr=write_fd, text=True, timeout=10)
+                self.assertEqual(result.returncode, 37, result.stdout)
+        finally:
+            os.close(write_fd)
+
+    def test_closed_console_pipe_does_not_mask_child_exit37(self):
+        read_fd, write_fd = os.pipe()
+        os.close(read_fd)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                result = subprocess.run(
+                    [sys.executable, str(SCRIPT), '--output-dir', tmp, '--label', 'build',
+                     '--', sys.executable, '-c', 'raise SystemExit(37)'],
+                    stdout=write_fd, stderr=subprocess.PIPE, text=True, timeout=10)
+                self.assertEqual(result.returncode, 37, result.stderr)
+                report = json.loads((Path(tmp) / 'summary.json').read_text())
+                self.assertEqual(report['child_returncode'], 37)
+        finally:
+            os.close(write_fd)
+
+    def test_live_disk_periodic_output_is_at_most_once_per_minute(self):
+        monitor = load_monitor()
+        now = [0.0]
+
+        def run(command, interval, periodic):
+            for instant in (0.1, 59.9, 60.0, 60.1, 119.9, 120.0):
+                now[0] = instant
+                periodic()
+            return 37, None, False, None
+
+        with tempfile.TemporaryDirectory() as tmp:
+            console = []
+            with patch.object(monitor.time, 'monotonic', side_effect=lambda: now[0]), \
+                    patch.object(monitor, 'run_command', side_effect=run), \
+                    patch.object(monitor.os, 'write', side_effect=lambda fd, data: console.append(data)):
+                code = monitor.main(['--output-dir', tmp, '--label', 'build', '--', 'unused'])
+            self.assertEqual(code, 37)
+            records = [json.loads(line.decode().split(': ', 1)[1]) for line in console]
+            self.assertEqual([r['phase'] for r in records], ['start', 'periodic', 'periodic', 'end'])
+            self.assertEqual([r['elapsed_seconds'] for r in records], [0.0, 60.0, 120.0, 120.0])
+            samples = (Path(tmp) / 'samples.jsonl').read_text().splitlines()
+            self.assertEqual(len(samples), 8)  # Artifact cadence is not reduced.
+
+    def test_live_disk_lines_survive_artifact_failure_without_changing_exit37(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            blocked = Path(tmp) / 'not-a-directory'
+            blocked.write_text('fixture')
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT), '--output-dir', str(blocked),
+                 '--label', 'private-label', '--interval', '0.01', '--',
+                 sys.executable, '-c', 'import time; time.sleep(0.08); raise SystemExit(37)'],
+                cwd=tmp, capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 37, result.stderr)
+            lines = [line for line in result.stdout.splitlines()
+                     if line.startswith('resource-monitor disk: ')]
+            self.assertEqual(len(lines), 2, result.stdout)
+            records = [json.loads(line.split(': ', 1)[1]) for line in lines]
+            self.assertEqual([r['phase'] for r in records], ['start', 'end'])
+            self.assertTrue(all(r['scope'] == 'container-visible' for r in records))
+            for line, record in zip(lines, records):
+                self.assertLess(len(line), 1024)
+                self.assertEqual(set(record['disks']),
+                                 {'container_root', 'workspace', 'cache', 'workspace_cache_same_device'})
+                self.assertEqual(set(record['disks']['workspace']),
+                                 {'status', 'bytes_available', 'inodes_available'})
+                self.assertNotIn(tmp, line)
+                self.assertNotIn('private-label', line)
+            self.assertIn('warning', result.stderr)
+
+    def test_cli_records_only_selected_disk_metadata_and_preserves_exit37(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT), '--output-dir', str(root / 'out'),
+                 '--label', 'build', '--', sys.executable, '-c',
+                 'raise SystemExit(37)', 'private-command-argument'], cwd=root,
+                env=dict(os.environ, PRIVATE_ENV='private-environment-value'),
+                capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 37, result.stderr)
+            report = json.loads((root / 'out/summary.json').read_text())
+            self.assertIn('disks', report['end_sample'])
+            disks = report['end_sample']['disks']
+            self.assertEqual(set(disks), {'container_root', 'workspace', 'cache',
+                                         'workspace_cache_same_device'})
+            workspace = disks['workspace']
+            self.assertEqual(workspace['status'], 'ok')
+            stat = root.stat()
+            self.assertEqual((workspace['uid'], workspace['gid'], workspace['mode']),
+                             (stat.st_uid, stat.st_gid, stat.st_mode))
+            for field in ('bytes_total', 'bytes_free', 'bytes_available',
+                          'inodes_total', 'inodes_free', 'inodes_available'):
+                self.assertIsInstance(workspace[field], int)
+                self.assertGreaterEqual(workspace[field], 0)
+            output = result.stdout + result.stderr + (root / 'out/summary.json').read_text()
+            output += (root / 'out/samples.jsonl').read_text()
+            for private in ('private-command-argument', 'private-environment-value', str(root)):
+                self.assertNotIn(private, output)
+            self.assertNotIn('st_dev', json.dumps(disks))
+            self.assertEqual(report['child_returncode'], 37)
+
     def test_cgroup_subtree_discovery_and_bounded_unavailable_reads(self):
         monitor = load_monitor()
         with tempfile.TemporaryDirectory() as tmp:
@@ -174,7 +344,7 @@ class MonitorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp)
             writer = monitor.SampleWriter(output, max_bytes=2048, record_bytes=512)
-            with redirect_stderr(io.StringIO()):
+            with patch.object(monitor, "console_line"):
                 for i in range(100):
                     writer.write({"phase": "start" if i == 0 else "periodic",
                                   "scope": "container-visible", "text": "x" * 350})
@@ -200,7 +370,7 @@ class MonitorTests(unittest.TestCase):
             # Real proc/cgroup collection and a real command, with only the
             # writer's cap reduced through its API to make this test fast.
             with patch.object(monitor, "SampleWriter", side_effect=small_writer):
-                with redirect_stderr(io.StringIO()):
+                with patch.object(monitor, "console_line"):
                     code = monitor.main(["--output-dir", tmp, "--label", "build", "--interval", "0.001",
                                          "--", sys.executable, "-c", "import time; time.sleep(0.3); raise SystemExit(37)"])
             self.assertEqual(code, 37)
@@ -334,7 +504,7 @@ while True:
         with tempfile.TemporaryDirectory() as tmp:
             errors = io.StringIO()
             with patch.object(monitor, "collect_snapshot", side_effect=PermissionError(13, "private details")):
-                with redirect_stderr(errors):
+                with patch.object(monitor.os, 'write', side_effect=lambda fd, data: errors.write(data.decode())):
                     code = monitor.main(["--output-dir", tmp, "--label", "build", "--",
                                          sys.executable, "-c", "raise SystemExit(37)"])
             self.assertEqual(code, 37)

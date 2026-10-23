@@ -18,7 +18,6 @@ from pathlib import Path, PurePosixPath
 import re
 import signal
 import subprocess
-import sys
 import time
 from typing import Any, Dict
 
@@ -95,6 +94,36 @@ def discover_cgroup(proc_root=Path("/proc")) -> Dict[str, Any]:
     return dict(metadata, status="unavailable", reason="current-cgroup-not-visible")
 
 
+def collect_disks(container_root=Path("/"), workspace=Path("."),
+                  cache=Path("/workspaces/yocto-cache")):
+    """Read only three selected paths; never disclose paths or device identifiers.
+
+    Container root is not host root. Same-device is a comparison, not proof of
+    host bind-source placement, cache durability, or a dedicated filesystem.
+    """
+    disks = {}
+    devices = {}
+    for name, path in (("container_root", container_root), ("workspace", workspace),
+                       ("cache", cache)):
+        try:
+            metadata = os.stat(path)
+            space = os.statvfs(path)
+            disks[name] = {"status": "ok", "uid": metadata.st_uid,
+                           "gid": metadata.st_gid, "mode": metadata.st_mode,
+                           "bytes_total": space.f_blocks * space.f_frsize,
+                           "bytes_free": space.f_bfree * space.f_frsize,
+                           "bytes_available": space.f_bavail * space.f_frsize,
+                           "inodes_total": space.f_files, "inodes_free": space.f_ffree,
+                           "inodes_available": space.f_favail}
+            devices[name] = metadata.st_dev
+        except OSError as error:
+            disks[name] = {"status": "unknown", "errno": error.errno}
+    disks["workspace_cache_same_device"] = (
+        devices["workspace"] == devices["cache"]
+        if "workspace" in devices and "cache" in devices else None)
+    return disks
+
+
 def collect_snapshot(proc_root=Path("/proc"), read_limit=READ_LIMIT) -> Dict[str, Any]:
     proc_root = Path(proc_root)
     cgroup = discover_cgroup(proc_root)
@@ -104,15 +133,20 @@ def collect_snapshot(proc_root=Path("/proc"), read_limit=READ_LIMIT) -> Dict[str
         for name in CGROUP_FILES}
     return {"scope": "container-visible", "proc": {
         name: read_bounded(proc_root / name, read_limit) for name in PROC_FILES},
-        "cgroup": cgroup}
+        "cgroup": cgroup, "disks": collect_disks()}
+
+
+def console_line(fd, message):
+    """No buffering: failed diagnostic flushes must not change exit status to 120."""
+    try:
+        os.write(fd, (message + "\n").encode("utf-8"))
+    except OSError:
+        pass
 
 
 def warn(message):
     # Do not include command arguments, environment, or arbitrary exception text.
-    try:
-        print("resource-monitor warning: " + message, file=sys.stderr, flush=True)
-    except OSError:
-        pass
+    console_line(2, "resource-monitor warning: " + message)
 
 
 class SampleWriter:
@@ -248,9 +282,11 @@ def main(argv=None):
     output = Path(args.output_dir)
     started = time.monotonic()
     collection_warned = False
+    last_disk_console = 0.0
 
     def sample(phase):
-        nonlocal collection_warned
+        nonlocal collection_warned, last_disk_console
+        snapshot: Dict[str, Any]
         try:
             snapshot = collect_snapshot()
         except Exception as error:
@@ -260,6 +296,18 @@ def main(argv=None):
             snapshot = {"scope": "container-visible", "status": "collection-failed",
                         "error_type": type(error).__name__}
         snapshot.update(phase=phase, elapsed_seconds=time.monotonic() - started)
+        if phase != "periodic" or snapshot["elapsed_seconds"] - last_disk_console >= 60:
+            last_disk_console = snapshot["elapsed_seconds"]
+            # Compact allowlisted values also survive when artifact writes fail.
+            disks = snapshot.get("disks", {})
+            compact: Dict[str, Any] = {name: {key: value for key, value in disks.get(name, {"status": "unknown"}).items()
+                              if key in ("status", "errno", "bytes_available", "inodes_available")}
+                       for name in ("container_root", "workspace", "cache")}
+            compact["workspace_cache_same_device"] = disks.get("workspace_cache_same_device")
+            console_line(1, "resource-monitor disk: " + json.dumps({
+                "phase": phase, "scope": "container-visible",
+                "elapsed_seconds": round(snapshot["elapsed_seconds"], 3),
+                "disks": compact}, separators=(",", ":")))
         return snapshot
 
     writer = SampleWriter(output)
