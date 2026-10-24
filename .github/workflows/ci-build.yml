@@ -2,6 +2,7 @@ name: Yocto build
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     branches:
       - main
       - kirkstone
@@ -44,6 +45,9 @@ concurrency:
 
 jobs:
   check-changes:
+    # Only this own-repo draft experiment defers the network/BitBake path.
+    # Dependents retain their normal success() guard; ready_for_review restores it.
+    if: ${{ !(github.event_name == 'pull_request' && github.repository == 'Azure/meta-iotedge' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'experiment/shared-yocto-cache' && github.event.pull_request.draft == true && !inputs.ref) }}
     name: Check if only docs changed
     runs-on: ubuntu-22.04
     outputs:
@@ -243,10 +247,8 @@ jobs:
       - name: Configure git safe directory
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
-      - name: Create build user
-        run: |
-          useradd -m builder
-          chown -R builder:builder /workspaces/yocto-cache
+      - name: Prepare local build cache
+        run: bash ./scripts/prepare-yocto-cache.sh
 
       - name: Fix permissions
         run: chown -R builder:builder "${GITHUB_WORKSPACE}"
@@ -322,6 +324,10 @@ jobs:
           # leg fails. So this
           # check fails the moment one line fails to build or boot, which is
           # what makes the green check honest across both LTS lines.
+          if [ "${{ needs.check-changes.result }}" == "skipped" ]; then
+            echo "Full Build/QEMU acceptance pending - draft cache experiment runs offline checks only"
+            exit 1
+          fi
           if [ "${{ needs.regression-tests.result }}" != "success" ] || \
              [ "${{ needs.check-changes.result }}" != "success" ]; then
             echo "✗ Fast regressions or change detection failed"
