@@ -4,6 +4,36 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const {spawnSync} = require('node:child_process');
+test('metadata schema dispatch selects only one bounded read-only job across every mode', () => {
+  const workflow = read('.github/workflows/shared-cache-pilot.yml');
+  const names = [...workflow.matchAll(/^  ([\w-]+):$/gm)]
+    .map(m => m[1]).filter(n => !['contents', 'pull_request', 'workflow_dispatch'].includes(n));
+  const github = {repository: 'Azure/meta-iotedge', event_name: 'workflow_dispatch',
+    ref: 'refs/heads/experiment/shared-yocto-cache', ref_type: 'branch', event: {}};
+  const selected = (g, operation) => names.filter(n => vm.runInNewContext(condition(job(workflow, n)),
+    {github: g, inputs: {operation}}));
+  for (const [mode, expected] of Object.entries({'metadata-schema': ['metadata-schema'],
+    preflight: ['host-preflight'], 'managed-roundtrip': ['managed-producer', 'managed-consumer'], other: []})) {
+    assert.deepEqual(selected(github, mode), expected);
+    for (const mutation of [{repository: 'fork/meta-iotedge'}, {ref: 'refs/heads/main'},
+      {ref_type: 'tag'}, {event_name: 'push'}]) {
+      assert.deepEqual(selected({...github, ...mutation}, mode), []);
+    }
+  }
+  assert.deepEqual(selected(event(), 'metadata-schema'), ['offline-tests']);
+  const block = job(workflow, 'metadata-schema');
+  assert.match(block, /1ES.Pool=meta-iotedge-1es-github-linux-amd64/);
+  assert.match(block, /1ES.ImageOverride=agent-aziotedge-ubuntu-22.04-msmoby/);
+  assert.match(block, /timeout-minutes: 5/);
+  assert.equal((block.match(/timeout-minutes: 1/g) || []).length, 3);
+  assert.match(block, /ref: \$\{\{ github.workflow_sha \}\}/);
+  assert.match(block, /persist-credentials: false/);
+  assert.match(block, /python3 shared-cache-pilot-source\/scripts\/shared-cache-roundtrip.py metadata-schema > "\$REPORT_DIR\/metadata-schema.json"/);
+  assert.match(block, /path: \$\{\{ runner.temp \}\}\/shared-cache-schema-[^\n]+\/metadata-schema.json/);
+  assert.doesNotMatch(block, /always\(|continue-on-error|needs:|matrix:|strategy:|producer|consumer|preflight.py|sudo |curl |wget |docker /);
+  assert.equal((block.match(/uses: actions\/upload-artifact@[a-f0-9]{40}/g) || []).length, 1);
+});
+
 const root = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 function job(workflow, name) {
@@ -67,7 +97,7 @@ test('pilot is PR-offline or exact-branch manual host inventory, never push or c
   assert.equal(/^  (schedule|pull_request_target|workflow_call):/m.test(triggers), false);
   assert.match(triggers, /^  pull_request:/m);
   assert.match(triggers, /^  workflow_dispatch:\s*$/m);
-  assert.match(triggers, /inputs:\n      operation:\n        description: .+\n        type: choice\n        default: preflight\n        options: \[preflight, managed-roundtrip\]/);
+  assert.match(triggers, /inputs:\n      operation:\n        description: .+\n        type: choice\n        default: preflight\n        options: \[preflight, managed-roundtrip, metadata-schema\]/);
   assert.match(triggers, /permissions:\n  contents: read/);
   assert.doesNotMatch(workflow, /sparse-checkout|container:|secrets\.|sudo |docker |buildcacheconfig/);
   const offline = job(workflow, 'offline-tests');
@@ -124,7 +154,7 @@ test('managed roundtrip runs exactly producer then consumer; preflight and PR ne
   assert.match(consumer, /^    needs: managed-producer$/m);
   assert.doesNotMatch(consumer, /always\(\)|download-artifact/);
   assert.doesNotMatch(producer, /^    needs:/m);
-  assert.equal((workflow.match(/^      - self-hosted$/gm) || []).length, 3);
+  assert.equal((workflow.match(/^      - self-hosted$/gm) || []).length, 4);
   for (const [phase, block] of [['producer', producer], ['consumer', consumer]]) {
     assert.match(block, /1ES.Pool=meta-iotedge-1es-github-linux-amd64/);
     assert.match(block, /1ES.ImageOverride=agent-aziotedge-ubuntu-22.04-msmoby/);

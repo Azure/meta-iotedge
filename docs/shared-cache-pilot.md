@@ -227,6 +227,31 @@ engine files are pipeline artifacts. Review both job outcomes and the two
 `shared-cache-roundtrip-<run-id>-<attempt>-{producer,consumer}` summaries; failed
 jobs require private diagnostics, not publication of raw logs.
 
+## Read-only metadata schema follow-up (implementation; not a live receipt)
+
+`operation=metadata-schema` selects **only one** manually gated job on the same
+pool/image; offline tests, host preflight and both managed jobs skip. The job is
+five minutes; checkout, collector and summary upload each have one-minute limits.
+It reads only fixed `/buildcacheconfig.json` with the existing 1 MiB regular-file,
+no-follow reader and duplicate-key guard. It never launches an engine, downloads
+a package, authenticates, performs HEAD/Blob/network operations or creates a
+private cache trial. Checkout and the isolated report/artifact are its only writes.
+
+Only `metadata-schema.json` uploads, on successful validated inventory emission.
+The fixed, at-most-16-KiB summary contains read-status/file/root-kind enums,
+bounded counts, exact known-field/casing presence, unknown-key counts (never their
+names), cache-name matches, selected shards, container roles/type kinds, signature
+kinds and SAS **key presence only**. Permission/container-scope booleans require
+all selected containers and are false for an empty selection; no permission or
+credential values, names, account URLs, raw metadata or exception text are emitted.
+PascalCase fields are backed by the pinned source above; camelCase and the four
+wrapper spellings are diagnostic comparisons, not schema normalization. The
+unchanged pure validator supplies `validator_passes`; no guessed failure cause or
+new cache-client behavior is introduced. Inventory success with a non-`ok` read
+status is **not cache acceptance**. This probe cannot diagnose the prelaunch
+changed-file guard because it deliberately takes only one snapshot. Review the
+probe before considering the separately bounded producer/consumer retry.
+
 ## Offline checks
 
 ```sh

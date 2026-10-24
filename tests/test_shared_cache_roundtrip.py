@@ -27,6 +27,159 @@ def metadata():
                        for kind in ('Content', 'Metadata', 'Checkpoint')]}]}]
 
 
+class SchemaTests(unittest.TestCase):
+    def test_schema_facts_are_fixed_secret_free_and_do_not_normalize_validator(self):
+        m = load()
+        def probe(data):
+            with tempfile.TemporaryDirectory() as temp:
+                path = Path(temp) / 'metadata'
+                path.write_text(json.dumps(data))
+                result = m.metadata_schema(path)
+                m.validate_schema_summary(result)
+                self.assertNotIn('FIXTURE_SECRET', json.dumps(result))
+                self.assertNotIn('fixtureaccount', json.dumps(result))
+                return result
+        good = probe(metadata())
+        self.assertTrue(good['validator_passes'])
+        self.assertIs(good['permissions_valid'], True)
+        self.assertIs(good['credential_container_scope'], True)
+        self.assertEqual(good['root_kind'], 'array')
+        for key, count in {'resource_count': 1, 'cache_name_match_count': 1,
+                'selected_shard_count': 1, 'container_count': 3, 'role_content_count': 1,
+                'type_string_count': 3, 'signature_query_count': 3,
+                'sas_sig_present_count': 3, 'permissions_valid_count': 3,
+                'credential_container_scope_count': 3}.items():
+            self.assertEqual(good[key], count, key)
+        for wrapper in ('AssociatedBuildCaches', 'associatedBuildCaches', 'BuildCaches', 'buildCaches'):
+            data = metadata()
+            data[0]['FIXTURE_SECRET_UNKNOWN_KEY'] = 'FIXTURE_SECRET_VALUE'
+            for obj in [data[0], data[0]['Shards'][0], *data[0]['Shards'][0]['Containers']]:
+                for key in list(obj):
+                    if key != 'FIXTURE_SECRET_UNKNOWN_KEY':
+                        obj[key[0].lower() + key[1:]] = obj.pop(key)
+            result = probe({wrapper: data, 'FIXTURE_SECRET_ROOT_KEY': 'FIXTURE_SECRET'})
+            self.assertFalse(result['validator_passes'])
+            self.assertEqual(result['root_' + wrapper + '_present_count'], 1)
+            self.assertEqual(result['root_unknown_key_count'], 1)
+            self.assertEqual(result['resource_unknown_key_count'], 1)
+            self.assertEqual(result['resource_name_present_count'], 1)
+            self.assertEqual(result['container_signature_present_count'], 3)
+            self.assertEqual(result['cache_name_match_count'], 1)
+        data = metadata()
+        containers = data[0]['Shards'][0]['Containers']
+        for obj in [data[0]['Shards'][0], containers[0]]:
+            obj['FIXTURE_SECRET_KEY'] = 'FIXTURE_SECRET'
+        for container, kind, signature in zip(containers, [17, 'CONTENT', 'FIXTURE_SECRET'],
+                ['', 'https://fixtureaccount.invalid/?sp=FIXTURE_SECRET&sr=b&sig=FIXTURE_SECRET',
+                 'FIXTURE_SECRET']):
+            container.update(Type=kind, Signature=signature)
+        result = probe(data)
+        for key in ('type_number_count', 'role_content_count',
+                    'signature_empty_count', 'signature_full_uri_count', 'signature_other_count',
+                    'shard_unknown_key_count', 'container_unknown_key_count'):
+            self.assertEqual(result[key], 1, key)
+        self.assertEqual(result['role_other_count'], 2)  # Numeric and unknown string roles.
+        self.assertEqual(result['permissions_valid_count'], 0)
+        self.assertEqual(result['credential_container_scope_count'], 0)
+        for bad in (dict(good, injected='FIXTURE_SECRET'), dict(good, root_kind='FIXTURE_SECRET'),
+                    dict(good, file_bytes=True), dict(good, file_bytes=m.METADATA_LIMIT + 1)):
+            with self.assertRaises(ValueError):
+                m.validate_schema_summary(bad)
+
+    def test_read_classification_reuses_bounded_nofollow_helper(self):
+        from unittest.mock import patch
+        import socket
+        m = load()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            file = root / 'regular'
+            file.write_text('[]')
+            (root / 'link').symlink_to(file)
+            (root / 'directory').mkdir()
+            os.mkfifo(root / 'fifo')
+            with socket.socket(socket.AF_UNIX) as sock:
+                sock.bind(str(root / 'socket'))
+                for name, kind, status in [('absent', 'missing', 'missing'),
+                        ('link', 'symlink', 'symlink-refused'), ('directory', 'directory', 'nonregular'),
+                        ('fifo', 'fifo', 'nonregular'), ('socket', 'socket', 'nonregular')]:
+                    with self.subTest(name=name), patch.object(m, 'read_regular') as read:
+                        summary = m.metadata_schema(root / name)
+                        self.assertEqual((summary['file_kind'], summary['read_status']), (kind, status))
+                        read.assert_not_called()
+            for content, status in [(b'x' * (m.METADATA_LIMIT + 1), 'oversized'),
+                    (b'{', 'invalid-json'), (b'\xff', 'invalid-json'),
+                    (b'{"Name":1,"Name":2}', 'duplicate-or-contract'), (b'[]', 'ok')]:
+                file.write_bytes(content)
+                summary = m.metadata_schema(file)
+                self.assertEqual(summary['read_status'], status)
+                self.assertLessEqual(summary['file_bytes'], m.METADATA_LIMIT)
+            with patch.object(m, 'read_regular', side_effect=PermissionError('FIXTURE_SECRET')):
+                self.assertEqual(m.metadata_schema(file)['read_status'], 'permission-denied')
+            import errno
+            for number, status in [(errno.ELOOP, 'symlink-refused'), (errno.EISDIR, 'nonregular'),
+                                   (errno.EFBIG, 'oversized')]:
+                with patch.object(m, 'read_regular', side_effect=OSError(number, 'FIXTURE_SECRET')):
+                    self.assertEqual(m.metadata_schema(file)['read_status'], status)
+            from types import SimpleNamespace
+            import stat
+            for mode, kind in [(stat.S_IFCHR, 'character'), (stat.S_IFBLK, 'block'), (0, 'other')]:
+                with patch.object(Path, 'lstat', return_value=SimpleNamespace(st_mode=mode, st_size=0)), \
+                     patch.object(m, 'read_regular') as read:
+                    self.assertEqual(m.metadata_schema(file)['file_kind'], kind)
+                    read.assert_not_called()
+
+    def test_cli_validates_before_print_and_reads_only_the_fixed_fixture(self):
+        import contextlib
+        import io
+        from unittest.mock import patch
+        m = load()
+        with tempfile.TemporaryDirectory() as temp:
+            fixture = Path(temp) / 'metadata'
+            for raw in (json.dumps(metadata()), '{', '{"FIXTURE_SECRET":1,"FIXTURE_SECRET":2}'):
+                fixture.write_text(raw)
+                public, errors = io.StringIO(), io.StringIO()
+                with patch.object(m, 'RUNTIME_CONFIG', fixture), \
+                     patch.object(m, 'read_regular', wraps=m.read_regular) as read, \
+                     patch.object(m, 'perform', side_effect=AssertionError('engine')), \
+                     patch.object(m, 'private_root', side_effect=AssertionError('trial writes')), \
+                     patch.object(m.subprocess, 'Popen', side_effect=AssertionError('process')), \
+                     patch.object(m.urllib.request, 'build_opener', side_effect=AssertionError('network')), \
+                     patch.object(m.urllib.request, 'urlopen', side_effect=AssertionError('network')), \
+                     contextlib.redirect_stdout(public), contextlib.redirect_stderr(errors):
+                    self.assertEqual(m.main(['metadata-schema']), 0)
+                    read.assert_called_once_with(fixture, m.METADATA_LIMIT)
+                m.validate_schema_summary(json.loads(public.getvalue()))
+                self.assertEqual(errors.getvalue(), '')
+                self.assertNotIn('FIXTURE_SECRET', public.getvalue())
+            public = io.StringIO()
+            with patch.object(m, 'metadata_schema', return_value={'raw': 'FIXTURE_SECRET'}), \
+                 contextlib.redirect_stdout(public), self.assertRaises(ValueError):
+                m.main(['metadata-schema'])
+            self.assertEqual(public.getvalue(), '')
+
+    def test_cli_is_early_readonly_inventory_even_when_missing(self):
+        import contextlib
+        import io
+        from unittest.mock import patch
+        m = load()
+        public, errors = io.StringIO(), io.StringIO()
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(patch.object(m, 'RUNTIME_CONFIG', Path('/fixture-missing-metadata')))
+            forbidden = [stack.enter_context(patch.object(m, name, side_effect=AssertionError(name)))
+                         for name in ('perform', 'private_root', 'download_package', 'check_containers',
+                                      'run_engine', 'private_opener')]
+            stack.enter_context(patch.object(m.urllib.request, 'build_opener', side_effect=AssertionError('network')))
+            stack.enter_context(contextlib.redirect_stdout(public))
+            stack.enter_context(contextlib.redirect_stderr(errors))
+            self.assertEqual(m.main(['metadata-schema']), 0)
+            for call in forbidden:
+                call.assert_not_called()
+        summary = json.loads(public.getvalue())
+        self.assertEqual(summary['read_status'], 'missing')
+        self.assertFalse(summary['validator_passes'])
+        self.assertEqual(errors.getvalue(), '')
+
+
 class MetadataTests(unittest.TestCase):
     def test_native_array_selects_exact_cache_and_container_scoped_targets(self):
         self.assertTrue(SCRIPT.exists(), 'managed roundtrip helper is missing')

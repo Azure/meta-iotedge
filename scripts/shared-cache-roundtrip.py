@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Bounded official BuildXL action pilot. Never emit native logs or credentials."""
+import errno
 import hashlib
 import json
 import os
@@ -412,7 +413,152 @@ def deadline(*args):
     raise TimeoutError('pilot overall limit')
 
 
+# Native keys: pinned BuildCache{Configuration,Shard,Container}.cs (see pilot docs).
+# Lowercase spellings/wrappers are diagnostic comparisons only, never runtime adapters.
+SCHEMA_FIELDS = {
+    'root': ('AssociatedBuildCaches', 'associatedBuildCaches', 'BuildCaches', 'buildCaches'),
+    'resource': ('Name', 'name', 'RetentionDays', 'retentionDays', 'Shards', 'shards'),
+    'shard': ('StorageUrl', 'storageUrl', 'Containers', 'containers'),
+    'container': ('Name', 'name', 'Signature', 'signature', 'Type', 'type')}
+SCHEMA_SAS = ('sv', 'sr', 'sp', 'st', 'se', 'sig', 'sip', 'spr', 'si', 'skoid', 'sktid',
+              'skt', 'ske', 'sks', 'skv', 'saoid', 'suoid', 'scid', 'ss', 'srt')
+SCHEMA_ENUMS = {
+    'read_status': ('missing', 'symlink-refused', 'nonregular', 'oversized', 'permission-denied',
+                    'invalid-json', 'duplicate-or-contract', 'ok'),
+    'file_kind': ('missing', 'regular', 'symlink', 'directory', 'fifo', 'socket', 'character', 'block', 'other'),
+    'root_kind': ('unread', 'array', 'object', 'string', 'number', 'boolean', 'null')}
+SCHEMA_COUNTS = ('file_bytes', 'resource_count', 'cache_name_match_count', 'selected_shard_count',
+                 'container_count', 'permissions_valid_count', 'credential_container_scope_count',
+                 *(f'{level}_unknown_key_count' for level in SCHEMA_FIELDS),
+                 *(f'{level}_{key}_present_count' for level, keys in SCHEMA_FIELDS.items() for key in keys),
+                 *(f'sas_{key}_present_count' for key in SCHEMA_SAS),
+                 *(f'role_{kind}_count' for kind in ('content', 'metadata', 'checkpoint', 'other')),
+                 *(f'type_{kind}_count' for kind in ('string', 'number', 'boolean', 'null', 'array', 'object')),
+                 *(f'signature_{kind}_count' for kind in ('empty', 'query', 'full_uri', 'other')))
+
+
+def validate_schema_summary(summary):
+    exact_fields(summary, (*SCHEMA_ENUMS, *SCHEMA_COUNTS, 'validator_passes',
+                           'permissions_valid', 'credential_container_scope'))
+    for key in ('validator_passes', 'permissions_valid', 'credential_container_scope'):
+        require(type(summary[key]) is bool)
+    for key, choices in SCHEMA_ENUMS.items():
+        require(type(summary[key]) is str and summary[key] in choices)
+    for key in SCHEMA_COUNTS:
+        require(type(summary[key]) is int and 0 <= summary[key] <= METADATA_LIMIT)
+    require(len(json.dumps(summary)) <= 16384)
+
+
+def schema_facts(data, summary):
+    def kind(value):
+        return {list: 'array', dict: 'object', str: 'string', int: 'number', float: 'number',
+                bool: 'boolean', type(None): 'null'}[type(value)]
+    def fields(level, obj):
+        if type(obj) is not dict:
+            return
+        summary[level + '_unknown_key_count'] += len(set(obj) - set(SCHEMA_FIELDS[level]))
+        for key in SCHEMA_FIELDS[level]:
+            summary[f'{level}_{key}_present_count'] += int(key in obj)
+    def value(obj, key):
+        return obj.get(key, obj.get(key[0].lower() + key[1:])) if type(obj) is dict else None
+    def array(obj):
+        return obj if type(obj) is list else []
+    summary['root_kind'] = kind(data)
+    fields('root', data)
+    resources = (data if type(data) is list else
+                 [item for key in SCHEMA_FIELDS['root']
+                  for item in array(data.get(key) if type(data) is dict else None)])
+    summary['resource_count'] = len(resources)
+    for cache in resources:
+        fields('resource', cache)
+        if value(cache, 'Name') != 'yocto-sstate':
+            continue
+        summary['cache_name_match_count'] += 1
+        shards = array(value(cache, 'Shards'))
+        summary['selected_shard_count'] += len(shards)
+        for shard in shards:
+            fields('shard', shard)
+            containers = array(value(shard, 'Containers'))
+            summary['container_count'] += len(containers)
+            for container in containers:
+                fields('container', container)
+                role = value(container, 'Type')
+                summary[f'type_{kind(role)}_count'] += 1
+                role = role.lower() if type(role) is str else ''
+                summary['role_' + (role if role in ('content', 'metadata', 'checkpoint') else 'other') + '_count'] += 1
+                signature = value(container, 'Signature')
+                signature = signature if type(signature) is str else None
+                full = signature is not None and signature.lower().startswith(('https:', 'http:'))
+                sig_kind = ('empty' if signature == '' else 'full_uri' if full else
+                            'query' if signature and '=' in signature else 'other')
+                summary[f'signature_{sig_kind}_count'] += 1
+                try:
+                    require(signature is not None and len(signature) <= 8192)
+                    signature = signature or ''
+                    query = unique_object(urllib.parse.parse_qsl(
+                        urllib.parse.urlsplit(signature).query if full else signature.lstrip('?'),
+                        keep_blank_values=True, strict_parsing=True, max_num_fields=32))
+                    for key in SCHEMA_SAS:
+                        summary[f'sas_{key}_present_count'] += int(key in query)
+                    permission = query.get('sp', '')
+                    summary['permissions_valid_count'] += int(bool(permission) and 'r' in permission and
+                                                               set(permission) <= set('racwdxltmeop'))
+                    summary['credential_container_scope_count'] += int(query.get('sr') == 'c' and
+                                                                      not {'ss', 'srt'} & set(query))
+                except ValueError:
+                    pass
+    for key in ('permissions_valid', 'credential_container_scope'):
+        summary[key] = 0 < summary['container_count'] == summary[key + '_count']
+    try:
+        validate_metadata(data)  # Pure existing validator; no container I/O or normalization.
+        summary['validator_passes'] = True
+    except (ValueError, TypeError, KeyError):
+        pass
+
+
+def metadata_schema(path=None):
+    summary: dict = dict.fromkeys(SCHEMA_COUNTS, 0)
+    summary.update(read_status='missing', validator_passes=False, file_kind='missing', root_kind='unread',
+                   permissions_valid=False, credential_container_scope=False)
+    try:
+        path = RUNTIME_CONFIG if path is None else path
+        info = path.lstat()
+        summary['file_kind'] = next((name for predicate, name in (
+            (stat.S_ISREG, 'regular'), (stat.S_ISLNK, 'symlink'), (stat.S_ISDIR, 'directory'),
+            (stat.S_ISFIFO, 'fifo'), (stat.S_ISSOCK, 'socket'), (stat.S_ISCHR, 'character'),
+            (stat.S_ISBLK, 'block')) if predicate(info.st_mode)), 'other')
+        if summary['file_kind'] != 'regular':
+            summary['read_status'] = ('symlink-refused' if summary['file_kind'] == 'symlink'
+                                      else 'nonregular')
+            return summary
+        if info.st_size > METADATA_LIMIT:
+            summary['read_status'] = 'oversized'
+            return summary
+        raw = read_regular(path, METADATA_LIMIT)
+        summary['file_bytes'] = len(raw)
+        data = json.loads(raw, object_pairs_hook=unique_object)
+        summary['read_status'] = 'ok'
+        schema_facts(data, summary)
+    except FileNotFoundError:
+        summary['read_status'] = 'missing'
+    except PermissionError:
+        summary['read_status'] = 'permission-denied'
+    except (json.JSONDecodeError, UnicodeError, RecursionError):
+        summary['read_status'] = 'invalid-json'
+    except OSError as error:
+        summary['read_status'] = {errno.ELOOP: 'symlink-refused', errno.EISDIR: 'nonregular',
+                                  errno.EFBIG: 'oversized'}.get(error.errno or 0, 'duplicate-or-contract')
+    except ValueError:
+        summary['read_status'] = 'duplicate-or-contract'
+    return summary
+
+
 def main(args):
+    if args == ['metadata-schema']:
+        summary = metadata_schema()
+        validate_schema_summary(summary)
+        print(json.dumps(summary, sort_keys=True))
+        return 0
     if len(args) != 1 or args[0] not in ('producer', 'consumer'):
         return 2
     phase = args[0]
