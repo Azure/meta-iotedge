@@ -22,9 +22,28 @@ import time
 from typing import Any, Dict
 
 READ_LIMIT = 64 * 1024
-CGROUP_FILES = ("memory.current", "memory.peak", "memory.max", "memory.events",
+CGROUP_FILES = ("memory.current", "memory.peak", "memory.max", "memory.events", "memory.stat",
                 "cpu.stat", "cpu.pressure", "memory.pressure", "io.pressure", "io.stat")
 PROC_FILES = ("meminfo", "loadavg", "pressure/cpu", "pressure/memory", "pressure/io")
+MEMORY_STAT_KEYS = ("anon", "file", "slab_reclaimable", "slab_unreclaimable",
+                    "kernel_stack", "kernel")
+
+
+def unsigned(value):
+    """Bound numeric output as well as reads; reject signs and arbitrary strings."""
+    return int(value) if re.fullmatch(r"[0-9]{1,20}", value) else None
+
+
+def selected_counters(entry, keys):
+    values = {}
+    if entry.get("status") == "ok":
+        for line in entry.get("text", "").splitlines():
+            fields = line.split()
+            if len(fields) == 2 and fields[0] in keys:
+                number = unsigned(fields[1])
+                if number is not None:
+                    values[fields[0]] = number
+    return values
 
 
 def read_bounded(path, limit=READ_LIMIT):
@@ -131,9 +150,57 @@ def collect_snapshot(proc_root=Path("/proc"), read_limit=READ_LIMIT) -> Dict[str
         name: read_bounded(Path(cgroup["path"]) / name, read_limit)
         if cgroup["status"] == "ok" else {"status": "unavailable"}
         for name in CGROUP_FILES}
+    # Unlike existing raw-file records, this new source retains selected numbers
+    # only; missing/truncated reads remain explicit and never produce partial data.
+    entry = cgroup["files"]["memory.stat"]
+    cgroup["files"]["memory.stat"] = {
+        "status": entry["status"], "values": selected_counters(entry, MEMORY_STAT_KEYS)}
     return {"scope": "container-visible", "proc": {
         name: read_bounded(proc_root / name, read_limit) for name in PROC_FILES},
         "cgroup": cgroup, "disks": collect_disks()}
+
+
+def compact_resources(snapshot):
+    """Only cgroup numbers reach live logs; procfs and discovery paths stay out."""
+    files = snapshot.get("cgroup", {}).get("files", {})
+    memory = {}
+    for name in ("current", "peak", "max"):
+        entry = files.get("memory." + name, {})
+        text = entry.get("text", "").strip() if entry.get("status") == "ok" else ""
+        memory[name] = "max" if name == "max" and text == "max" else unsigned(text)
+    memory["events"] = selected_counters(files.get("memory.events", {}),
+                                         ("oom", "oom_kill", "high", "max"))
+    stat = files.get("memory.stat", {})
+    memory["stat"] = {key: value for key, value in stat.get("values", {}).items()
+                      if stat.get("status") == "ok" and key in MEMORY_STAT_KEYS
+                      and type(value) is int and 0 <= value < 10 ** 20}
+    cpu = selected_counters(files.get("cpu.stat", {}),
+                            ("usage_usec", "user_usec", "system_usec", "nr_periods",
+                             "nr_throttled", "throttled_usec"))
+    pressure = {}
+    for name in ("cpu", "memory", "io"):
+        pressure[name] = {}
+        entry = files.get(name + ".pressure", {})
+        if entry.get("status") != "ok":
+            continue
+        for line in entry.get("text", "").splitlines():
+            fields = line.split()
+            if not fields or fields[0] not in ("some", "full"):
+                continue
+            values = {}
+            for field in fields[1:]:
+                key, _, text = field.partition("=")
+                if key == "total":
+                    number = unsigned(text)
+                    if number is not None:
+                        values[key] = number
+                elif key == "avg10" and re.fullmatch(r"[0-9]{1,3}(?:\.[0-9]{1,6})?", text):
+                    number = float(text)
+                    if 0 <= number <= 100:
+                        values[key] = number
+            if values:
+                pressure[name][fields[0]] = values
+    return {"memory": memory, "cpu": cpu, "pressure": pressure}
 
 
 def console_line(fd, message):
@@ -308,6 +375,19 @@ def main(argv=None):
                 "phase": phase, "scope": "container-visible",
                 "elapsed_seconds": round(snapshot["elapsed_seconds"], 3),
                 "disks": compact}, separators=(",", ":")))
+            try:
+                resources = compact_resources(snapshot)
+            except Exception:
+                # New live formatting is diagnostic too: never block the child
+                # or expose exception text if a source/parser becomes unusable.
+                resources = {"memory": {}, "cpu": {}, "pressure": {}}
+                if not collection_warned:
+                    warn("resource snapshot unavailable; command will continue")
+                    collection_warned = True
+            console_line(1, "resource-monitor resources: " + json.dumps({
+                "phase": phase, "scope": "container-visible",
+                "elapsed_seconds": round(snapshot["elapsed_seconds"], 3),
+                **resources}, separators=(",", ":")))
         return snapshot
 
     writer = SampleWriter(output)

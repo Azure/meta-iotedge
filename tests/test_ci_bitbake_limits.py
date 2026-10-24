@@ -15,7 +15,8 @@ LIMITS = {'BB_NUMBER_THREADS': '4', 'PARALLEL_MAKE': '-j4', 'BB_NUMBER_PARSE_THR
 class LimitsTests(unittest.TestCase):
     def test_cache_placement_changes_only_the_host_default_and_retains_override(self):
         workflow = (ROOT / '.github/workflows/ci-build.yml').read_text()
-        options = next(line.strip() for line in workflow.splitlines()
+        container = workflow.split('    container:\n', 1)[1].split('    env:', 1)[0]
+        options = next(line.strip() for line in container.splitlines()
                        if line.strip().startswith('options:'))
         self.assertEqual(options, "options: --user root -v ${{ vars.YOCTO_CACHE_PATH || '/mnt/yocto-cache' }}:/workspaces/yocto-cache")
         self.assertIn('image: ghcr.io/azure/meta-iotedge-devcontainer:latest', workflow)

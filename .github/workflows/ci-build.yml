@@ -11,6 +11,15 @@ on:
       - kirkstone
   workflow_dispatch:
     inputs:
+      template:
+        description: "Diagnostic single-template build (not full acceptance); all preserves normal CI"
+        type: choice
+        default: all
+        options:
+          - all
+          - scarthgap
+          - wrynose
+          - scarthgap-1.6
       skip_qemu:
         description: "Skip QEMU validation (faster, packages only)"
         type: boolean
@@ -46,6 +55,9 @@ jobs:
   check-changes:
     name: Check if only docs changed
     runs-on: ubuntu-22.04
+    env:
+      EVENT_NAME: ${{ github.event_name }}
+      MANUAL_TEMPLATE: ${{ inputs.template || 'all' }}
     outputs:
       docs_only: ${{ steps.docs-only.outputs.docs_only }}
       template: ${{ steps.set-template.outputs.template }}
@@ -125,6 +137,21 @@ jobs:
           # (e.g. 1.6.0-scarthgap, 1.6.1-scarthgap) selects the scarthgap-1.6
           # template; a plain 1.6.x tag stays Wrynose.
           REF="${{ inputs.release_tag || inputs.ref || github.base_ref || github.ref_name }}"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            case "$MANUAL_TEMPLATE" in
+              all) ;;
+              scarthgap|wrynose|scarthgap-1.6)
+                # Diagnostics must not override the existing release-tag mapping.
+                case "${{ github.ref_type }}:$REF" in
+                  tag:*|*:1.5.*|*:1.6.*)
+                    echo "::error::Single-template diagnostics require a non-release branch" >&2
+                    exit 1 ;;
+                esac
+                echo "template=$MANUAL_TEMPLATE" >> "$GITHUB_OUTPUT"
+                exit 0 ;;
+              *) echo "::error::Invalid manual template" >&2; exit 1 ;;
+            esac
+          fi
           case "$REF" in
             *-scarthgap|*-scarthgap.*) echo "template=scarthgap-1.6" >> "$GITHUB_OUTPUT" ;;
             1.6.*) echo "template=wrynose" >> "$GITHUB_OUTPUT" ;;
@@ -162,7 +189,9 @@ jobs:
             1.5.*|1.6.*) IS_TAG="true" ;;
           esac
 
-          if [ "$IS_TAG" = "true" ]; then
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$MANUAL_TEMPLATE" != "all" ]; then
+            templates="[\"${{ steps.set-template.outputs.template }}\"]"
+          elif [ "$IS_TAG" = "true" ]; then
             # Single template, matching the release line.
             templates="[\"${{ steps.set-template.outputs.template }}\"]"
           else
@@ -200,7 +229,7 @@ jobs:
         run: python3 scripts/check-recipe-consistency.py
 
   build:
-    name: Build and validate
+    name: ${{ github.event_name == 'workflow_dispatch' && inputs.template != '' && inputs.template != 'all' && 'Diagnostic build (not full acceptance)' || 'Build and validate' }}
     # Container jobs otherwise default to sh; build/artifact gates use [[ ... ]].
     defaults:
       run:
@@ -351,7 +380,7 @@ jobs:
           if-no-files-found: error
 
   status-check:
-    name: Status check
+    name: ${{ github.event_name == 'workflow_dispatch' && inputs.template != '' && inputs.template != 'all' && 'Diagnostic status (not full acceptance)' || 'Status check' }}
     runs-on: ubuntu-22.04
     needs: [check-changes, regression-tests, check-recipes, build]
     if: always()

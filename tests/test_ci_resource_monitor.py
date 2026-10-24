@@ -115,6 +115,22 @@ class MonitorTests(unittest.TestCase):
         finally:
             os.close(write_fd)
 
+    def test_closed_pipes_and_failed_artifacts_preserve_child_sigkill137(self):
+        read_fd, write_fd = os.pipe()
+        os.close(read_fd)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                blocked = Path(tmp) / 'not-a-directory'
+                blocked.write_text('fixture')
+                result = subprocess.run(
+                    [sys.executable, str(SCRIPT), '--output-dir', str(blocked), '--label', 'build',
+                     '--', sys.executable, '-c',
+                     'import os, signal; os.kill(os.getpid(), signal.SIGKILL)'],
+                    stdout=write_fd, stderr=write_fd, timeout=10)
+                self.assertEqual(result.returncode, 137)
+        finally:
+            os.close(write_fd)
+
     def test_live_disk_periodic_output_is_at_most_once_per_minute(self):
         monitor = load_monitor()
         now = [0.0]
@@ -132,11 +148,117 @@ class MonitorTests(unittest.TestCase):
                     patch.object(monitor.os, 'write', side_effect=lambda fd, data: console.append(data)):
                 code = monitor.main(['--output-dir', tmp, '--label', 'build', '--', 'unused'])
             self.assertEqual(code, 37)
-            records = [json.loads(line.decode().split(': ', 1)[1]) for line in console]
+            records = [json.loads(line.decode().split(': ', 1)[1]) for line in console
+                       if line.startswith(b'resource-monitor disk: ')]
+            resources = [json.loads(line.decode().split(': ', 1)[1]) for line in console
+                         if line.startswith(b'resource-monitor resources: ')]
+            self.assertEqual([r['phase'] for r in resources], [r['phase'] for r in records])
+            self.assertEqual([r['elapsed_seconds'] for r in resources],
+                             [r['elapsed_seconds'] for r in records])
+            self.assertEqual(len(console), len(records) + len(resources))
             self.assertEqual([r['phase'] for r in records], ['start', 'periodic', 'periodic', 'end'])
             self.assertEqual([r['elapsed_seconds'] for r in records], [0.0, 60.0, 120.0, 120.0])
             samples = (Path(tmp) / 'samples.jsonl').read_text().splitlines()
             self.assertEqual(len(samples), 8)  # Artifact cadence is not reduced.
+
+    def test_live_resources_emit_only_selected_numbers_not_raw_sources(self):
+        monitor = load_monitor()
+        files: dict = {name: {'status': 'ok', 'text': text} for name, text in {
+            'memory.current': '123\n', 'memory.peak': '456\n', 'memory.max': 'max\n',
+            'memory.events': 'oom 1\noom_kill 2\nhigh 3\nmax 4\nprivate_sentinel 99\n',
+            'cpu.stat': 'usage_usec 10\nuser_usec 6\nsystem_usec 4\nnr_periods 7\n'
+                        'nr_throttled 2\nthrottled_usec 8\nprivate_sentinel 99\n',
+            'cpu.pressure': 'some avg10=1.25 avg60=9 total=123 private_sentinel=99\n'
+                            'full avg10=0.00 total=0\nprivate_sentinel avg10=99 total=99\n',
+            'memory.pressure': 'some avg10=2.50 total=456\n',
+            'io.pressure': 'full avg10=3.75 total=789\n',
+        }.items()}
+        files['memory.stat'] = {'status': 'ok', 'values': {'anon': 100, 'file': 23,
+            'slab_reclaimable': 5, 'slab_unreclaimable': 6, 'kernel_stack': 7, 'kernel': 8,
+            'private_sentinel': 99}}
+        snapshot = {'scope': 'container-visible', 'cgroup': {
+            'path': '/private/cgroup-path', 'files': files},
+            'proc': {'private_sentinel': '/proc/private-raw'}, 'environment': 'private-env'}
+        with tempfile.TemporaryDirectory() as tmp:
+            console = []
+            with patch.object(monitor, 'collect_snapshot', return_value=snapshot), \
+                    patch.object(monitor, 'run_command', return_value=(37, None, False, None)), \
+                    patch.object(monitor.os, 'write', side_effect=lambda fd, data: console.append(data)):
+                code = monitor.main(['--output-dir', tmp, '--label', 'private-label', '--', 'unused'])
+            self.assertEqual(code, 37)
+            lines = [line.decode() for line in console
+                     if line.startswith(b'resource-monitor resources: ')]
+            self.assertEqual(len(lines), 2)
+            record = json.loads(lines[0].split(': ', 1)[1])
+            self.assertEqual(set(record), {'phase', 'scope', 'elapsed_seconds', 'memory', 'cpu', 'pressure'})
+            self.assertEqual(record['scope'], 'container-visible')
+            self.assertEqual(record['memory'], {'current': 123, 'peak': 456, 'max': 'max',
+                'events': {'oom': 1, 'oom_kill': 2, 'high': 3, 'max': 4},
+                'stat': {'anon': 100, 'file': 23, 'slab_reclaimable': 5,
+                         'slab_unreclaimable': 6, 'kernel_stack': 7, 'kernel': 8}})
+            self.assertEqual(record['cpu'], {'usage_usec': 10, 'user_usec': 6, 'system_usec': 4,
+                'nr_periods': 7, 'nr_throttled': 2, 'throttled_usec': 8})
+            self.assertEqual(record['pressure'], {
+                'cpu': {'some': {'avg10': 1.25, 'total': 123}, 'full': {'avg10': 0.0, 'total': 0}},
+                'memory': {'some': {'avg10': 2.5, 'total': 456}},
+                'io': {'full': {'avg10': 3.75, 'total': 789}}})
+            for line in lines:
+                self.assertLess(len(line), 2048)
+                for private in ('private', '/proc', 'text', tmp, 'environment', 'avg60'):
+                    self.assertNotIn(private, line)
+
+    def test_live_resources_reject_malformed_truncated_and_unavailable_numbers(self):
+        monitor = load_monitor()
+        files: dict = {}
+        snapshot = {'cgroup': {'files': files}}
+        expected_empty = {'memory': {'current': None, 'peak': None, 'max': None,
+                                    'events': {}, 'stat': {}},
+                          'cpu': {}, 'pressure': {'cpu': {}, 'memory': {}, 'io': {}}}
+        self.assertEqual(monitor.compact_resources(snapshot), expected_empty)
+        for text in ('-1', 'NaN', 'inf', 'private-sentinel', '1 extra', '1' * 21, 'max'):
+            for name in ('memory.current', 'memory.peak'):
+                with self.subTest(source=name, text=text):
+                    files[name] = {'status': 'ok', 'text': text}
+                    self.assertIsNone(monitor.compact_resources(snapshot)['memory'][name.split('.')[1]])
+        files.clear()
+        files['memory.max'] = {'status': 'ok', 'text': '123456'}
+        self.assertEqual(monitor.compact_resources(snapshot)['memory']['max'], 123456)
+        for status in ('ok', 'absent', 'permission-denied', 'truncated', 'unavailable'):
+            with self.subTest(status=status):
+                files.clear()
+                files['memory.events'] = {'status': status, 'text':
+                    'oom -1\noom_kill NaN\nhigh 1 extra\nmax /private-sentinel\n'}
+                files['cpu.stat'] = {'status': status, 'text':
+                    'usage_usec -1\nnr_periods inf\nnr_throttled 1 extra\nthrottled_usec ' + '9' * 21}
+                files['memory.stat'] = {'status': status, 'values':
+                    {'anon': 'private-sentinel', 'file': -1, 'kernel': True, 'kernel_stack': 10 ** 21}}
+                files['cpu.pressure'] = {'status': status, 'text':
+                    'some avg10=NaN total=-1\nfull avg10=101 total=inf\n'}
+                self.assertEqual(monitor.compact_resources(snapshot), expected_empty)
+        # Valid-looking content from a partial or unavailable read is not evidence.
+        for status in ('absent', 'truncated', 'unavailable'):
+            with self.subTest(status=status):
+                files.clear()
+                for name, text in (('memory.current', '123'), ('memory.events', 'oom 1'),
+                                   ('cpu.stat', 'usage_usec 1'),
+                                   ('cpu.pressure', 'some avg10=1 total=1')):
+                    files[name] = {'status': status, 'text': text}
+                files['memory.stat'] = {'status': status, 'values': {'anon': 1}}
+                self.assertEqual(monitor.compact_resources(snapshot), expected_empty)
+
+    def test_live_resource_formatting_failure_is_best_effort(self):
+        monitor = load_monitor()
+        with tempfile.TemporaryDirectory() as tmp:
+            console = []
+            with patch.object(monitor, 'compact_resources', side_effect=ValueError('private-sentinel')), \
+                    patch.object(monitor.os, 'write', side_effect=lambda fd, data: console.append(data)):
+                code = monitor.main(['--output-dir', tmp, '--label', 'build', '--',
+                                     sys.executable, '-c', 'raise SystemExit(37)'])
+            self.assertEqual(code, 37)
+            self.assertNotIn('private-sentinel', b''.join(console).decode())
+            summary = json.loads((Path(tmp) / 'summary.json').read_text())
+            self.assertEqual(summary['child_returncode'], 37)
+            self.assertIn('cgroup', summary['end_sample'])
 
     def test_live_disk_lines_survive_artifact_failure_without_changing_exit37(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -151,6 +273,15 @@ class MonitorTests(unittest.TestCase):
             lines = [line for line in result.stdout.splitlines()
                      if line.startswith('resource-monitor disk: ')]
             self.assertEqual(len(lines), 2, result.stdout)
+            resource_lines = [line for line in result.stdout.splitlines()
+                              if line.startswith('resource-monitor resources: ')]
+            self.assertEqual(len(resource_lines), len(lines), result.stdout)
+            self.assertEqual([json.loads(line.split(': ', 1)[1])['phase']
+                              for line in resource_lines], ['start', 'end'])
+            for line in resource_lines:
+                self.assertLess(len(line), 2048)
+                self.assertNotIn(tmp, line)
+                self.assertNotIn('private-label', line)
             records = [json.loads(line.split(': ', 1)[1]) for line in lines]
             self.assertEqual([r['phase'] for r in records], ['start', 'end'])
             self.assertTrue(all(r['scope'] == 'container-visible' for r in records))
@@ -227,6 +358,35 @@ class MonitorTests(unittest.TestCase):
             self.assertEqual(snapshot["proc"]["pressure/cpu"]["status"], "absent")
             self.assertEqual(snapshot["proc"]["pressure/memory"]["status"], "ok")
             self.assertEqual(snapshot["proc"]["meminfo"]["text"], "MemTotal: 1234 kB\n")
+
+    def test_memory_stat_is_bounded_selected_and_never_raw(self):
+        monitor = load_monitor()
+        with tempfile.TemporaryDirectory() as tmp:
+            group = Path(tmp) / 'private-cgroup-path'
+            group.mkdir()
+            discovery = {'status': 'ok', 'path': str(group)}
+            cases = (
+                (None, 'absent', {}),
+                ('anon 123\nfile 456\nslab_reclaimable 7\nslab_unreclaimable 8\n'
+                 'kernel_stack 9\nkernel 10\nprivate_sentinel 11\n', 'ok',
+                 {'anon': 123, 'file': 456, 'slab_reclaimable': 7,
+                  'slab_unreclaimable': 8, 'kernel_stack': 9, 'kernel': 10}),
+                ('anon -1\nfile NaN\nslab_reclaimable 1 extra\n'
+                 'slab_unreclaimable 0\nkernel_stack /private/sentinel\n', 'ok',
+                 {'slab_unreclaimable': 0}),
+                ('anon 123\n' + 'private_sentinel' * 20, 'truncated', {}),
+            )
+            for text, status, values in cases:
+                with self.subTest(status=status, text=text):
+                    if text is not None:
+                        (group / 'memory.stat').write_text(text)
+                    with patch.object(monitor, 'discover_cgroup', return_value=discovery.copy()):
+                        snapshot = monitor.collect_snapshot(proc_root=Path(tmp), read_limit=160)
+                    entry = snapshot['cgroup']['files'].get('memory.stat')
+                    self.assertEqual(entry, {'status': status, 'values': values})
+                    encoded = json.dumps(entry)
+                    for private in ('private_sentinel', '/private', 'text', str(group)):
+                        self.assertNotIn(private, encoded)
 
     def test_namespaced_membership_resolves_under_visible_mount(self):
         monitor = load_monitor()
