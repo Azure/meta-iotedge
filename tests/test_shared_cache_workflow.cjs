@@ -67,12 +67,12 @@ test('pilot is PR-offline or exact-branch manual host inventory, never push or c
   assert.equal(/^  (schedule|pull_request_target|workflow_call):/m.test(triggers), false);
   assert.match(triggers, /^  pull_request:/m);
   assert.match(triggers, /^  workflow_dispatch:\s*$/m);
-  assert.doesNotMatch(triggers, /inputs:/);
+  assert.match(triggers, /inputs:\n      operation:\n        description: .+\n        type: choice\n        default: preflight\n        options: \[preflight, managed-roundtrip\]/);
   assert.match(triggers, /permissions:\n  contents: read/);
   assert.doesNotMatch(workflow, /sparse-checkout|container:|secrets\.|sudo |docker |buildcacheconfig/);
   const offline = job(workflow, 'offline-tests');
   const host = job(workflow, 'host-preflight');
-  const evaluate = github => vm.runInNewContext(condition(host), {github});
+  const evaluate = github => vm.runInNewContext(condition(host), {github, inputs: {operation: 'preflight'}});
   const dispatch = {...event({event_name: 'workflow_dispatch', event: {}}),
     ref: 'refs/heads/experiment/shared-yocto-cache', ref_type: 'branch'};
   assert.equal(evaluate(dispatch), true);
@@ -102,4 +102,42 @@ test('pilot is PR-offline or exact-branch manual host inventory, never push or c
   assert.match(host, /uses: actions\/upload-artifact@[a-f0-9]{40}\b/);
   assert.match(host, /path: \$\{\{ runner.temp \}\}\/shared-cache-pilot-\$\{\{ github.run_id \}\}-\$\{\{ github.run_attempt \}\}\/preflight.json/);
   assert.match(host, /if-no-files-found: error/);
+});
+
+test('managed roundtrip runs exactly producer then consumer; preflight and PR never join', () => {
+  const workflow = read('.github/workflows/shared-cache-pilot.yml');
+  const dispatch = {repository: 'Azure/meta-iotedge', event_name: 'workflow_dispatch',
+    ref: 'refs/heads/experiment/shared-yocto-cache', ref_type: 'branch', event: {}};
+  const names = ['host-preflight', 'managed-producer', 'managed-consumer'];
+  const evaluate = (name, github, operation) => vm.runInNewContext(condition(job(workflow, name)),
+    {github, inputs: {operation}});
+  assert.deepEqual(names.filter(n => evaluate(n, dispatch, 'managed-roundtrip')),
+    ['managed-producer', 'managed-consumer']);
+  assert.deepEqual(names.filter(n => evaluate(n, dispatch, 'preflight')), ['host-preflight']);
+  assert.deepEqual(names.filter(n => evaluate(n, dispatch, 'other')), []);
+  for (const mutation of [{repository: 'fork/meta-iotedge'}, {ref: 'refs/heads/main'},
+    {ref_type: 'tag'}, {event_name: 'push'}, {event_name: 'pull_request'}]) {
+    assert.deepEqual(names.filter(n => evaluate(n, {...dispatch, ...mutation}, 'managed-roundtrip')), []);
+  }
+  const producer = job(workflow, 'managed-producer');
+  const consumer = job(workflow, 'managed-consumer');
+  assert.match(consumer, /^    needs: managed-producer$/m);
+  assert.doesNotMatch(consumer, /always\(\)|download-artifact/);
+  assert.doesNotMatch(producer, /^    needs:/m);
+  assert.equal((workflow.match(/^      - self-hosted$/gm) || []).length, 3);
+  for (const [phase, block] of [['producer', producer], ['consumer', consumer]]) {
+    assert.match(block, /1ES.Pool=meta-iotedge-1es-github-linux-amd64/);
+    assert.match(block, /1ES.ImageOverride=agent-aziotedge-ubuntu-22.04-msmoby/);
+    assert.match(block, /timeout-minutes: 5/);
+    assert.match(block, /ref: \$\{\{ github.workflow_sha \}\}/);
+    assert.match(block, /persist-credentials: false/);
+    assert.match(block, new RegExp(`python3 shared-cache-pilot-source/scripts/shared-cache-roundtrip.py ${phase} > "\\$REPORT_DIR/roundtrip.json"`));
+    assert.match(block, /path: \$\{\{ runner.temp \}\}\/shared-cache-roundtrip-[^\n]+\/roundtrip.json/);
+    assert.doesNotMatch(block.replace(/^\s*#.*$/gm, ''), /if: always\(\)|matrix:|strategy:|affinity|recycle|continue-on-error/);
+  }
+  for (const key of ['sha256', 'host_id', 'path_id', 'input_id']) {
+    assert.ok(producer.includes(`${key}: \${{ steps.roundtrip.outputs.${key} }}`));
+    assert.ok(consumer.includes(`PRODUCER_${key.toUpperCase()}: \${{ needs.managed-producer.outputs.${key} }}`));
+  }
+  assert.match(job(workflow, 'offline-tests'), /python3 -m unittest discover -s tests -p test_shared_cache_roundtrip.py/);
 });
