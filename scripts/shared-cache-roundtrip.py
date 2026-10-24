@@ -71,7 +71,8 @@ def validate_metadata(data):
         exact_fields(shard, ('StorageUrl', 'Containers'))
         url = shard['StorageUrl']
         require(type(url) is str and re.fullmatch(
-            r'https://[a-z0-9]{3,24}\.blob\.core\.windows\.net/?', url))
+            r'https://[a-z0-9]{3,24}\.(?:blob\.core\.windows\.net|'
+            r'z[0-9]{2}\.blob\.storage\.azure\.net)/?', url))
         require(url.rstrip('/') not in accounts)
         accounts.add(url.rstrip('/'))
         containers = shard['Containers']

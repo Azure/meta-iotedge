@@ -189,6 +189,44 @@ class MetadataTests(unittest.TestCase):
         self.assertTrue(all(url.startswith('https://fixtureaccount.blob.core.windows.net/fixture-') for url in targets))
         self.assertTrue(all('restype=container' in url for url in targets))
 
+    def test_blob_endpoint_allowlist_accepts_only_documented_https_account_roots(self):
+        m = load()
+        for host in ('fixtureaccount.blob.core.windows.net',
+                     'fixtureaccount.z00.blob.storage.azure.net',
+                     'fixtureaccount.z99.blob.storage.azure.net'):
+            for slash in ('', '/'):
+                url = 'https://' + host + slash
+                with self.subTest(url=url):
+                    data = metadata()
+                    data[0]['Shards'][0]['StorageUrl'] = url
+                    original = copy.deepcopy(data)
+                    targets = m.validate_metadata(data)
+                    self.assertEqual(len(targets), 3)
+                    self.assertTrue(all(target.startswith('https://' + host + '/fixture-')
+                                        for target in targets))
+                    self.assertEqual(data, original)
+        for url in (
+                'https://fixtureaccount.z00.blob.storage.azure.net.evil/',
+                'https://fixtureaccount.z00.z99.blob.storage.azure.net/',
+                'https://fixtureaccount.z0.blob.storage.azure.net/',
+                'https://fixtureaccount.z000.blob.storage.azure.net/',
+                'http://fixtureaccount.z00.blob.storage.azure.net/',
+                'https://fixtureaccount.z00.blob.storage.azure.net:443/',
+                'https://user@fixtureaccount.z00.blob.storage.azure.net/',
+                'https://fixtureaccount.z00.blob.storage.azure.net/?sig=secret',
+                'https://fixtureaccount.z00.blob.storage.azure.net/#fragment',
+                'https://fixtureaccount.z00.blob.storage.azure.net/other',
+                'https://fixtureaccount.z00.blob.storage.azure.net//',
+                'https://ab.z00.blob.storage.azure.net/',
+                'https://' + 'a' * 25 + '.z00.blob.storage.azure.net/',
+                'https://Fixtureaccount.z00.blob.storage.azure.net/',
+                'https://fixture-account.z00.blob.storage.azure.net/'):
+            with self.subTest(url=url):
+                data = metadata()
+                data[0]['Shards'][0]['StorageUrl'] = url
+                with self.assertRaises(ValueError):
+                    m.validate_metadata(data)
+
     def test_schema_url_and_credential_ambiguity_fail_closed(self):
         m = load()
         cases = [

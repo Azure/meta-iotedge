@@ -163,7 +163,11 @@ hosted-pool schema is a PascalCase array with exactly one `Name=yocto-sstate`,
 containers, each with native `Name`, `Type`, `Signature`. Unknown/ambiguous
 schema fails, without guessed normalization or a developer-token workaround.
 
-Only HTTPS account roots matching `*.blob.core.windows.net` are accepted.
+Only HTTPS account roots matching `<account>.blob.core.windows.net` or
+`<account>.z[00-99].blob.storage.azure.net` are accepted, with a 3–24 character
+lowercase alphanumeric account name and at most one trailing slash; ports,
+userinfo, paths, queries and fragments are refused. The DNS-zone format is
+[documented by Microsoft](https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blob-query-endpoint-srp).
 Every selected credential must explicitly be a service/user-delegation
 container SAS (`sr=c`, explicit read permission); account SAS (`ss`/`srt`),
 unknown/duplicate credential fields and URI overrides are refused. The helper
