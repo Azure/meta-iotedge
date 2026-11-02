@@ -13,6 +13,7 @@ import stat
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
@@ -117,10 +118,30 @@ def private_opener():
 def check_containers(data, opener=None):
     targets = validate_metadata(data)  # Validate every target before any I/O.
     opener = opener or private_opener()
-    for url in targets:
-        with opener.open(urllib.request.Request(url, method='HEAD'), timeout=5) as response:
-            require(response.status == 200)
-    return len(targets)
+    cache = next(cache for cache in data if cache['Name'] == 'yocto-sstate')
+    roles = [container['Type'] for shard in cache['Shards'] for container in shard['Containers']]
+    for url, role in zip(targets, roles):
+        # ShardedBlobCacheTopology startup ensures only Content and Metadata.
+        # Checkpoint still passes the complete metadata/credential validation.
+        if role == 'Checkpoint':
+            continue
+        try:
+            with opener.open(urllib.request.Request(url, method='HEAD'), timeout=5) as response:
+                require(response.status == 200)
+        except urllib.error.HTTPError as error:
+            status = error.code
+            error.close()
+            # ExistsAsync returning false must not become a create attempt. Never
+            # follow redirects; other HTTP failures may still permit listing.
+            require(status != 404 and not 300 <= status < 400)
+            listing = url + '&comp=list&maxresults=1'
+            try:
+                with opener.open(urllib.request.Request(listing, method='GET'), timeout=5) as response:
+                    require(response.status == 200)
+            except urllib.error.HTTPError as error:
+                error.close()  # Avoid destructor warnings exposing private failure details.
+                require(False)
+    return len(targets)  # Count all validated roles, not only startup checks.
 
 
 PACKAGE_SHA = '1332d1b02d686328369fb75742fd5942f0eef84aa24aea73b358852715359456'

@@ -295,7 +295,69 @@ class MetadataTests(unittest.TestCase):
 
 
 class NetworkPackageTests(unittest.TestCase):
-    def test_heads_only_preexisting_selected_containers_no_redirect_or_proxy(self):
+    def test_head_forbidden_uses_bounded_container_listing_before_native_launch(self):
+        import urllib.error
+        import urllib.parse
+        import io
+        from email.message import Message
+        m = load()
+        calls = []
+        class Response:
+            status = 200
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+            def read(self, *args): raise AssertionError('must not expose object data')
+        class Opener:
+            def open(self, request, timeout):
+                calls.append((request.get_method(), request.full_url, timeout))
+                if request.get_method() == 'HEAD' and '/fixture-content?' in request.full_url:
+                    raise urllib.error.HTTPError(request.full_url, 403, 'fixture denial', Message(), io.BytesIO())
+                return Response()
+        try:
+            count = m.check_containers(metadata(), opener=Opener())
+        except urllib.error.HTTPError as error:
+            error.close()
+            self.fail('HEAD403 blocked the native-supported listing fallback')
+        self.assertEqual(count, 3)
+        listing = [(method, url, timeout) for method, url, timeout in calls if method == 'GET']
+        self.assertEqual(len(listing), 1)
+        method, url, timeout = listing[0]
+        self.assertEqual(urllib.parse.urlsplit(url).path, '/fixture-content')
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        self.assertEqual(query['restype'], ['container'])
+        self.assertEqual(query['comp'], ['list'])
+        self.assertEqual(query['maxresults'], ['1'])
+        self.assertNotIn('marker', query)
+        self.assertEqual(query['sig'], ['FIXTURE_SECRET'])
+        self.assertLessEqual(timeout, 5)
+        self.assertTrue(all(method in ('HEAD', 'GET') and timeout <= 5
+                            for method, url, timeout in calls))
+
+    def test_preflight_checks_content_metadata_not_checkpoint_on_every_shard(self):
+        import urllib.parse
+        m = load()
+        data = metadata()
+        second = copy.deepcopy(data[0]['Shards'][0])
+        second['StorageUrl'] = 'https://secondfixture.z00.blob.storage.azure.net/'
+        second['Containers'].reverse()  # Roles, not list position, select startup checks.
+        data[0]['Shards'].append(second)
+        calls = []
+        class Response:
+            status = 200
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+        class Opener:
+            def open(self, request, timeout):
+                uri = urllib.parse.urlsplit(request.full_url)
+                calls.append((uri.hostname, uri.path, request.get_method()))
+                return Response()
+        self.assertEqual(m.check_containers(data, opener=Opener()), 6)
+        self.assertEqual(len(calls), 4, 'Checkpoint HEAD blocks native startup unnecessarily')
+        self.assertTrue(all(path in ('/fixture-content', '/fixture-metadata') and method == 'HEAD'
+                            for host, path, method in calls))
+        self.assertEqual(len({host for host, path, method in calls}), 2)
+
+    def test_heads_only_preexisting_startup_containers_no_redirect_or_proxy(self):
         m = load()
         self.assertTrue(hasattr(m, 'check_containers'), 'bounded container HEAD preflight missing')
         calls = []
@@ -309,7 +371,7 @@ class NetworkPackageTests(unittest.TestCase):
                 calls.append((request.get_method(), request.full_url, timeout))
                 return Response()
         m.check_containers(metadata(), opener=Opener())
-        self.assertEqual(len(calls), 3)
+        self.assertEqual(len(calls), 2)
         self.assertTrue(all(method == 'HEAD' and timeout <= 5 for method, url, timeout in calls))
         import urllib.request
         from unittest.mock import patch
@@ -333,6 +395,60 @@ class NetworkPackageTests(unittest.TestCase):
             def open(self, *args, **kwargs): raise TimeoutError('FIXTURE_SECRET')
         with self.assertRaises(TimeoutError):
             m.check_containers(metadata(), opener=Timeout())
+
+    def test_http_missing_redirect_or_failed_listing_never_reaches_native_engine(self):
+        import contextlib
+        import io
+        import urllib.error
+        from email.message import Message
+        from unittest.mock import patch
+        m = load()
+        for head, listing in ((404, None), (301, None), (302, None),
+                              (403, 403), (403, 404), (403, 302), (500, 500)):
+            with self.subTest(head=head, listing=listing), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                calls, raised = [], []
+                class Opener:
+                    def open(self, request, timeout):
+                        method = request.get_method()
+                        calls.append(method)
+                        code = head if method == 'HEAD' else listing
+                        assert code is not None, 'unexpected listing after missing/redirected HEAD'
+                        error = urllib.error.HTTPError(request.full_url, code, 'private fixture denial',
+                                                       Message(), io.BytesIO(b'private fixture response'))
+                        raised.append(error)
+                        raise error
+                public, errors = io.StringIO(), io.StringIO()
+                with patch.object(m, 'private_root', return_value=root), \
+                     patch.object(m, 'read_metadata', return_value=metadata()), \
+                     patch.object(m, 'private_opener', return_value=Opener()), \
+                     patch.object(m, 'download_package') as download, \
+                     patch.object(m, 'run_engine') as engine, \
+                     patch.dict(os.environ, {'GITHUB_RUN_ID': '400000001', 'GITHUB_RUN_ATTEMPT': '1',
+                                            'GITHUB_OUTPUT': str(root / 'output')}), \
+                     contextlib.redirect_stdout(public), contextlib.redirect_stderr(errors):
+                    self.assertEqual(m.main(['producer']), 1)
+                    engine.assert_not_called()
+                    download.assert_not_called()
+                closed = [error.closed for error in raised]
+                for error in raised:
+                    error.close()  # Fixture cleanup must not hide helper closure failures.
+                self.assertEqual(calls, ['HEAD'] if listing is None else ['HEAD', 'GET'])
+                self.assertEqual(errors.getvalue(), 'failure-stage: container-preflight\n')
+                self.assertEqual(json.loads(public.getvalue())['status'], 'failed')
+                self.assertNotIn('private fixture', public.getvalue() + errors.getvalue())
+                self.assertNotIn('FIXTURE_SECRET', public.getvalue() + errors.getvalue())
+                self.assertFalse((root / 'output').exists())
+                self.assertTrue(all(closed), 'unclosed listing HTTPError can disclose details via ResourceWarning')
+
+    def test_checkpoint_credential_rejection_happens_before_any_opener(self):
+        from unittest.mock import patch
+        m = load()
+        data = metadata()
+        data[0]['Shards'][0]['Containers'][2]['Signature'] = '?sr=b&sp=r&sig=FIXTURE_SECRET'
+        with patch.object(m, 'private_opener') as opener, self.assertRaises(ValueError):
+            m.check_containers(data)
+        opener.assert_not_called()
 
     def test_package_pin_and_full_zip_validation_before_extract(self):
         m = load()
@@ -520,6 +636,52 @@ class ExecutionTests(unittest.TestCase):
 
 
 class LifecycleTests(unittest.TestCase):
+    def test_coordinator_reaches_native_launch_after_content_metadata_listing(self):
+        import io
+        import urllib.error
+        from email.message import Message
+        from unittest.mock import patch
+        m = load()
+        self.assertEqual(m.run_engine.__defaults__, (90,))
+        calls = []
+        class NativeLaunchReached(Exception):
+            pass
+        class Response:
+            status = 200
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+            def read(self, *args): raise AssertionError('object body read')
+        class Opener:
+            def open(self, request, timeout):
+                method = request.get_method()
+                if '/fixture-checkpoint?' in request.full_url:
+                    raise AssertionError('Checkpoint data plane reached')
+                calls.append(method)
+                if method == 'HEAD':
+                    raise urllib.error.HTTPError(request.full_url, 403, 'fixture denial', Message(), io.BytesIO())
+                return Response()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = root / 'runtime-fixture.json'
+            config.write_text(json.dumps(metadata()))
+            def extract(archive, package):
+                package.mkdir()
+                (package / 'bxl').write_text('offline fixture')
+            read_metadata = m.read_metadata
+            with patch.object(m, 'RUNTIME_CONFIG', config), \
+                 patch.object(m, 'read_metadata', side_effect=lambda: read_metadata(config)) as reads, \
+                 patch.object(m, 'private_opener', return_value=Opener()), \
+                 patch.object(m, 'download_package'), patch.object(m, 'extract_package', side_effect=extract), \
+                 patch.object(m, 'run_engine', side_effect=NativeLaunchReached) as engine:
+                with self.assertRaises(NativeLaunchReached):
+                    m.perform(root, 'producer', 'a' * 32, {})
+                engine.assert_called_once()
+                self.assertEqual(reads.call_count, 2)
+            self.assertEqual(calls, ['HEAD', 'GET', 'HEAD', 'GET'])
+            remote = json.loads((root / 'producer/cache.json').read_text())['RemoteCache']
+            self.assertEqual(remote['HostedPoolBuildCacheConfigurationFile'], str(config))
+            self.assertNotIn('FIXTURE_SECRET', (root / 'producer/cache.json').read_text())
+
     def test_allowlisted_summary_rejects_raw_metadata_and_invalid_digest(self):
         m = load()
         self.assertTrue(hasattr(m, 'validate_summary'), 'allowlisted publication contract missing')

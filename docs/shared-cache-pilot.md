@@ -137,9 +137,13 @@ Both jobs have five-minute limits, four-minute action steps, a 230-second
 whole-helper deadline and a 90-second engine process-group timeout. The public
 package transfer has a 90-second checked deadline with 15-second socket bounds,
 no retries and a 200 MiB compressed ceiling; the whole-helper deadline also
-bounds DNS/extraction/HEAD delays. Slow acquisition fails rather than extending
-job limits or installing host tools. Container HEAD requests have five-second
-bounds, at most twelve targets and no retry/redirect/proxy/body download.
+bounds DNS/extraction/preflight delays. Slow acquisition fails rather than
+extending job limits or installing host tools. For at most eight startup
+containers (Content and Metadata across four shards), preflight uses a
+five-second HEAD and, only after a non-404/non-redirect HTTP failure, one
+five-second container-list GET (`maxresults=1`). There are no retries,
+redirects, proxies, continuation pages or object-body reads. Transport errors
+and deadlines fail closed; the 90-second engine limit remains unchanged.
 
 ### Official executable and runtime contract
 
@@ -170,14 +174,27 @@ userinfo, paths, queries and fragments are refused. The DNS-zone format is
 [documented by Microsoft](https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blob-query-endpoint-srp).
 Every selected credential must explicitly be a service/user-delegation
 container SAS (`sr=c`, explicit read permission); account SAS (`ss`/`srt`),
-unknown/duplicate credential fields and URI overrides are refused. The helper
-HEADs only those actual container URIs and stops before engine startup if any
-container is absent/inaccessible. It also refuses metadata changes detected
-between this check and launch. It never lists/downloads objects during preflight.
-Native startup may still call ensure-container-exists: `IsReadOnly` alone is
-**not** a no-create guarantee. Preexisting containers and container-scoped SAS
-prevent authorization to create other containers. Runtime metadata must remain
-stable through native startup; the helper does not lock or alter the host file.
+unknown/duplicate credential fields and URI overrides are refused. All three
+roles still pass that complete validation. Only Content and Metadata undergo
+existence preflight, matching pinned
+[`ShardedBlobCacheTopology.EnsureContainersExistAsync`](https://github.com/microsoft/BuildXL/blob/9caed4d586bb6421ad6491eb6e4a54a8e839c5af/Public/Src/Cache/ContentStore/Distributed/Blob/ShardedBlobCacheTopology.cs).
+Pinned [`CheckContainerExistsAsync`](https://github.com/microsoft/BuildXL/blob/9caed4d586bb6421ad6491eb6e4a54a8e839c5af/Public/Src/Cache/ContentStore/Distributed/Blob/StorageClientExtensions.cs)
+tries `ExistsAsync`, then `GetBlobsAsync` if existence checking throws. Thus
+HEAD403 alone is not proof that native startup cannot access a container.
+The helper retains a bounded, read-only existence guard: HEAD200 passes;
+HEAD404 or any redirect stops before engine launch; other HTTP failures try
+one same-container list GET, whose HTTP200 also passes for an empty container.
+Failed listing stops before launch. It never reads an object body or follows
+listing continuation. This is not a replacement SDK or an exact reproduction
+of all native exception/retry behavior: transport failures/timeouts still stop.
+The summary's `containers` counts all validated configured containers, not
+successful HEADs or startup roles. The helper also refuses metadata changes
+between validation and launch. Native startup may still call
+ensure-container-exists: `IsReadOnly` alone is **not** a no-create guarantee.
+Existing Content/Metadata are required before launch, and container-scoped SAS
+cannot authorize creating other containers. Checkpoint is validated but not
+accessed by this startup path. Runtime metadata must remain stable through
+native startup; the helper does not lock or alter the host file.
 
 The official outer `BlobWithLocalCacheFactory` has `FailIfRemoteFails=true`, a
 writable local `MaxCacheSizeInMB=64`, and a remote configured with
