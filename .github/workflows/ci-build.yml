@@ -20,6 +20,10 @@ on:
           - scarthgap
           - wrynose
           - scarthgap-1.6
+      cold_cache:
+        description: "Cold Scarthgap diagnostic on diag/pr232-cold-observation only (QEMU required)"
+        type: boolean
+        default: false
       skip_qemu:
         description: "Skip QEMU validation (faster, packages only)"
         type: boolean
@@ -58,10 +62,16 @@ jobs:
     env:
       EVENT_NAME: ${{ github.event_name }}
       MANUAL_TEMPLATE: ${{ inputs.template || 'all' }}
+      MANUAL_COLD_CACHE: ${{ inputs.cold_cache || 'false' }}
+      MANUAL_SKIP_QEMU: ${{ inputs.skip_qemu || 'false' }}
+      REF_NAME: ${{ github.ref_name }}
+      REF_TYPE: ${{ github.ref_type }}
     outputs:
       docs_only: ${{ steps.docs-only.outputs.docs_only }}
       template: ${{ steps.set-template.outputs.template }}
       templates: ${{ steps.set-matrix.outputs.templates }}
+      cold_cache: ${{ steps.set-cold-cache.outputs.cold_cache }}
+      cold_cache_path: ${{ steps.set-cold-cache.outputs.cold_cache_path }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -121,6 +131,26 @@ jobs:
           else
             echo "Code files changed - running full build"
           fi
+
+      - name: Validate cold diagnostic launch
+        id: set-cold-cache
+        run: |
+          if [ "$EVENT_NAME" != "workflow_dispatch" ] || [ "$MANUAL_COLD_CACHE" = "false" ]; then
+            echo "cold_cache=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$MANUAL_COLD_CACHE" != "true" ] || \
+             [ "$REF_TYPE" != "branch" ] || [ "$REF_NAME" != "diag/pr232-cold-observation" ] || \
+             [ "$MANUAL_TEMPLATE" != "scarthgap" ] || [ "$MANUAL_SKIP_QEMU" != "false" ]; then
+            echo "::error::Cold diagnostic requires its dedicated branch, Scarthgap and QEMU" >&2
+            exit 1
+          fi
+          if ! [[ "$GITHUB_RUN_ID" =~ ^[0-9]+$ && "$GITHUB_RUN_ATTEMPT" =~ ^[0-9]+$ ]]; then
+            echo "::error::Invalid cold diagnostic run identity" >&2
+            exit 1
+          fi
+          echo "cold_cache=1" >> "$GITHUB_OUTPUT"
+          echo "cold_cache_path=/mnt/yocto-cold-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
 
       - name: Determine template from branch or tag
         id: set-template
@@ -259,12 +289,15 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-      options: --user root -v ${{ vars.YOCTO_CACHE_PATH || '/mnt/yocto-cache' }}:/workspaces/yocto-cache
+      # Cold diagnostics change only the existing cache bind source. Docker
+      # creates the per-run host directory; no old cache is mounted or cleaned.
+      options: --user root -v ${{ needs.check-changes.outputs.cold_cache_path || vars.YOCTO_CACHE_PATH || '/mnt/yocto-cache' }}:/workspaces/yocto-cache
     env:
       DEVCONTAINER: "1"
       RELEASE_TAG: ${{ inputs.release_tag || '' }}
       # Explicit opt-in: generated local.conf only, never developer templates.
       CI_YOCTO_RESOURCE_LIMITS: "1"
+      CI_YOCTO_COLD_CACHE: ${{ needs.check-changes.outputs.cold_cache || '0' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -288,10 +321,21 @@ jobs:
             }
           done
 
+      - name: Prepare empty cold caches
+        if: needs.check-changes.outputs.cold_cache == '1'
+        run: |
+          python3 scripts/ci-cold-cache.py prepare /workspaces/yocto-cache
+          echo "Cold cache retained at ${{ needs.check-changes.outputs.cold_cache_path }}; no automatic cleanup."
+          echo "Host listener/service health unavailable from this job container; resource-monitor remains container-visible."
+
       - name: Create build user
         run: |
           useradd -m builder
-          chown -R builder:builder /workspaces/yocto-cache
+          if [[ "$CI_YOCTO_COLD_CACHE" == "1" ]]; then
+            chown builder:builder /workspaces/yocto-cache /workspaces/yocto-cache/downloads /workspaces/yocto-cache/sstate-cache
+          else
+            chown -R builder:builder /workspaces/yocto-cache
+          fi
 
       - name: Fix permissions
         run: chown -R builder:builder "${GITHUB_WORKSPACE}"

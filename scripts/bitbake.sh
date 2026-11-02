@@ -15,12 +15,16 @@ RELEASE_TEMPLATE="${TEMPLATECONF##*/}"
 export BB_SERVER_TIMEOUT="${BB_SERVER_TIMEOUT:-600}"
 export BB_COMMAND_TIMEOUT="${BB_COMMAND_TIMEOUT:-300}"
 
-source ${DIR}/poky/oe-init-build-env build
+source "${DIR}/poky/oe-init-build-env" build || exit $?
 
 # CI opts in explicitly; leave developer templates and copied configs unchanged.
 # Apply after oe-init creates local.conf, before any recipe parsing or queries.
 if [[ "${CI_YOCTO_RESOURCE_LIMITS:-0}" == "1" ]]; then
     python3 "${SCRIPT_DIR}/ci-bitbake-limits.py" configure conf/local.conf || exit 1
+fi
+if [[ "${CI_YOCTO_COLD_CACHE:-0}" == "1" ]]; then
+    python3 "${SCRIPT_DIR}/ci-cold-cache.py" configure conf/local.conf \
+        --cache-root "${CI_YOCTO_COLD_CACHE_ROOT:-/workspaces/yocto-cache}" || exit 1
 fi
 
 # Ensure BB_COMMAND_TIMEOUT survives BitBake's environment cleanup
@@ -44,6 +48,10 @@ echo "✓ Recipe parse validation passed"
 
 if [[ "${CI_YOCTO_RESOURCE_LIMITS:-0}" == "1" ]]; then
     python3 "${SCRIPT_DIR}/ci-bitbake-limits.py" verify || exit 1
+fi
+if [[ "${CI_YOCTO_COLD_CACHE:-0}" == "1" ]]; then
+    python3 "${SCRIPT_DIR}/ci-cold-cache.py" verify \
+        --cache-root "${CI_YOCTO_COLD_CACHE_ROOT:-/workspaces/yocto-cache}" || exit 1
 fi
 
 # Resolve all five actual providers; PREFERRED_VERSION alone permits fallback.

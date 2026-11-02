@@ -18,7 +18,7 @@ class LimitsTests(unittest.TestCase):
         container = workflow.split('    container:\n', 1)[1].split('    env:', 1)[0]
         options = next(line.strip() for line in container.splitlines()
                        if line.strip().startswith('options:'))
-        self.assertEqual(options, "options: --user root -v ${{ vars.YOCTO_CACHE_PATH || '/mnt/yocto-cache' }}:/workspaces/yocto-cache")
+        self.assertEqual(options, "options: --user root -v ${{ needs.check-changes.outputs.cold_cache_path || vars.YOCTO_CACHE_PATH || '/mnt/yocto-cache' }}:/workspaces/yocto-cache")
         self.assertIn('image: ghcr.io/azure/meta-iotedge-devcontainer:latest', workflow)
         self.assertIn('chown -R builder:builder /workspaces/yocto-cache', workflow)
 
